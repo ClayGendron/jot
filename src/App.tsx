@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, useRef } from "react";
 import { Editor } from "@/components/editor/Editor";
-import { FileTree, DocumentOutline } from "@/components/sidebar";
+import { FileTree, DocumentOutline, BacklinksPanel } from "@/components/sidebar";
 import { SaveIndicator } from "@/components/ui/SaveIndicator";
 import { useEditorStore } from "@/stores/editorStore";
-import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { useWorkspaceStore, selectAllFilesForSuggestion } from "@/stores/workspaceStore";
+import { useLinksStore, selectBacklinksForFile } from "@/stores/linksStore";
 import { useAutosave } from "@/hooks/useAutosave";
 import { useDocumentOutline } from "@/hooks/useDocumentOutline";
 import {
@@ -20,7 +21,7 @@ import {
 } from "@/lib/tauri/files";
 import "./index.css";
 
-type SidebarTab = "files" | "outline";
+type SidebarTab = "files" | "outline" | "backlinks";
 
 /**
  * Main application component
@@ -36,6 +37,13 @@ function App() {
     setError,
     isLoading,
   } = useWorkspaceStore();
+
+  // Get files list for backlinks building
+  const allFiles = useWorkspaceStore(selectAllFilesForSuggestion);
+
+  // Backlinks store
+  const { buildIndex } = useLinksStore();
+  const backlinks = useLinksStore(selectBacklinksForFile(filePath));
 
   const [editorContent, setEditorContent] = useState("");
   const [activeTab, setActiveTab] = useState<SidebarTab>("files");
@@ -99,6 +107,40 @@ function App() {
       console.error("Failed to open folder:", err);
     }
   }, [loadWorkspace]);
+
+  // Build backlinks index when workspace files change
+  useEffect(() => {
+    const buildBacklinksIndex = async () => {
+      if (!workspacePath || allFiles.length === 0) return;
+
+      try {
+        // Read content of all markdown files
+        const fileContents = await Promise.all(
+          allFiles.map(async (file) => {
+            try {
+              const content = await readFile(file.path);
+              return {
+                path: file.path,
+                name: file.name,
+                content,
+              };
+            } catch {
+              // Skip files that can't be read
+              return null;
+            }
+          })
+        );
+
+        // Filter out failed reads and build index
+        const validFiles = fileContents.filter((f): f is NonNullable<typeof f> => f !== null);
+        buildIndex(validFiles, workspacePath);
+      } catch (err) {
+        console.error("Failed to build backlinks index:", err);
+      }
+    };
+
+    buildBacklinksIndex();
+  }, [workspacePath, allFiles, buildIndex]);
 
   // Open file - saves current file first if dirty
   const handleFileSelect = useCallback(
@@ -363,10 +405,19 @@ function App() {
             <OutlineTabIcon />
             <span>Outline</span>
           </button>
+          <button
+            className={`sidebar-tab ${activeTab === "backlinks" ? "active" : ""}`}
+            onClick={() => setActiveTab("backlinks")}
+            disabled={!filePath}
+            title={!filePath ? "Open a file to see backlinks" : undefined}
+          >
+            <BacklinksTabIcon />
+            <span>Links</span>
+          </button>
         </div>
 
         {/* Tab Content */}
-        {activeTab === "files" ? (
+        {activeTab === "files" && (
           <>
             {!workspacePath ? (
               <button className="open-folder-btn" onClick={handleOpenFolder}>
@@ -387,11 +438,18 @@ function App() {
               />
             )}
           </>
-        ) : (
+        )}
+        {activeTab === "outline" && (
           <DocumentOutline
             headings={headings}
             activeHeadingId={activeHeadingId}
             onHeadingClick={scrollToHeading}
+          />
+        )}
+        {activeTab === "backlinks" && (
+          <BacklinksPanel
+            backlinks={backlinks}
+            onBacklinkClick={handleFileSelect}
           />
         )}
       </aside>
@@ -537,6 +595,24 @@ function OutlineTabIcon() {
       <line x1="3" y1="6" x2="3.01" y2="6" />
       <line x1="3" y1="12" x2="3.01" y2="12" />
       <line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+  );
+}
+
+function BacklinksTabIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>
   );
 }
