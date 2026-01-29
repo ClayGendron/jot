@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useWorkspaceStore, selectAllFilePaths } from "./workspaceStore";
+import { useWorkspaceStore, selectAllFilePaths, selectAllFilesForSuggestion } from "./workspaceStore";
 import type { FileEntry } from "@/lib/tauri/files";
 
 const mockFileTree: FileEntry[] = [
@@ -299,6 +299,33 @@ describe("workspaceStore", () => {
       const state = useWorkspaceStore.getState();
       const paths = selectAllFilePaths(state);
       expect(paths).toEqual([]);
+    });
+
+    it("selectAllFilesForSuggestion returns file info for suggestions", () => {
+      const { setFileTree, setWorkspacePath } = useWorkspaceStore.getState();
+      setWorkspacePath("/workspace");
+      setFileTree(mockFileTree);
+
+      const state = useWorkspaceStore.getState();
+      const files = selectAllFilesForSuggestion(state);
+
+      expect(files).toHaveLength(2);
+      expect(files[0]).toEqual({
+        name: "readme.md",
+        path: "/workspace/docs/readme.md",
+        displayPath: "docs/readme.md",
+      });
+      expect(files[1]).toEqual({
+        name: "notes.md",
+        path: "/workspace/notes.md",
+        displayPath: "notes.md",
+      });
+    });
+
+    it("selectAllFilesForSuggestion returns empty array for empty tree", () => {
+      const state = useWorkspaceStore.getState();
+      const files = selectAllFilesForSuggestion(state);
+      expect(files).toEqual([]);
     });
   });
 

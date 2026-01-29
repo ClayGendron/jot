@@ -1774,3 +1774,102 @@ body {
     background: var(--color-border);
   }
 }
+
+/* ==========================================
+   Internal Link Suggestions Popup
+   ========================================== */
+
+.internal-link-suggestions {
+  background: var(--color-paper);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.suggestion-item:hover,
+.suggestion-item.active {
+  background: var(--color-paper-warm);
+}
+
+.suggestion-item-icon {
+  flex-shrink: 0;
+  color: var(--color-ink-muted);
+}
+
+.suggestion-item.active .suggestion-item-icon {
+  color: var(--color-accent);
+}
+
+.suggestion-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.suggestion-item-name {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.suggestion-item-path {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--color-ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.suggestion-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  color: var(--color-ink-muted);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-style: italic;
+}
+
+.suggestion-empty-icon {
+  color: var(--color-ink-muted);
+  opacity: 0.5;
+}
+
+/* Tippy.js theme for internal link suggestions */
+.tippy-box[data-theme~='internal-link'] {
+  background: transparent;
+  padding: 0;
+}
+
+.tippy-box[data-theme~='internal-link'] .tippy-content {
+  padding: 0;
+}
+
+.tippy-box[data-theme~='internal-link'] .tippy-arrow {
+  display: none;
+}

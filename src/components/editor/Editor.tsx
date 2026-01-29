@@ -12,10 +12,13 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { common, createLowlight } from "lowlight";
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { useEditorStore } from "@/stores/editorStore";
+import { useWorkspaceStore, selectAllFilesForSuggestion } from "@/stores/workspaceStore";
 import { EditorToolbar } from "./EditorToolbar";
 import { CodeBlockWithCopy } from "./extensions/CodeBlockWithCopy";
+import { InternalLink } from "./extensions/InternalLink";
+import { createSuggestionRender } from "./extensions/internalLinkSuggestionRender";
 import { SourceEditor } from "./SourceEditor";
 import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
 import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
@@ -48,6 +51,16 @@ export function Editor({
 }: EditorProps) {
   const { setContent, content, focusMode, sourceMode, toggleSourceMode } =
     useEditorStore();
+
+  // Get files for internal link suggestions
+  const files = useWorkspaceStore(selectAllFilesForSuggestion);
+  const getFiles = useCallback(() => files, [files]);
+
+  // Create suggestion render function (memoized)
+  const suggestionRender = useMemo(
+    () => createSuggestionRender({ getFiles }),
+    [getFiles]
+  );
 
   // Track markdown source when in source mode
   const [markdownSource, setMarkdownSource] = useState("");
@@ -95,6 +108,11 @@ export function Editor({
       CodeBlockWithCopy.configure({
         lowlight,
         defaultLanguage: "plaintext",
+      }),
+      InternalLink.configure({
+        suggestion: {
+          render: suggestionRender,
+        },
       }),
     ],
     content: initialContent || content,

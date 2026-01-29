@@ -238,3 +238,43 @@ export function selectAllFilePaths(state: WorkspaceState): string[] {
   collectPaths(state.fileTree);
   return paths;
 }
+
+/**
+ * File info for internal link suggestions
+ */
+export interface SuggestionFile {
+  name: string;
+  path: string;
+  displayPath: string; // Relative path from workspace for display
+}
+
+/**
+ * Selector for getting all markdown files as suggestion items
+ */
+export function selectAllFilesForSuggestion(state: WorkspaceState): SuggestionFile[] {
+  const files: SuggestionFile[] = [];
+  const workspacePath = state.workspacePath;
+
+  const collectFiles = (entries: FileEntry[]) => {
+    for (const entry of entries) {
+      if (entry.is_markdown) {
+        // Get relative path from workspace root
+        const displayPath = workspacePath
+          ? entry.path.replace(workspacePath + "/", "")
+          : entry.name;
+
+        files.push({
+          name: entry.name,
+          path: entry.path,
+          displayPath,
+        });
+      }
+      if (entry.children) {
+        collectFiles(entry.children);
+      }
+    }
+  };
+
+  collectFiles(state.fileTree);
+  return files;
+}

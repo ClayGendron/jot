@@ -35,9 +35,12 @@
     "@tiptap/pm": "^3.18.0",
     "@tiptap/react": "^3.18.0",
     "@tiptap/starter-kit": "^3.18.0",
+    "@tiptap/suggestion": "^3.18.0",
     "lowlight": "^3.3.0",
+    "lucide-react": "^0.563.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "tippy.js": "^6.3.7",
     "zustand": "^5.0.10"
   },
   "devDependencies": {
