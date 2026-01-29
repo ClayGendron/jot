@@ -24,18 +24,42 @@ A lightweight, fast, cross-platform markdown editor that's free forever.
 
 ## Development
 
+### Prerequisites
+
+- [Bun](https://bun.sh/) - JavaScript runtime and package manager
+- [Rust](https://www.rust-lang.org/tools/install) - For Tauri backend
+- [Tauri Prerequisites](https://tauri.app/start/prerequisites/) - Platform-specific dependencies
+
+### Setup
+
 ```bash
 # Install dependencies
 bun install
 
 # Start development server
-bun dev
+bun run tauri dev
 
 # Run tests
 bun test
 
 # Build for production
-bun run build
+bun run tauri build
+```
+
+### Project Structure
+
+```
+jot/
+├── src/                  # React frontend
+│   ├── components/       # React components
+│   ├── lib/             # Pure business logic
+│   ├── hooks/           # React hooks
+│   └── stores/          # State management
+├── src-tauri/           # Rust backend
+│   ├── src/             # Rust source code
+│   └── Cargo.toml       # Rust dependencies
+├── FEATURE_SCOPE.md     # Feature planning document
+└── package.json         # Frontend dependencies
 ```
 
 ## License
