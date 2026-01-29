@@ -5,6 +5,8 @@
  * Handles common elements: headings, paragraphs, lists, code, tables, etc.
  */
 
+import { isInternalLink } from "../links/resolver";
+
 /**
  * Convert Markdown string to HTML
  */
@@ -293,8 +295,13 @@ function processInlineElements(html: string): string {
   // Images (must come before links to handle ![alt](url) vs [text](url))
   html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" />');
 
-  // Links
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+  // Links (detect internal .md links and add special class)
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, href) => {
+    if (isInternalLink(href)) {
+      return `<a href="${href}" class="internal-link" data-internal-link="true">${text}</a>`;
+    }
+    return `<a href="${href}">${text}</a>`;
+  });
 
   // Line breaks (two spaces at end of line)
   html = html.replace(/  $/gm, "<br />");

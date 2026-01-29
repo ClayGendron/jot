@@ -83,10 +83,74 @@ describe("markdownToHtml", () => {
   });
 
   describe("links", () => {
-    it("converts link", () => {
+    it("converts external link", () => {
       expect(markdownToHtml("[Link](https://example.com)")).toBe(
         '<p><a href="https://example.com">Link</a></p>'
       );
+    });
+
+    it("converts http link without internal-link class", () => {
+      const result = markdownToHtml("[Link](http://example.com)");
+      expect(result).toBe('<p><a href="http://example.com">Link</a></p>');
+      expect(result).not.toContain("internal-link");
+    });
+
+    it("converts mailto link without internal-link class", () => {
+      const result = markdownToHtml("[Email](mailto:test@example.com)");
+      expect(result).toBe(
+        '<p><a href="mailto:test@example.com">Email</a></p>'
+      );
+      expect(result).not.toContain("internal-link");
+    });
+  });
+
+  describe("internal links", () => {
+    it("adds internal-link class to .md file links", () => {
+      const result = markdownToHtml("[Note](note.md)");
+      expect(result).toContain('class="internal-link"');
+      expect(result).toContain('data-internal-link="true"');
+      expect(result).toContain('href="note.md"');
+      expect(result).toContain(">Note</a>");
+    });
+
+    it("adds internal-link class to .md links with path", () => {
+      const result = markdownToHtml("[Guide](docs/guide.md)");
+      expect(result).toContain('class="internal-link"');
+      expect(result).toContain('href="docs/guide.md"');
+    });
+
+    it("adds internal-link class to .md links with heading anchor", () => {
+      const result = markdownToHtml("[Section](note.md#intro)");
+      expect(result).toContain('class="internal-link"');
+      expect(result).toContain('href="note.md#intro"');
+    });
+
+    it("does not add internal-link class to external links", () => {
+      const result = markdownToHtml("[Example](https://example.com)");
+      expect(result).not.toContain("internal-link");
+      expect(result).not.toContain("data-internal-link");
+    });
+
+    it("does not add internal-link class to non-md files", () => {
+      const result = markdownToHtml("[Image](photo.png)");
+      expect(result).not.toContain("internal-link");
+    });
+
+    it("handles multiple internal links in same paragraph", () => {
+      const result = markdownToHtml("Link to [A](a.md) and [B](b.md)");
+      expect(result).toContain('href="a.md" class="internal-link"');
+      expect(result).toContain('href="b.md" class="internal-link"');
+    });
+
+    it("handles mixed internal and external links", () => {
+      const result = markdownToHtml(
+        "See [note](note.md) and [web](https://example.com)"
+      );
+      const internalMatch = result.match(/<a href="note\.md"[^>]*>/);
+      const externalMatch = result.match(/<a href="https:\/\/example\.com"[^>]*>/);
+
+      expect(internalMatch?.[0]).toContain("internal-link");
+      expect(externalMatch?.[0]).not.toContain("internal-link");
     });
   });
 

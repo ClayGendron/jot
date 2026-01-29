@@ -212,6 +212,42 @@ body {
   color: var(--color-ink);
 }
 
+/* Internal Links - Wiki-style links to other documents */
+.tiptap-editor a.internal-link {
+  color: var(--color-accent);
+  text-decoration: none;
+  border-bottom: 1px dashed currentColor;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tiptap-editor a.internal-link:hover {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  border-bottom-style: solid;
+}
+
+/* Broken internal link - target file doesn't exist */
+.tiptap-editor a.internal-link.broken {
+  color: #d97706;
+  border-bottom-style: wavy;
+  border-bottom-color: #d97706;
+}
+
+.tiptap-editor a.internal-link.broken:hover {
+  background: color-mix(in srgb, #d97706 10%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .tiptap-editor a.internal-link.broken {
+    color: #fbbf24;
+    border-bottom-color: #fbbf24;
+  }
+
+  .tiptap-editor a.internal-link.broken:hover {
+    background: color-mix(in srgb, #fbbf24 10%, transparent);
+  }
+}
+
 /* Lists */
 .tiptap-editor ul,
 .tiptap-editor ol {
