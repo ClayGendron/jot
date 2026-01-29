@@ -17,35 +17,35 @@ export interface FileEntry {
  * Read directory contents (markdown files and folders only)
  */
 export async function readDirectory(path: string): Promise<FileEntry[]> {
-  return invoke<FileEntry[]>("read_directory", { path });
+  return invoke<FileEntry[]>("jot_read_directory", { path });
 }
 
 /**
  * Read file contents
  */
 export async function readFile(path: string): Promise<string> {
-  return invoke<string>("read_file", { path });
+  return invoke<string>("jot_read_file", { path });
 }
 
 /**
  * Write content to file
  */
 export async function writeFile(path: string, content: string): Promise<void> {
-  return invoke("write_file", { path, content });
+  return invoke("jot_write_file", { path, content });
 }
 
 /**
  * Create new file
  */
 export async function createFile(path: string): Promise<void> {
-  return invoke("create_file", { path });
+  return invoke("jot_create_file", { path });
 }
 
 /**
  * Create new folder
  */
 export async function createFolder(path: string): Promise<void> {
-  return invoke("create_folder", { path });
+  return invoke("jot_create_folder", { path });
 }
 
 /**
@@ -55,28 +55,28 @@ export async function renamePath(
   oldPath: string,
   newPath: string
 ): Promise<void> {
-  return invoke("rename_path", { oldPath, newPath });
+  return invoke("jot_rename_path", { oldPath, newPath });
 }
 
 /**
  * Delete file or folder
  */
 export async function deletePath(path: string): Promise<void> {
-  return invoke("delete_path", { path });
+  return invoke("jot_delete_path", { path });
 }
 
 /**
  * Get file info
  */
 export async function getFileInfo(path: string): Promise<FileEntry> {
-  return invoke<FileEntry>("get_file_info", { path });
+  return invoke<FileEntry>("jot_get_file_info", { path });
 }
 
 /**
  * Check if path exists
  */
 export async function pathExists(path: string): Promise<boolean> {
-  return invoke<boolean>("path_exists", { path });
+  return invoke<boolean>("jot_path_exists", { path });
 }
 
 /**

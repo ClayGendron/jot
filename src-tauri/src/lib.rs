@@ -15,7 +15,7 @@ pub struct FileEntry {
 
 /// Read directory contents recursively, filtering for markdown files and folders
 #[tauri::command]
-pub fn read_directory(path: &str) -> Result<Vec<FileEntry>, String> {
+fn jot_read_directory(path: &str) -> Result<Vec<FileEntry>, String> {
     let root = Path::new(path);
 
     if !root.exists() {
@@ -91,13 +91,13 @@ fn read_dir_recursive(dir: &Path, depth: usize, max_depth: usize) -> Result<Vec<
 
 /// Read a single file's contents
 #[tauri::command]
-pub fn read_file(path: &str) -> Result<String, String> {
+fn jot_read_file(path: &str) -> Result<String, String> {
     fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))
 }
 
 /// Write content to a file
 #[tauri::command]
-pub fn write_file(path: &str, content: &str) -> Result<(), String> {
+fn jot_write_file(path: &str, content: &str) -> Result<(), String> {
     // Create parent directories if they don't exist
     if let Some(parent) = Path::new(path).parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
@@ -108,7 +108,7 @@ pub fn write_file(path: &str, content: &str) -> Result<(), String> {
 
 /// Create a new file
 #[tauri::command]
-pub fn create_file(path: &str) -> Result<(), String> {
+fn jot_create_file(path: &str) -> Result<(), String> {
     let file_path = Path::new(path);
 
     if file_path.exists() {
@@ -125,13 +125,13 @@ pub fn create_file(path: &str) -> Result<(), String> {
 
 /// Create a new folder
 #[tauri::command]
-pub fn create_folder(path: &str) -> Result<(), String> {
+fn jot_create_folder(path: &str) -> Result<(), String> {
     fs::create_dir_all(path).map_err(|e| format!("Failed to create folder: {}", e))
 }
 
 /// Rename a file or folder
 #[tauri::command]
-pub fn rename_path(old_path: &str, new_path: &str) -> Result<(), String> {
+fn jot_rename_path(old_path: &str, new_path: &str) -> Result<(), String> {
     if Path::new(new_path).exists() {
         return Err("A file with that name already exists".to_string());
     }
@@ -143,7 +143,7 @@ pub fn rename_path(old_path: &str, new_path: &str) -> Result<(), String> {
 /// WARNING: This permanently deletes files, not moves to trash
 /// TODO: Consider using the `trash` crate for safer deletion
 #[tauri::command]
-pub fn delete_path(path: &str) -> Result<(), String> {
+fn jot_delete_path(path: &str) -> Result<(), String> {
     let path = Path::new(path);
 
     if path.is_dir() {
@@ -155,7 +155,7 @@ pub fn delete_path(path: &str) -> Result<(), String> {
 
 /// Get file metadata
 #[tauri::command]
-pub fn get_file_info(path: &str) -> Result<FileEntry, String> {
+fn jot_get_file_info(path: &str) -> Result<FileEntry, String> {
     let path_buf = PathBuf::from(path);
     let metadata = fs::metadata(&path_buf).map_err(|e| e.to_string())?;
 
@@ -185,13 +185,13 @@ pub fn get_file_info(path: &str) -> Result<FileEntry, String> {
 
 /// Check if a path exists
 #[tauri::command]
-pub fn path_exists(path: &str) -> bool {
+fn jot_path_exists(path: &str) -> bool {
     Path::new(path).exists()
 }
 
 /// Watch for file changes (placeholder for future implementation)
 #[tauri::command]
-pub fn watch_directory(_path: &str) -> Result<(), String> {
+fn jot_watch_directory(_path: &str) -> Result<(), String> {
     // TODO: Implement file watching with notify crate
     Ok(())
 }
@@ -203,16 +203,16 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
-            read_directory,
-            read_file,
-            write_file,
-            create_file,
-            create_folder,
-            rename_path,
-            delete_path,
-            get_file_info,
-            path_exists,
-            watch_directory,
+            jot_read_directory,
+            jot_read_file,
+            jot_write_file,
+            jot_create_file,
+            jot_create_folder,
+            jot_rename_path,
+            jot_delete_path,
+            jot_get_file_info,
+            jot_path_exists,
+            jot_watch_directory,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
