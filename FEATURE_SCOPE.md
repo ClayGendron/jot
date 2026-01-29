@@ -733,10 +733,10 @@ workspace/
 
 -   E1.2.5: Diagrams sync with light/dark theme ✅
 
+-   E2.1.4: Auto-link update on rename ✅
+
 
 ### Remaining P0 Work
-
--   E2.1.4: Auto-link update on rename
 
 -   E2.1.5: Drag-drop file move
 

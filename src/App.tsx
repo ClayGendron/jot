@@ -25,6 +25,7 @@ import {
 import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { isWithinWorkspace } from "@/lib/links/linkService";
 import { createFileSafe } from "@/lib/tauri/links";
+import { renameFileWithLinkUpdates } from "@/lib/links/linkUpdater";
 import "./index.css";
 
 type SidebarTab = "files" | "outline" | "backlinks";
@@ -287,7 +288,7 @@ function App() {
     [workspacePath, loadWorkspace]
   );
 
-  // Rename file/folder
+  // Rename file/folder with automatic link updates
   const handleRename = useCallback(
     async (path: string) => {
       const currentName = getFileName(path);
@@ -298,7 +299,29 @@ function App() {
       const newPath = joinPath(parentPath, newName);
 
       try {
-        await renamePath(path, newPath);
+        // Get files that link to this file (only for .md files)
+        const isMarkdown = path.endsWith(".md");
+        const backlinks = isMarkdown
+          ? useLinksStore.getState().getBacklinks(path)
+          : [];
+
+        if (backlinks.length > 0 && workspacePath) {
+          // Update links in affected files, then rename
+          const { errors } = await renameFileWithLinkUpdates(
+            path,
+            newPath,
+            workspacePath,
+            backlinks
+          );
+
+          if (errors.length > 0) {
+            console.warn("Some link updates failed:", errors);
+          }
+        } else {
+          // No backlinks, just rename
+          await renamePath(path, newPath);
+        }
+
         if (workspacePath) {
           await loadWorkspace(workspacePath);
         }
