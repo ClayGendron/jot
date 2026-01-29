@@ -1911,6 +1911,14 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
+/* Editing state - subtle border highlight */
+.mermaid-block.is-editing {
+  border-color: var(--color-accent-border, var(--color-border-strong));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--color-accent, #6366f1) 15%, transparent),
+    0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
 .mermaid-header {
   display: flex;
   align-items: center;
@@ -2185,6 +2193,13 @@ body {
   color: white;
 }
 
+.mermaid-error-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+  font-style: italic;
+}
+
 /* Empty state */
 .mermaid-empty {
   display: flex;
@@ -2214,6 +2229,13 @@ body {
 .mermaid-empty-action:hover {
   border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+.mermaid-empty-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+  font-style: italic;
 }
 
 /* Dark theme adjustments for Mermaid */

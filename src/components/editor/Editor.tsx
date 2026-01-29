@@ -17,7 +17,6 @@ import { useWorkspaceStore } from "@/stores/workspaceStore";
 import type { FileEntry } from "@/lib/tauri/files";
 import { EditorToolbar } from "./EditorToolbar";
 import { CodeBlockWithCopy } from "./extensions/CodeBlockWithCopy";
-import { MermaidBlock } from "./extensions/MermaidBlock";
 import { HeadingWithId } from "./extensions/HeadingWithId";
 import { InternalLinkMark } from "./extensions/InternalLinkMark";
 import { InternalLink } from "./extensions/InternalLink";
@@ -189,10 +188,6 @@ export function Editor({
       CodeBlockWithCopy.configure({
         lowlight,
         defaultLanguage: "plaintext",
-      }),
-      // Mermaid diagram blocks - higher priority to intercept mermaid language
-      MermaidBlock.configure({
-        lowlight,
       }),
       InternalLink.configure({
         suggestion: {
