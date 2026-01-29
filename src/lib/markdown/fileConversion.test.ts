@@ -236,4 +236,136 @@ describe("File-based markdown conversion", () => {
       expect(percentDiff).toBeLessThan(0.2);
     });
   });
+
+  describe("Mermaid diagram round-trip", () => {
+    it("preserves basic flowchart", () => {
+      const input = `# My Document
+
+\`\`\`mermaid
+graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[End]
+    B -->|No| A
+\`\`\`
+
+Some text after.`;
+
+      const html = markdownToHtml(input);
+      const output = htmlToMarkdown(html);
+
+      expect(output).toContain("```mermaid");
+      expect(output).toContain("graph TD");
+      expect(output).toContain("A[Start] --> B{Decision}");
+      expect(output).toContain("B -->|Yes| C[End]");
+    });
+
+    it("preserves sequence diagram", () => {
+      const input = `\`\`\`mermaid
+sequenceDiagram
+    Alice->>John: Hello John
+    John-->>Alice: Hi Alice
+    Alice->>John: How are you?
+\`\`\``;
+
+      const html = markdownToHtml(input);
+      const output = htmlToMarkdown(html);
+
+      expect(output).toContain("```mermaid");
+      expect(output).toContain("sequenceDiagram");
+      expect(output).toContain("Alice->>John: Hello John");
+    });
+
+    it("preserves pie chart", () => {
+      const input = `\`\`\`mermaid
+pie title Pets
+    "Dogs" : 386
+    "Cats" : 85
+    "Rats" : 15
+\`\`\``;
+
+      const html = markdownToHtml(input);
+      const output = htmlToMarkdown(html);
+
+      expect(output).toContain("```mermaid");
+      expect(output).toContain('pie title Pets');
+      expect(output).toContain('"Dogs" : 386');
+    });
+
+    it("preserves gantt chart", () => {
+      const input = `\`\`\`mermaid
+gantt
+    title A Gantt Diagram
+    section Section A
+    Task 1 :a1, 2024-01-01, 30d
+    Task 2 :after a1, 20d
+\`\`\``;
+
+      const html = markdownToHtml(input);
+      const output = htmlToMarkdown(html);
+
+      expect(output).toContain("```mermaid");
+      expect(output).toContain("gantt");
+      expect(output).toContain("title A Gantt Diagram");
+      expect(output).toContain("Task 1 :a1, 2024-01-01, 30d");
+    });
+
+    it("preserves class diagram", () => {
+      const input = `\`\`\`mermaid
+classDiagram
+    Animal <|-- Duck
+    Animal <|-- Fish
+    Animal : +int age
+    Animal : +String gender
+    Animal: +isMammal()
+\`\`\``;
+
+      const html = markdownToHtml(input);
+      const output = htmlToMarkdown(html);
+
+      expect(output).toContain("```mermaid");
+      expect(output).toContain("classDiagram");
+      expect(output).toContain("Animal <|-- Duck");
+      expect(output).toContain("+isMammal()");
+    });
+
+    it("preserves mermaid with special characters", () => {
+      const input = `\`\`\`mermaid
+graph LR
+    A["<User>"] --> B["API & Backend"]
+    B --> C{{"Data >= 100?"}}
+\`\`\``;
+
+      const html = markdownToHtml(input);
+      const output = htmlToMarkdown(html);
+
+      expect(output).toContain("```mermaid");
+      // Special chars should be preserved
+      expect(output).toContain("A[");
+      expect(output).toContain("-->");
+    });
+
+    it("handles multiple mermaid blocks in same document", () => {
+      const input = `# Diagrams
+
+\`\`\`mermaid
+graph TD
+    A --> B
+\`\`\`
+
+Some text.
+
+\`\`\`mermaid
+sequenceDiagram
+    X->>Y: Message
+\`\`\``;
+
+      const html = markdownToHtml(input);
+      const output = htmlToMarkdown(html);
+
+      const mermaidCount = (output.match(/```mermaid/g) || []).length;
+      expect(mermaidCount).toBe(2);
+      expect(output).toContain("graph TD");
+      expect(output).toContain("sequenceDiagram");
+    });
+  });
 });

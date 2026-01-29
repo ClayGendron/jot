@@ -116,7 +116,7 @@ workspace/
 
 ### 1.2 Mermaid Diagram Support
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -714,23 +714,33 @@ workspace/
 -   E9.1.2: Links stored as standard markdown `[text](file.md)` ✅
     
 -   E9.1.3: Click internal link to navigate to document ✅
-    
+
+-   E1.1.8: Internal links to specific headings (`[[filename#heading]]`) ✅
+
+-   E9.1.4: Non-existent file links styled differently, create on click ✅
+
+-   E9.1.5: Backlinks panel showing documents linking to current ✅
+
+-   E8.3.3: Toolbar shows active formatting state ✅
+
+-   E1.2.1: Mermaid code blocks recognized and rendered ✅
+
+-   E1.2.2: Diagrams render inline (flowcharts, sequence, Gantt, pie, class) ✅
+
+-   E1.2.3: Click-to-edit diagram source with edit/preview toggle ✅
+
+-   E1.2.4: Export diagrams as PNG/SVG via dropdown menu ✅
+
+-   E1.2.5: Diagrams sync with light/dark theme ✅
+
 
 ### Remaining P0 Work
 
--   E1.1.8: Internal links to specific headings (`[[filename#heading]]`)
-    
--   E9.1.4: Non-existent file links styled differently, create on click
-    
--   E9.1.5: Backlinks panel showing documents linking to current
-    
 -   E2.1.4: Auto-link update on rename
-    
+
 -   E2.1.5: Drag-drop file move
-    
+
 -   E2.1.7: Sort by name/date
-    
--   Epic 1.2: Mermaid diagrams
     
 -   Epic 2.3: Workspace management
     
