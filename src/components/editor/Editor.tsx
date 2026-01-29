@@ -35,6 +35,8 @@ interface EditorProps {
   autofocus?: boolean;
   /** Callback when an internal link is clicked */
   onInternalLinkClick?: (path: string, heading?: string) => void;
+  /** Callback when a broken link is clicked - receives the intended file path */
+  onBrokenLinkClick?: (intendedPath: string) => void;
 }
 
 /**
@@ -53,6 +55,7 @@ export function Editor({
   placeholder = "Start writing...",
   autofocus = true,
   onInternalLinkClick,
+  onBrokenLinkClick,
 }: EditorProps) {
   const { setContent, content, focusMode, sourceMode, toggleSourceMode, filePath } =
     useEditorStore();
@@ -90,6 +93,7 @@ export function Editor({
   // Set up internal link click handling
   useInternalLinkNavigation({
     onNavigate: handleInternalLinkNavigate,
+    onBrokenLinkClick,
     containerRef,
     enabled: !!onInternalLinkClick && !sourceMode,
   });

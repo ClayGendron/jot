@@ -12,6 +12,8 @@ import { resolveInternalLink, isInternalLink, isSameFileHeadingLink } from "@/li
 export interface UseInternalLinkNavigationOptions {
   /** Callback when an internal link is clicked */
   onNavigate: (path: string, heading?: string) => void;
+  /** Callback when a broken link is clicked - receives the intended file path */
+  onBrokenLinkClick?: (intendedPath: string) => void;
   /** Container element to listen for clicks */
   containerRef: React.RefObject<HTMLElement | null>;
   /** Whether navigation is enabled */
@@ -28,6 +30,7 @@ export interface UseInternalLinkNavigationResult {
  */
 export function useInternalLinkNavigation({
   onNavigate,
+  onBrokenLinkClick,
   containerRef,
   enabled = true,
 }: UseInternalLinkNavigationOptions): UseInternalLinkNavigationResult {
@@ -69,11 +72,21 @@ export function useInternalLinkNavigation({
       if (resolved.exists && resolved.resolvedPath) {
         onNavigate(resolved.resolvedPath, resolved.heading);
       } else {
-        // File doesn't exist - could prompt to create it (Phase 5)
-        console.warn(`Internal link target not found: ${href}`);
+        // File doesn't exist - offer to create it
+        // Build the intended path from href
+        const pathWithoutAnchor = href.split("#")[0];
+        const intendedPath = pathWithoutAnchor.startsWith("/")
+          ? pathWithoutAnchor
+          : `${workspacePath}/${pathWithoutAnchor}`;
+
+        if (onBrokenLinkClick) {
+          onBrokenLinkClick(intendedPath);
+        } else {
+          console.warn(`Internal link target not found: ${href}`);
+        }
       }
     },
-    [workspacePath, fileInfos, onNavigate, currentFilePath]
+    [workspacePath, fileInfos, onNavigate, onBrokenLinkClick, currentFilePath]
   );
 
   // Click event listener for the container

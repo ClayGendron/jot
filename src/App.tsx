@@ -289,6 +289,35 @@ function App() {
     [handleFileSelect]
   );
 
+  // Handle broken link click - offer to create the file
+  const handleBrokenLinkClick = useCallback(
+    async (intendedPath: string) => {
+      const fileName = getFileName(intendedPath);
+      const shouldCreate = window.confirm(
+        `"${fileName}" doesn't exist. Would you like to create it?`
+      );
+
+      if (shouldCreate) {
+        try {
+          // Create the file
+          await createFile(intendedPath);
+
+          // Reload workspace to show new file
+          if (workspacePath) {
+            await loadWorkspace(workspacePath);
+          }
+
+          // Open the new file
+          await handleFileSelect(intendedPath);
+        } catch (err) {
+          console.error("Failed to create file:", err);
+          alert(err instanceof Error ? err.message : "Failed to create file");
+        }
+      }
+    },
+    [workspacePath, loadWorkspace, handleFileSelect]
+  );
+
   return (
     <div className="app-layout">
       {/* Sidebar */}
@@ -394,6 +423,7 @@ function App() {
             onUpdate={handleEditorUpdate}
             placeholder="Start writing..."
             onInternalLinkClick={handleInternalLinkClick}
+            onBrokenLinkClick={handleBrokenLinkClick}
           />
         ) : (
           <div className="empty-state">

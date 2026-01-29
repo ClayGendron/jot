@@ -7,25 +7,35 @@ import { renderHook } from "@testing-library/react";
 import { useInternalLinkNavigation } from "./useInternalLinkNavigation";
 
 // Mock the workspace store
-vi.mock("@/stores/workspaceStore", () => ({
-  useWorkspaceStore: vi.fn((selector) => {
-    const state = {
-      workspacePath: "/workspace",
-      fileTree: [],
-    };
+vi.mock("@/stores/workspaceStore", () => {
+  const mockFiles = [
+    { name: "note.md", path: "/workspace/note.md", displayPath: "note.md" },
+    { name: "guide.md", path: "/workspace/docs/guide.md", displayPath: "docs/guide.md" },
+  ];
 
-    // selectAllFilesForSuggestion mock
-    if (typeof selector === "function") {
-      return [
-        { name: "note.md", path: "/workspace/note.md", displayPath: "note.md" },
-        { name: "guide.md", path: "/workspace/docs/guide.md", displayPath: "docs/guide.md" },
-      ];
-    }
+  const selectAllFilesForSuggestion = () => mockFiles;
 
-    return state.workspacePath;
-  }),
-  selectAllFilesForSuggestion: vi.fn(),
-}));
+  return {
+    useWorkspaceStore: vi.fn((selector) => {
+      const state = {
+        workspacePath: "/workspace",
+        fileTree: [],
+      };
+
+      if (typeof selector === "function") {
+        // Check if it's the selectAllFilesForSuggestion selector by name
+        if (selector.name === "selectAllFilesForSuggestion" || selector === selectAllFilesForSuggestion) {
+          return mockFiles;
+        }
+        // Otherwise, call the selector with state
+        return selector(state);
+      }
+
+      return state.workspacePath;
+    }),
+    selectAllFilesForSuggestion,
+  };
+});
 
 // Mock the editor store
 vi.mock("@/stores/editorStore", () => ({
@@ -118,6 +128,24 @@ describe("useInternalLinkNavigation", () => {
     result.current.handleLinkClick("missing.md");
 
     expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it("calls onBrokenLinkClick for non-existent files when provided", () => {
+    const onBrokenLinkClick = vi.fn();
+
+    const { result } = renderHook(() =>
+      useInternalLinkNavigation({
+        onNavigate,
+        onBrokenLinkClick,
+        containerRef,
+        enabled: true,
+      })
+    );
+
+    result.current.handleLinkClick("missing.md");
+
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(onBrokenLinkClick).toHaveBeenCalledWith("/workspace/missing.md");
   });
 
   it("handles same-file heading links", () => {
