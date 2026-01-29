@@ -18,8 +18,13 @@ export interface InternalLinkMarkOptions {
 
 /**
  * Extended Link extension with internal link support
+ *
+ * Note: Uses a unique name to avoid TipTap's duplicate extension warning
+ * when multiple instances are created during React re-renders.
  */
 export const InternalLinkMark = Link.extend<InternalLinkMarkOptions>({
+  name: "internalLinkMark",
+
   addOptions() {
     return {
       ...this.parent?.(),
