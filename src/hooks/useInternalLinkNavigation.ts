@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo } from "react";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { resolveInternalLink, isInternalLink, isSameFileHeadingLink } from "@/lib/links/resolver";
-import { isWithinWorkspace } from "@/lib/links/linkService";
+import { isWithinWorkspace, shouldScrollOnly } from "@/lib/links/linkService";
 import type { FileEntry } from "@/lib/tauri/files";
 
 export interface UseInternalLinkNavigationOptions {
@@ -21,6 +21,8 @@ export interface UseInternalLinkNavigationOptions {
   containerRef: React.RefObject<HTMLElement | null>;
   /** Whether navigation is enabled */
   enabled?: boolean;
+  /** Current file path - used to detect same-file navigation with explicit filename */
+  currentFilePath?: string | null;
 }
 
 export interface UseInternalLinkNavigationResult {
@@ -37,6 +39,7 @@ export function useInternalLinkNavigation({
   onBrokenLinkClick,
   containerRef,
   enabled = true,
+  currentFilePath,
 }: UseInternalLinkNavigationOptions): UseInternalLinkNavigationResult {
   // Use individual selectors to avoid React 19 + Zustand snapshot caching issues
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
@@ -87,6 +90,14 @@ export function useInternalLinkNavigation({
       const resolved = resolveInternalLink(href, workspacePath, fileInfos);
 
       if (resolved.exists && resolved.resolvedPath) {
+        // Check if this is same-file navigation (e.g., "currentfile.md#section")
+        // In this case, just scroll instead of reloading the file
+        if (currentFilePath && shouldScrollOnly(resolved.resolvedPath, currentFilePath, resolved.heading)) {
+          if (resolved.heading && onScrollToHeading) {
+            onScrollToHeading(resolved.heading);
+          }
+          return;
+        }
         onNavigate(resolved.resolvedPath, resolved.heading);
       } else {
         // File doesn't exist - offer to create it
@@ -109,7 +120,7 @@ export function useInternalLinkNavigation({
         }
       }
     },
-    [workspacePath, fileInfos, onNavigate, onScrollToHeading, onBrokenLinkClick]
+    [workspacePath, fileInfos, onNavigate, onScrollToHeading, onBrokenLinkClick, currentFilePath]
   );
 
   // Click event listener for the container

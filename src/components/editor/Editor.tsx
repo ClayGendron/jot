@@ -13,7 +13,8 @@ import { TableHeader } from "@tiptap/extension-table-header";
 import { common, createLowlight } from "lowlight";
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { useEditorStore } from "@/stores/editorStore";
-import { useWorkspaceStore, selectAllFilesForSuggestion } from "@/stores/workspaceStore";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
+import type { FileEntry } from "@/lib/tauri/files";
 import { EditorToolbar } from "./EditorToolbar";
 import { CodeBlockWithCopy } from "./extensions/CodeBlockWithCopy";
 import { HeadingWithId } from "./extensions/HeadingWithId";
@@ -72,8 +73,37 @@ export function Editor({
   // Ref for the editor container (for internal link click handling)
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Get files for internal link suggestions - use centralized selector
-  const files = useWorkspaceStore(selectAllFilesForSuggestion);
+  // Get files for internal link suggestions - compute with useMemo for React 19 compatibility
+  // Using primitive selectors to avoid Zustand snapshot caching issues
+  const fileTree = useWorkspaceStore((state) => state.fileTree);
+  const workspacePath = useWorkspaceStore((state) => state.workspacePath);
+
+  const files = useMemo(() => {
+    const result: { name: string; path: string; displayPath: string }[] = [];
+
+    const collectFiles = (entries: FileEntry[]) => {
+      for (const entry of entries) {
+        if (entry.is_markdown) {
+          const displayPath = workspacePath
+            ? entry.path.replace(workspacePath + "/", "")
+            : entry.name;
+
+          result.push({
+            name: entry.name,
+            path: entry.path,
+            displayPath,
+          });
+        }
+        if (entry.children) {
+          collectFiles(entry.children);
+        }
+      }
+    };
+
+    collectFiles(fileTree);
+    return result;
+  }, [fileTree, workspacePath]);
+
   const getFiles = useCallback(() => files, [files]);
 
   // Get current file path and content for same-file heading links
@@ -106,6 +136,7 @@ export function Editor({
     onBrokenLinkClick,
     containerRef,
     enabled: !!onInternalLinkClick && !sourceMode,
+    currentFilePath: filePath,
   });
 
   // Track markdown source when in source mode

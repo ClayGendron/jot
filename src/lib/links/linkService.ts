@@ -90,22 +90,28 @@ export function validateAndNormalizePath(
 
 /**
  * Extract headings from HTML content (for editor content)
+ * Uses DOMParser to correctly handle inline formatting (strong, em, code, etc.)
  */
 export function extractHeadingsFromHtml(html: string): Heading[] {
+  if (!html) return [];
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
   const headings: Heading[] = [];
 
-  // Match heading tags with their content
-  const headingRegex = /<h([1-6])(?:\s+id="([^"]*)")?[^>]*>([^<]*)<\/h\1>/gi;
-  let match;
+  doc.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach((element) => {
+    const level = parseInt(element.tagName.charAt(1), 10) as 1 | 2 | 3 | 4 | 5 | 6;
+    const text = element.textContent?.trim() || "";
+    const existingId = element.getAttribute("id");
 
-  while ((match = headingRegex.exec(html)) !== null) {
-    const level = parseInt(match[1], 10) as 1 | 2 | 3 | 4 | 5 | 6;
-    const existingId = match[2];
-    const text = match[3].trim();
-    const id = existingId || generateHeadingId(text);
-
-    headings.push({ level, text, id });
-  }
+    if (text) {
+      headings.push({
+        level,
+        text,
+        id: existingId || generateHeadingId(text),
+      });
+    }
+  });
 
   return headings;
 }

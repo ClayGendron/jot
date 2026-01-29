@@ -135,6 +135,51 @@ describe("linkService", () => {
 
       expect(headings).toHaveLength(0);
     });
+
+    it("extracts text from headings with bold formatting", () => {
+      const html = '<h1>Hello <strong>World</strong></h1>';
+      const headings = extractHeadingsFromHtml(html);
+
+      expect(headings).toHaveLength(1);
+      expect(headings[0].text).toBe("Hello World");
+      expect(headings[0].id).toBe("hello-world");
+    });
+
+    it("extracts text from headings with italic formatting", () => {
+      const html = '<h2><em>Emphasized</em> Section</h2>';
+      const headings = extractHeadingsFromHtml(html);
+
+      expect(headings).toHaveLength(1);
+      expect(headings[0].text).toBe("Emphasized Section");
+    });
+
+    it("extracts text from headings with code formatting", () => {
+      const html = '<h3>Using <code>npm install</code></h3>';
+      const headings = extractHeadingsFromHtml(html);
+
+      expect(headings).toHaveLength(1);
+      expect(headings[0].text).toBe("Using npm install");
+    });
+
+    it("extracts text from headings with mixed inline formatting", () => {
+      const html = '<h1><strong>Bold</strong> and <em>italic</em> and <code>code</code></h1>';
+      const headings = extractHeadingsFromHtml(html);
+
+      expect(headings).toHaveLength(1);
+      expect(headings[0].text).toBe("Bold and italic and code");
+    });
+
+    it("extracts text from headings with nested formatting", () => {
+      const html = '<h2><strong><em>Bold Italic</em></strong> Text</h2>';
+      const headings = extractHeadingsFromHtml(html);
+
+      expect(headings).toHaveLength(1);
+      expect(headings[0].text).toBe("Bold Italic Text");
+    });
+
+    it("returns empty array for empty input", () => {
+      expect(extractHeadingsFromHtml("")).toHaveLength(0);
+    });
   });
 
   describe("extractHeadingsFromMarkdown", () => {
