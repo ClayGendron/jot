@@ -139,7 +139,7 @@ workspace/
 | E2.1.7 | As a user, I can sort files by name/date | Sort dropdown in file tree header |
 
 ### 2.2 Document Outline
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 |----|------------|---------------------|
@@ -559,6 +559,10 @@ workspace/
 - E2.1.2: Expand/collapse folders ✅
 - E2.1.3: Create new files/folders via context menu ✅
 - E2.1.6: Delete files with confirmation dialog ✅
+- E2.2.1: Document outline showing H1-H6 hierarchy ✅
+- E2.2.2: Click outline item to navigate to heading ✅
+- E2.2.3: Current section highlighted as user scrolls ✅
+- E2.2.4: Filter outline by search ✅
 - E3.1.1: Auto-save after 1 second of inactivity ✅
 - E3.1.2: Save status indicator ("Saving...", "Saved") ✅
 - E3.1.3: Cmd/Ctrl+S triggers immediate save ✅
@@ -577,7 +581,6 @@ workspace/
 - E2.1.5: Drag-drop file move
 - E2.1.7: Sort by name/date
 - Epic 1.2: Mermaid diagrams
-- Epic 2.2: Document outline
 - Epic 2.3: Workspace management
 - Epic 3.2: Version history
 - Epic 4.1-4.2: Search
