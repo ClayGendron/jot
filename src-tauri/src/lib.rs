@@ -1,3 +1,4 @@
+use regex::RegexBuilder;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -259,6 +260,179 @@ fn jot_watch_directory(_path: &str) -> Result<(), String> {
 }
 
 // ==========================================
+// Global Search Commands
+// ==========================================
+
+/// A single match within a search result
+#[derive(Debug, Clone, Serialize)]
+pub struct SearchMatch {
+    /// 1-indexed line number
+    pub line_number: usize,
+    /// The line content containing the match
+    pub line_content: String,
+    /// Start index of match within line_content
+    pub match_start: usize,
+    /// End index of match within line_content
+    pub match_end: usize,
+    /// Line before the match (for context)
+    pub context_before: Option<String>,
+    /// Line after the match (for context)
+    pub context_after: Option<String>,
+}
+
+/// Search results for a single file
+#[derive(Debug, Clone, Serialize)]
+pub struct FileSearchResult {
+    /// Full path to the file
+    pub file_path: String,
+    /// File name only
+    pub file_name: String,
+    /// All matches in this file
+    pub matches: Vec<SearchMatch>,
+}
+
+/// Search all markdown files in the workspace
+#[tauri::command]
+fn jot_search_workspace(
+    workspace_path: &str,
+    search_term: &str,
+    case_sensitive: bool,
+    use_regex: bool,
+    path_filter: Option<&str>,
+) -> Result<Vec<FileSearchResult>, String> {
+    if search_term.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let workspace = Path::new(workspace_path);
+    if !workspace.exists() || !workspace.is_dir() {
+        return Err(format!("Invalid workspace path: {}", workspace_path));
+    }
+
+    // Build the regex pattern
+    let pattern = if use_regex {
+        search_term.to_string()
+    } else {
+        // Escape special regex characters for literal search
+        regex::escape(search_term)
+    };
+
+    let regex = RegexBuilder::new(&pattern)
+        .case_insensitive(!case_sensitive)
+        .build()
+        .map_err(|e| format!("Invalid search pattern: {}", e))?;
+
+    // Collect all markdown files
+    let mut markdown_files = Vec::new();
+    collect_markdown_files(workspace, &mut markdown_files)?;
+
+    // Apply path filter if provided
+    let files_to_search: Vec<PathBuf> = if let Some(filter) = path_filter {
+        if filter.is_empty() {
+            markdown_files
+        } else {
+            // Build glob pattern relative to workspace
+            let glob_pattern = workspace.join(filter).to_string_lossy().to_string();
+            let glob_matches: std::collections::HashSet<PathBuf> =
+                glob::glob(&glob_pattern)
+                    .map_err(|e| format!("Invalid path filter: {}", e))?
+                    .filter_map(Result::ok)
+                    .collect();
+
+            markdown_files
+                .into_iter()
+                .filter(|f| glob_matches.contains(f))
+                .collect()
+        }
+    } else {
+        markdown_files
+    };
+
+    // Search each file
+    let mut results = Vec::new();
+    for file_path in files_to_search {
+        if let Ok(matches) = search_file(&file_path, &regex) {
+            if !matches.is_empty() {
+                let file_name = file_path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_default();
+
+                results.push(FileSearchResult {
+                    file_path: file_path.to_string_lossy().to_string(),
+                    file_name,
+                    matches,
+                });
+            }
+        }
+    }
+
+    // Sort results by file path for consistent ordering
+    results.sort_by(|a, b| a.file_path.cmp(&b.file_path));
+
+    Ok(results)
+}
+
+/// Recursively collect all markdown files in a directory
+fn collect_markdown_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
+    let read_dir = fs::read_dir(dir).map_err(|e| e.to_string())?;
+
+    for entry in read_dir {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        // Skip hidden files/folders and .jot directory
+        if name.starts_with('.') {
+            continue;
+        }
+
+        if path.is_dir() {
+            collect_markdown_files(&path, files)?;
+        } else if name.ends_with(".md") {
+            files.push(path);
+        }
+    }
+
+    Ok(())
+}
+
+/// Search a single file for matches
+fn search_file(file_path: &Path, regex: &regex::Regex) -> Result<Vec<SearchMatch>, String> {
+    let content = fs::read_to_string(file_path).map_err(|e| e.to_string())?;
+    let lines: Vec<&str> = content.lines().collect();
+
+    let mut matches = Vec::new();
+
+    for (line_idx, line) in lines.iter().enumerate() {
+        for mat in regex.find_iter(line) {
+            let context_before = if line_idx > 0 {
+                Some(lines[line_idx - 1].to_string())
+            } else {
+                None
+            };
+
+            let context_after = if line_idx + 1 < lines.len() {
+                Some(lines[line_idx + 1].to_string())
+            } else {
+                None
+            };
+
+            matches.push(SearchMatch {
+                line_number: line_idx + 1, // 1-indexed
+                line_content: line.to_string(),
+                match_start: mat.start(),
+                match_end: mat.end(),
+                context_before,
+                context_after,
+            });
+        }
+    }
+
+    Ok(matches)
+}
+
+// ==========================================
 // Version History Commands
 // ==========================================
 
@@ -383,6 +557,8 @@ pub fn run() {
             jot_watch_directory,
             jot_normalize_path,
             jot_is_within_workspace,
+            // Global search commands
+            jot_search_workspace,
             // Version history commands
             jot_save_version,
             jot_get_versions,

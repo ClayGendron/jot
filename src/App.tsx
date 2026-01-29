@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { Editor } from "@/components/editor/Editor";
+import { Editor, type EditorRef } from "@/components/editor/Editor";
 import {
   FileTree,
   DocumentOutline,
   BacklinksPanel,
   SortDropdown,
 } from "@/components/sidebar";
+import { FindReplaceBar, GlobalSearchPanel } from "@/components/search";
 import { SaveIndicator } from "@/components/ui/SaveIndicator";
 import { VersionHistoryPanel, DiffViewer } from "@/components/history";
 import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useLinksStore } from "@/stores/linksStore";
+import { useSearchStore } from "@/stores/searchStore";
 import { getBacklinksForFile } from "@/lib/links/backlinks";
 import { useAutosave } from "@/hooks/useAutosave";
 import { useDocumentOutline } from "@/hooks/useDocumentOutline";
@@ -89,6 +91,15 @@ function App() {
   const [editorContent, setEditorContent] = useState("");
   const [activeTab, setActiveTab] = useState<SidebarTab>("files");
   const mainContentRef = useRef<HTMLElement | null>(null);
+  const editorRef = useRef<EditorRef | null>(null);
+
+  // Search store - individual selectors for React 19 compatibility
+  const documentSearchOpen = useSearchStore((s) => s.documentSearchOpen);
+  const openDocumentSearch = useSearchStore((s) => s.openDocumentSearch);
+  const closeDocumentSearch = useSearchStore((s) => s.closeDocumentSearch);
+  const globalSearchOpen = useSearchStore((s) => s.globalSearchOpen);
+  const openGlobalSearch = useSearchStore((s) => s.openGlobalSearch);
+  const closeGlobalSearch = useSearchStore((s) => s.closeGlobalSearch);
 
   // Version history state
   const [showHistory, setShowHistory] = useState(false);
@@ -248,11 +259,51 @@ function App() {
         e.preventDefault();
         toggleSidebar();
       }
+
+      // Cmd/Ctrl + F: Find in document
+      if (isMod && e.key === "f" && !e.shiftKey) {
+        e.preventDefault();
+        if (filePath) {
+          openDocumentSearch();
+        }
+      }
+
+      // Cmd/Ctrl + Shift + F: Global search
+      if (isMod && e.key === "f" && e.shiftKey) {
+        e.preventDefault();
+        if (workspacePath) {
+          openGlobalSearch();
+        }
+      }
+
+      // Escape: Close search panels
+      if (e.key === "Escape") {
+        if (documentSearchOpen) {
+          e.preventDefault();
+          closeDocumentSearch();
+          editorRef.current?.editor?.commands.clearSearch();
+        } else if (globalSearchOpen) {
+          e.preventDefault();
+          closeGlobalSearch();
+        }
+      }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [handleSave, handleOpenFolder, toggleSidebar]);
+  }, [
+    handleSave,
+    handleOpenFolder,
+    toggleSidebar,
+    filePath,
+    workspacePath,
+    documentSearchOpen,
+    openDocumentSearch,
+    closeDocumentSearch,
+    globalSearchOpen,
+    openGlobalSearch,
+    closeGlobalSearch,
+  ]);
 
   // Create new file
   const handleCreateFile = useCallback(
@@ -473,6 +524,23 @@ function App() {
     []
   );
 
+  // Handle global search result click - open file and scroll to line
+  const handleGlobalSearchResultClick = useCallback(
+    async (resultFilePath: string, _lineNumber: number) => {
+      // Open the file if not already open
+      if (filePath !== resultFilePath) {
+        await handleFileSelect(resultFilePath);
+      }
+
+      // TODO: Scroll to the specific line in the editor
+      // For now, we just open the file
+
+      // Close the global search panel
+      closeGlobalSearch();
+    },
+    [filePath, handleFileSelect, closeGlobalSearch]
+  );
+
   // Handle broken link click - offer to create the file
   const handleBrokenLinkClick = useCallback(
     async (intendedPath: string) => {
@@ -640,14 +708,27 @@ function App() {
 
         {/* Editor */}
         {filePath ? (
-          <Editor
-            initialContent={editorContent}
-            onUpdate={handleEditorUpdate}
-            placeholder="Start writing..."
-            onInternalLinkClick={handleInternalLinkClick}
-            onScrollToHeading={handleScrollToHeading}
-            onBrokenLinkClick={handleBrokenLinkClick}
-          />
+          <div className="editor-wrapper">
+            {/* Find/Replace Bar */}
+            {documentSearchOpen && (
+              <FindReplaceBar
+                editor={editorRef.current?.editor ?? null}
+                onClose={() => {
+                  closeDocumentSearch();
+                  editorRef.current?.editor?.commands.clearSearch();
+                }}
+              />
+            )}
+            <Editor
+              ref={editorRef}
+              initialContent={editorContent}
+              onUpdate={handleEditorUpdate}
+              placeholder="Start writing..."
+              onInternalLinkClick={handleInternalLinkClick}
+              onScrollToHeading={handleScrollToHeading}
+              onBrokenLinkClick={handleBrokenLinkClick}
+            />
+          </div>
         ) : (
           <div className="empty-state">
             <div className="empty-state-content">
@@ -663,6 +744,15 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Global Search Panel */}
+      {globalSearchOpen && workspacePath && (
+        <GlobalSearchPanel
+          workspacePath={workspacePath}
+          onResultClick={handleGlobalSearchResultClick}
+          onClose={closeGlobalSearch}
+        />
+      )}
 
       {/* Version History Panel */}
       {showHistory && filePath && workspacePath && (

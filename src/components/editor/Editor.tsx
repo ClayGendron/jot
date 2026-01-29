@@ -1,4 +1,5 @@
 import { useEditor, EditorContent } from "@tiptap/react";
+import type { Editor as TipTapEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Typography from "@tiptap/extension-typography";
@@ -11,7 +12,15 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { common, createLowlight } from "lowlight";
-import { useCallback, useEffect, useState, useRef, useMemo } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  useRef,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import type { FileEntry } from "@/lib/tauri/files";
@@ -20,6 +29,7 @@ import { CodeBlockWithCopy } from "./extensions/CodeBlockWithCopy";
 import { HeadingWithId } from "./extensions/HeadingWithId";
 import { InternalLinkMark } from "./extensions/InternalLinkMark";
 import { InternalLink } from "./extensions/InternalLink";
+import { SearchAndReplace } from "./extensions/SearchAndReplace";
 import { createSuggestionRender } from "./extensions/internalLinkSuggestionRender";
 import { SourceEditor } from "./SourceEditor";
 import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
@@ -30,7 +40,7 @@ import { readFile } from "@/lib/tauri/files";
 // Create lowlight instance with common languages
 const lowlight = createLowlight(common);
 
-interface EditorProps {
+export interface EditorProps {
   initialContent?: string;
   onUpdate?: (content: string) => void;
   placeholder?: string;
@@ -44,6 +54,13 @@ interface EditorProps {
 }
 
 /**
+ * Editor ref handle for external access to editor instance
+ */
+export interface EditorRef {
+  editor: TipTapEditor | null;
+}
+
+/**
  * Core WYSIWYG markdown editor built on TipTap
  *
  * Features:
@@ -52,16 +69,20 @@ interface EditorProps {
  * - Task lists, tables, images
  * - Typography improvements (smart quotes, etc.)
  * - Internal link support
+ * - Search and replace (Cmd+F)
  */
-export function Editor({
-  initialContent = "",
-  onUpdate,
-  placeholder = "Start writing...",
-  autofocus = true,
-  onInternalLinkClick,
-  onScrollToHeading,
-  onBrokenLinkClick,
-}: EditorProps) {
+export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
+  {
+    initialContent = "",
+    onUpdate,
+    placeholder = "Start writing...",
+    autofocus = true,
+    onInternalLinkClick,
+    onScrollToHeading,
+    onBrokenLinkClick,
+  },
+  ref
+) {
   // Use individual selectors to avoid React 19 + Zustand issues
   const setContent = useEditorStore((state) => state.setContent);
   const content = useEditorStore((state) => state.content);
@@ -194,6 +215,10 @@ export function Editor({
           render: suggestionRender,
         },
       }),
+      SearchAndReplace.configure({
+        searchResultClass: "search-result",
+        searchResultCurrentClass: "search-result-current",
+      }),
     ],
     content: initialContent || content,
     autofocus,
@@ -209,6 +234,15 @@ export function Editor({
       onUpdate?.(html);
     },
   });
+
+  // Expose editor instance via ref for parent components (e.g., FindReplaceBar)
+  useImperativeHandle(
+    ref,
+    () => ({
+      editor,
+    }),
+    [editor]
+  );
 
   // Sync content when initialContent changes
   useEffect(() => {
@@ -294,6 +328,6 @@ export function Editor({
       )}
     </div>
   );
-}
+});
 
 export default Editor;

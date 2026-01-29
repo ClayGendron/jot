@@ -231,7 +231,7 @@ workspace/
 
 ### 4.1 Keyword Search
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -749,23 +749,35 @@ workspace/
 
 -   E3.2.5: SQLite storage with 30-day configurable retention ✅
 
+-   E4.1.1: In-document search with Cmd+F, highlights matches ✅
+
+-   E4.1.2: Find and replace with Replace/Replace All buttons ✅
+
+-   E4.1.3: Global workspace search with Cmd+Shift+F ✅
+
+-   E4.1.4: Search results with file name, line number, context ✅
+
+-   E4.1.5: Path filter support (glob patterns like `docs/*.md`) ✅
+
+-   E4.1.6: Regex mode toggle in both local and global search ✅
+
 
 ### Remaining P0 Work
 
 -   Epic 2.3: Workspace management
-    
--   Epic 4.1-4.2: Search
-    
+
+-   Epic 4.2: Semantic search (vector)
+
 -   Epic 5.1-5.2: Spell/grammar check
-    
+
 -   Epic 6.1-6.4: Export
-    
+
 -   Epic 7.1-7.3: Themes/typography/preferences
-    
+
 -   Epic 8.2: Tabs
-    
+
 -   Epic 10.1: iOS app
-    
+
 -   Epic 11.1-11.2: Performance
     
 

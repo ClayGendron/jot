@@ -1787,6 +1787,8 @@ name = "jot"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "glob",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",
