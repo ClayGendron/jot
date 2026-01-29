@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useEditorStore } from "@/stores/editorStore";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { writeFile } from "@/lib/tauri/files";
 import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
+import { saveVersion } from "@/lib/tauri/versionHistory";
 
 const AUTOSAVE_DELAY_MS = 1000;
 const SAVED_INDICATOR_DURATION_MS = 2000;
@@ -39,10 +41,12 @@ function isValidCrashRecoveryData(data: unknown): data is CrashRecoveryData {
 export function useAutosave(content: string) {
   const { filePath, isDirty, markSaved, setSaveStatus, setContent } =
     useEditorStore();
+  const workspacePath = useWorkspaceStore((state) => state.workspacePath);
 
   // Use refs to avoid stale closure issues in debounced saves
   const contentRef = useRef(content);
   const filePathRef = useRef(filePath);
+  const workspacePathRef = useRef(workspacePath);
   const isDirtyRef = useRef(isDirty);
   const isSavingRef = useRef(false);
 
@@ -54,6 +58,10 @@ export function useAutosave(content: string) {
   useEffect(() => {
     filePathRef.current = filePath;
   }, [filePath]);
+
+  useEffect(() => {
+    workspacePathRef.current = workspacePath;
+  }, [workspacePath]);
 
   useEffect(() => {
     isDirtyRef.current = isDirty;
@@ -87,6 +95,7 @@ export function useAutosave(content: string) {
     const currentFilePath = filePathRef.current;
     const currentContent = contentRef.current;
     const currentIsDirty = isDirtyRef.current;
+    const currentWorkspacePath = workspacePathRef.current;
 
     if (!currentFilePath || !currentIsDirty || isSavingRef.current) return;
 
@@ -97,6 +106,17 @@ export function useAutosave(content: string) {
       // Convert HTML to Markdown before saving (canonical format on disk is Markdown)
       const markdownContent = htmlToMarkdown(currentContent);
       await writeFile(currentFilePath, markdownContent);
+
+      // Save version snapshot (only if workspace is open)
+      if (currentWorkspacePath) {
+        try {
+          await saveVersion(currentWorkspacePath, currentFilePath, markdownContent);
+        } catch (versionError) {
+          // Version history is non-critical - log but don't fail the save
+          console.warn("Failed to save version:", versionError);
+        }
+      }
+
       markSaved();
       setSaveStatus("saved");
       clearCrashRecovery();

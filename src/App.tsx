@@ -8,6 +8,7 @@ import {
   SortDropdown,
 } from "@/components/sidebar";
 import { SaveIndicator } from "@/components/ui/SaveIndicator";
+import { VersionHistoryPanel, DiffViewer } from "@/components/history";
 import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useLinksStore } from "@/stores/linksStore";
@@ -88,6 +89,11 @@ function App() {
   const [editorContent, setEditorContent] = useState("");
   const [activeTab, setActiveTab] = useState<SidebarTab>("files");
   const mainContentRef = useRef<HTMLElement | null>(null);
+
+  // Version history state
+  const [showHistory, setShowHistory] = useState(false);
+  const [showDiffViewer, setShowDiffViewer] = useState(false);
+  const [diffVersions, setDiffVersions] = useState<{ old: number; new: number } | null>(null);
 
   // Document outline hook
   const { headings, activeHeadingId, scrollToHeading } = useDocumentOutline({
@@ -444,6 +450,29 @@ function App() {
     [handleFileSelect]
   );
 
+  // Handle version restore
+  const handleVersionRestore = useCallback(
+    (content: string) => {
+      // Content from version history is in markdown format
+      // Convert to HTML for the editor
+      const htmlContent = markdownToHtml(content);
+      setEditorContent(htmlContent);
+      setContent(htmlContent);
+      setShowHistory(false);
+    },
+    [setContent]
+  );
+
+  // Handle compare versions
+  const handleCompareVersions = useCallback(
+    (oldVersionId: number, newVersionId: number) => {
+      setDiffVersions({ old: oldVersionId, new: newVersionId });
+      setShowDiffViewer(true);
+      setShowHistory(false);
+    },
+    []
+  );
+
   // Handle broken link click - offer to create the file
   const handleBrokenLinkClick = useCallback(
     async (intendedPath: string) => {
@@ -596,6 +625,17 @@ function App() {
             </span>
             <SaveIndicator />
           </div>
+          <div className="title-bar-right">
+            {filePath && workspacePath && (
+              <button
+                className="title-bar-btn"
+                onClick={() => setShowHistory(!showHistory)}
+                title="Version history"
+              >
+                <HistoryIcon />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Editor */}
@@ -623,6 +663,40 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Version History Panel */}
+      {showHistory && filePath && workspacePath && (
+        <VersionHistoryPanel
+          filePath={filePath}
+          workspacePath={workspacePath}
+          onRestore={handleVersionRestore}
+          onClose={() => setShowHistory(false)}
+          onCompare={handleCompareVersions}
+        />
+      )}
+
+      {/* Diff Viewer */}
+      {showDiffViewer && diffVersions && workspacePath && (
+        <DiffViewer
+          workspacePath={workspacePath}
+          oldVersionId={diffVersions.old}
+          newVersionId={diffVersions.new}
+          onClose={() => {
+            setShowDiffViewer(false);
+            setDiffVersions(null);
+          }}
+          onRestoreOld={(content) => {
+            handleVersionRestore(content);
+            setShowDiffViewer(false);
+            setDiffVersions(null);
+          }}
+          onRestoreNew={(content) => {
+            handleVersionRestore(content);
+            setShowDiffViewer(false);
+            setDiffVersions(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -738,6 +812,24 @@ function BacklinksTabIcon() {
     >
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
+function HistoryIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
     </svg>
   );
 }

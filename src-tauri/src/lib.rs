@@ -2,6 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+mod version_history;
+use version_history::{Version, VersionDiff, VersionMeta};
+
 /// Represents a file or folder in the file tree
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileEntry {
@@ -255,6 +258,111 @@ fn jot_watch_directory(_path: &str) -> Result<(), String> {
     Ok(())
 }
 
+// ==========================================
+// Version History Commands
+// ==========================================
+
+/// Save a new version snapshot
+#[tauri::command]
+fn jot_save_version(
+    workspace_path: &str,
+    file_path: &str,
+    content: &str,
+) -> Result<i64, String> {
+    // Only save if content has changed from latest version
+    let changed = version_history::is_content_changed(workspace_path, file_path, content)
+        .map_err(|e| e.to_string())?;
+
+    if !changed {
+        return Ok(-1); // Return -1 to indicate no new version created
+    }
+
+    version_history::save_version(workspace_path, file_path, content)
+        .map_err(|e| e.to_string())
+}
+
+/// Get version metadata list for a file (most recent first)
+#[tauri::command]
+fn jot_get_versions(
+    workspace_path: &str,
+    file_path: &str,
+    limit: i32,
+) -> Result<Vec<VersionMeta>, String> {
+    version_history::get_versions(workspace_path, file_path, limit)
+        .map_err(|e| e.to_string())
+}
+
+/// Get a specific version by ID
+#[tauri::command]
+fn jot_get_version(workspace_path: &str, version_id: i64) -> Result<Option<Version>, String> {
+    version_history::get_version(workspace_path, version_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Delete a specific version
+#[tauri::command]
+fn jot_delete_version(workspace_path: &str, version_id: i64) -> Result<bool, String> {
+    version_history::delete_version(workspace_path, version_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Delete all versions for a file
+#[tauri::command]
+fn jot_delete_file_versions(workspace_path: &str, file_path: &str) -> Result<i32, String> {
+    version_history::delete_file_versions(workspace_path, file_path)
+        .map_err(|e| e.to_string())
+}
+
+/// Compare two versions and return a diff
+#[tauri::command]
+fn jot_diff_versions(
+    workspace_path: &str,
+    old_version_id: i64,
+    new_version_id: i64,
+) -> Result<Option<VersionDiff>, String> {
+    version_history::diff_versions(workspace_path, old_version_id, new_version_id)
+        .map_err(|e| e.to_string())
+}
+
+/// Get total version count for a file
+#[tauri::command]
+fn jot_get_version_count(workspace_path: &str, file_path: &str) -> Result<i32, String> {
+    version_history::get_version_count(workspace_path, file_path)
+        .map_err(|e| e.to_string())
+}
+
+/// Clean up old versions based on retention policy
+#[tauri::command]
+fn jot_cleanup_old_versions(workspace_path: &str) -> Result<i32, String> {
+    version_history::cleanup_old_versions(workspace_path)
+        .map_err(|e| e.to_string())
+}
+
+/// Get the retention setting in days
+#[tauri::command]
+fn jot_get_retention_days(workspace_path: &str) -> Result<i32, String> {
+    version_history::get_retention_days(workspace_path)
+        .map_err(|e| e.to_string())
+}
+
+/// Set the retention setting in days
+#[tauri::command]
+fn jot_set_retention_days(workspace_path: &str, days: i32) -> Result<(), String> {
+    version_history::set_retention_days(workspace_path, days)
+        .map_err(|e| e.to_string())
+}
+
+/// Update file path for all versions when a file is renamed
+#[tauri::command]
+fn jot_update_version_file_path(
+    workspace_path: &str,
+    old_path: &str,
+    new_path: &str,
+) -> Result<i32, String> {
+    version_history::update_file_path(workspace_path, old_path, new_path)
+        .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -275,6 +383,18 @@ pub fn run() {
             jot_watch_directory,
             jot_normalize_path,
             jot_is_within_workspace,
+            // Version history commands
+            jot_save_version,
+            jot_get_versions,
+            jot_get_version,
+            jot_delete_version,
+            jot_delete_file_versions,
+            jot_diff_versions,
+            jot_get_version_count,
+            jot_cleanup_old_versions,
+            jot_get_retention_days,
+            jot_set_retention_days,
+            jot_update_version_file_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
