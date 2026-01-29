@@ -6,7 +6,8 @@
 
 import { useCallback, useEffect } from "react";
 import { useWorkspaceStore, selectAllFilesForSuggestion } from "@/stores/workspaceStore";
-import { resolveInternalLink, isInternalLink } from "@/lib/links/resolver";
+import { useEditorStore } from "@/stores/editorStore";
+import { resolveInternalLink, isInternalLink, isSameFileHeadingLink } from "@/lib/links/resolver";
 
 export interface UseInternalLinkNavigationOptions {
   /** Callback when an internal link is clicked */
@@ -32,6 +33,7 @@ export function useInternalLinkNavigation({
 }: UseInternalLinkNavigationOptions): UseInternalLinkNavigationResult {
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const files = useWorkspaceStore(selectAllFilesForSuggestion);
+  const currentFilePath = useEditorStore((state) => state.filePath);
 
   // Convert SuggestionFile[] to FileInfo[] for resolver
   const fileInfos = files.map((f) => ({
@@ -41,6 +43,23 @@ export function useInternalLinkNavigation({
 
   const handleLinkClick = useCallback(
     (href: string) => {
+      // Handle same-file heading links (#heading)
+      if (isSameFileHeadingLink(href)) {
+        const heading = href.slice(1); // Remove the leading #
+        if (currentFilePath) {
+          // Navigate to the same file with heading
+          onNavigate(currentFilePath, heading);
+        } else {
+          // No current file, just scroll to the heading element directly
+          const headingElement = document.getElementById(heading);
+          if (headingElement) {
+            headingElement.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+        }
+        return;
+      }
+
+      // Handle cross-file internal links
       if (!workspacePath || !isInternalLink(href)) {
         return;
       }
@@ -54,7 +73,7 @@ export function useInternalLinkNavigation({
         console.warn(`Internal link target not found: ${href}`);
       }
     },
-    [workspacePath, fileInfos, onNavigate]
+    [workspacePath, fileInfos, onNavigate, currentFilePath]
   );
 
   // Click event listener for the container

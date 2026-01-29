@@ -27,6 +27,21 @@ vi.mock("@/stores/workspaceStore", () => ({
   selectAllFilesForSuggestion: vi.fn(),
 }));
 
+// Mock the editor store
+vi.mock("@/stores/editorStore", () => ({
+  useEditorStore: vi.fn((selector) => {
+    const state = {
+      filePath: "/workspace/current.md",
+    };
+
+    if (typeof selector === "function") {
+      return selector(state);
+    }
+
+    return state;
+  }),
+}));
+
 describe("useInternalLinkNavigation", () => {
   let onNavigate: (path: string, heading?: string) => void;
   let containerRef: { current: HTMLElement | null };
@@ -103,5 +118,33 @@ describe("useInternalLinkNavigation", () => {
     result.current.handleLinkClick("missing.md");
 
     expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it("handles same-file heading links", () => {
+    const { result } = renderHook(() =>
+      useInternalLinkNavigation({
+        onNavigate,
+        containerRef,
+        enabled: true,
+      })
+    );
+
+    result.current.handleLinkClick("#introduction");
+
+    expect(onNavigate).toHaveBeenCalledWith("/workspace/current.md", "introduction");
+  });
+
+  it("handles same-file heading links with multiple words", () => {
+    const { result } = renderHook(() =>
+      useInternalLinkNavigation({
+        onNavigate,
+        containerRef,
+        enabled: true,
+      })
+    );
+
+    result.current.handleLinkClick("#getting-started");
+
+    expect(onNavigate).toHaveBeenCalledWith("/workspace/current.md", "getting-started");
   });
 });

@@ -8,8 +8,31 @@ import { describe, it, expect } from "vitest";
 import {
   resolveInternalLink,
   isInternalLink,
+  isSameFileHeadingLink,
   parseInternalLink,
 } from "./resolver";
+
+describe("isSameFileHeadingLink", () => {
+  it("returns true for heading-only links", () => {
+    expect(isSameFileHeadingLink("#introduction")).toBe(true);
+    expect(isSameFileHeadingLink("#getting-started")).toBe(true);
+    expect(isSameFileHeadingLink("#1-overview")).toBe(true);
+  });
+
+  it("returns false for just # without heading", () => {
+    expect(isSameFileHeadingLink("#")).toBe(false);
+  });
+
+  it("returns false for file links with headings", () => {
+    expect(isSameFileHeadingLink("note.md#heading")).toBe(false);
+    expect(isSameFileHeadingLink("docs/guide.md#intro")).toBe(false);
+  });
+
+  it("returns false for non-heading links", () => {
+    expect(isSameFileHeadingLink("note.md")).toBe(false);
+    expect(isSameFileHeadingLink("https://example.com")).toBe(false);
+  });
+});
 
 describe("isInternalLink", () => {
   it("returns true for .md file links", () => {

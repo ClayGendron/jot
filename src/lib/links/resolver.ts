@@ -25,6 +25,13 @@ export interface FileInfo {
 }
 
 /**
+ * Check if a URL is a same-file heading link (starts with #)
+ */
+export function isSameFileHeadingLink(href: string): boolean {
+  return href.startsWith("#") && href.length > 1;
+}
+
+/**
  * Check if a URL is an internal markdown link
  */
 export function isInternalLink(href: string): boolean {

@@ -26,10 +26,26 @@ export const InternalLink = Extension.create<InternalLinkOptions>({
         allowSpaces: true,
         // These will be overridden by the component
         command: ({ editor, range, props }) => {
-          const { name, displayPath } = props;
-          // Insert a markdown link that will be converted properly
-          const href = displayPath;
-          const linkText = name.replace(/\.md$/, "");
+          // Handle both file and heading items
+          const itemType = props.type;
+
+          let href: string;
+          let linkText: string;
+
+          if (itemType === "heading") {
+            // Heading item: include anchor in href
+            // If displayPath is empty, it's a same-file heading link
+            if (props.displayPath) {
+              href = `${props.displayPath}#${props.headingId}`;
+            } else {
+              href = `#${props.headingId}`;
+            }
+            linkText = props.name;
+          } else {
+            // File item: just the path
+            href = props.displayPath;
+            linkText = props.name.replace(/\.md$/, "");
+          }
 
           editor
             .chain()

@@ -23,6 +23,7 @@ import { SourceEditor } from "./SourceEditor";
 import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
 import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { useInternalLinkNavigation } from "@/hooks/useInternalLinkNavigation";
+import { readFile } from "@/lib/tauri/files";
 
 // Create lowlight instance with common languages
 const lowlight = createLowlight(common);
@@ -53,7 +54,7 @@ export function Editor({
   autofocus = true,
   onInternalLinkClick,
 }: EditorProps) {
-  const { setContent, content, focusMode, sourceMode, toggleSourceMode } =
+  const { setContent, content, focusMode, sourceMode, toggleSourceMode, filePath } =
     useEditorStore();
 
   // Ref for the editor container (for internal link click handling)
@@ -63,10 +64,19 @@ export function Editor({
   const files = useWorkspaceStore(selectAllFilesForSuggestion);
   const getFiles = useCallback(() => files, [files]);
 
+  // Get current file path and content for same-file heading links
+  const getCurrentFilePath = useCallback(() => filePath, [filePath]);
+  const getCurrentFileContent = useCallback(() => content, [content]);
+
   // Create suggestion render function (memoized)
   const suggestionRender = useMemo(
-    () => createSuggestionRender({ getFiles }),
-    [getFiles]
+    () => createSuggestionRender({
+      getFiles,
+      readFileContent: readFile,
+      getCurrentFilePath,
+      getCurrentFileContent,
+    }),
+    [getFiles, getCurrentFilePath, getCurrentFileContent]
   );
 
   // Handle internal link navigation
