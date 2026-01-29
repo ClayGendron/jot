@@ -1,6 +1,7 @@
 import { useCallback, useState, useRef, useEffect } from "react";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import type { FileEntry } from "@/lib/tauri/files";
+import { validateMove } from "@/lib/links/moveFile";
 
 interface FileTreeItemProps {
   entry: FileEntry;
@@ -8,8 +9,14 @@ interface FileTreeItemProps {
   onSelect: (path: string) => void;
   onToggle: (path: string) => void;
   onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
+  onDragStart: (e: React.DragEvent, entry: FileEntry) => void;
+  onDragOver: (e: React.DragEvent, entry: FileEntry) => void;
+  onDragLeave: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent, targetEntry: FileEntry) => void;
   selectedPath: string | null;
   expandedPaths: Set<string>;
+  dragOverPath: string | null;
+  isDragValid: boolean;
 }
 
 function FileTreeItem({
@@ -18,11 +25,18 @@ function FileTreeItem({
   onSelect,
   onToggle,
   onContextMenu,
+  onDragStart,
+  onDragOver,
+  onDragLeave,
+  onDrop,
   selectedPath,
   expandedPaths,
+  dragOverPath,
+  isDragValid,
 }: FileTreeItemProps) {
   const isExpanded = expandedPaths.has(entry.path);
   const isSelected = selectedPath === entry.path;
+  const isDragOver = dragOverPath === entry.path;
 
   const handleClick = useCallback(() => {
     if (entry.is_dir) {
@@ -40,14 +54,46 @@ function FileTreeItem({
     [entry, onContextMenu]
   );
 
+  const handleDragStart = useCallback(
+    (e: React.DragEvent) => {
+      onDragStart(e, entry);
+    },
+    [entry, onDragStart]
+  );
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      onDragOver(e, entry);
+    },
+    [entry, onDragOver]
+  );
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      onDrop(e, entry);
+    },
+    [entry, onDrop]
+  );
+
+  // Build class names for drag states
+  let dragClass = "";
+  if (isDragOver) {
+    dragClass = isDragValid ? "drag-over-valid" : "drag-over-invalid";
+  }
+
   return (
     <div className="file-tree-item-container">
       <button
         type="button"
-        className={`file-tree-item ${isSelected ? "selected" : ""}`}
+        className={`file-tree-item ${isSelected ? "selected" : ""} ${dragClass}`}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
+        draggable
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={handleDrop}
         data-testid={`file-tree-item-${entry.name}`}
       >
         {/* Expand/collapse chevron for folders */}
@@ -83,8 +129,14 @@ function FileTreeItem({
               onSelect={onSelect}
               onToggle={onToggle}
               onContextMenu={onContextMenu}
+              onDragStart={onDragStart}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
               selectedPath={selectedPath}
               expandedPaths={expandedPaths}
+              dragOverPath={dragOverPath}
+              isDragValid={isDragValid}
             />
           ))}
           {entry.children.length === 0 && (
@@ -107,6 +159,7 @@ interface FileTreeProps {
   onCreateFolder?: (parentPath: string) => void;
   onRename?: (path: string) => void;
   onDelete?: (path: string) => void;
+  onMove?: (sourcePath: string, targetFolderPath: string) => void;
 }
 
 export function FileTree({
@@ -115,6 +168,7 @@ export function FileTree({
   onCreateFolder,
   onRename,
   onDelete,
+  onMove,
 }: FileTreeProps) {
   // Use individual selectors to avoid React 19 + Zustand issues
   const fileTree = useWorkspaceStore((state) => state.fileTree);
@@ -129,6 +183,11 @@ export function FileTree({
     y: number;
     entry: FileEntry | null;
   } | null>(null);
+
+  // Drag-drop state
+  const [draggedPath, setDraggedPath] = useState<string | null>(null);
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null);
+  const [isDragValid, setIsDragValid] = useState(false);
 
   const contextMenuRef = useRef<HTMLDivElement>(null);
 
@@ -204,6 +263,127 @@ export function FileTree({
     setContextMenu(null);
   }, [contextMenu, onDelete]);
 
+  // Drag-drop handlers
+  const handleDragStart = useCallback(
+    (e: React.DragEvent, entry: FileEntry) => {
+      setDraggedPath(entry.path);
+      e.dataTransfer.setData("text/plain", entry.path);
+      e.dataTransfer.effectAllowed = "move";
+
+      // Add a slight delay for visual feedback
+      const target = e.target as HTMLElement;
+      setTimeout(() => {
+        target.classList.add("dragging");
+      }, 0);
+    },
+    []
+  );
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent, entry: FileEntry) => {
+      e.preventDefault();
+
+      if (!draggedPath || !workspacePath) return;
+
+      // Determine target folder (if dropping on file, use its parent)
+      const targetFolder = entry.is_dir
+        ? entry.path
+        : entry.path.split("/").slice(0, -1).join("/");
+
+      // Validate the move
+      const validation = validateMove(draggedPath, targetFolder, workspacePath);
+
+      setDragOverPath(entry.path);
+      setIsDragValid(validation.valid);
+
+      // Set cursor feedback
+      e.dataTransfer.dropEffect = validation.valid ? "move" : "none";
+    },
+    [draggedPath, workspacePath]
+  );
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // Only clear if leaving the element (not entering a child)
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    const currentTarget = e.currentTarget as HTMLElement;
+
+    if (!currentTarget.contains(relatedTarget)) {
+      setDragOverPath(null);
+      setIsDragValid(false);
+    }
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedPath(null);
+    setDragOverPath(null);
+    setIsDragValid(false);
+
+    // Remove dragging class from all items
+    document.querySelectorAll(".dragging").forEach((el) => {
+      el.classList.remove("dragging");
+    });
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent, targetEntry: FileEntry) => {
+      e.preventDefault();
+
+      if (!draggedPath || !workspacePath || !onMove) {
+        handleDragEnd();
+        return;
+      }
+
+      // Determine target folder
+      const targetFolder = targetEntry.is_dir
+        ? targetEntry.path
+        : targetEntry.path.split("/").slice(0, -1).join("/");
+
+      // Validate one more time before executing
+      const validation = validateMove(draggedPath, targetFolder, workspacePath);
+
+      if (validation.valid) {
+        onMove(draggedPath, targetFolder);
+      }
+
+      handleDragEnd();
+    },
+    [draggedPath, workspacePath, onMove, handleDragEnd]
+  );
+
+  // Handle drops on the root file tree area (workspace root)
+  const handleRootDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+
+      if (!draggedPath || !workspacePath) return;
+
+      const validation = validateMove(draggedPath, workspacePath, workspacePath);
+      setIsDragValid(validation.valid);
+      e.dataTransfer.dropEffect = validation.valid ? "move" : "none";
+    },
+    [draggedPath, workspacePath]
+  );
+
+  const handleRootDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+
+      if (!draggedPath || !workspacePath || !onMove) {
+        handleDragEnd();
+        return;
+      }
+
+      const validation = validateMove(draggedPath, workspacePath, workspacePath);
+
+      if (validation.valid) {
+        onMove(draggedPath, workspacePath);
+      }
+
+      handleDragEnd();
+    },
+    [draggedPath, workspacePath, onMove, handleDragEnd]
+  );
+
   if (fileTree.length === 0) {
     return (
       <div className="file-tree-empty-state">
@@ -216,7 +396,13 @@ export function FileTree({
   }
 
   return (
-    <div className="file-tree" data-testid="file-tree">
+    <div
+      className="file-tree"
+      data-testid="file-tree"
+      onDragOver={handleRootDragOver}
+      onDrop={handleRootDrop}
+      onDragEnd={handleDragEnd}
+    >
       {fileTree.map((entry) => (
         <FileTreeItem
           key={entry.path}
@@ -225,8 +411,14 @@ export function FileTree({
           onSelect={handleSelect}
           onToggle={toggleExpanded}
           onContextMenu={handleContextMenu}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
           selectedPath={selectedPath}
           expandedPaths={expandedPaths}
+          dragOverPath={dragOverPath}
+          isDragValid={isDragValid}
         />
       ))}
 

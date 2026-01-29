@@ -26,6 +26,7 @@ import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { isWithinWorkspace } from "@/lib/links/linkService";
 import { createFileSafe } from "@/lib/tauri/links";
 import { renameFileWithLinkUpdates } from "@/lib/links/linkUpdater";
+import { moveFileWithLinkUpdates, calculateNewPath } from "@/lib/links/moveFile";
 import "./index.css";
 
 type SidebarTab = "files" | "outline" | "backlinks";
@@ -363,6 +364,47 @@ function App() {
     [workspacePath, loadWorkspace, filePath, setFilePath, setContent]
   );
 
+  // Move file/folder with automatic link updates
+  const handleMove = useCallback(
+    async (sourcePath: string, targetFolderPath: string) => {
+      if (!workspacePath) return;
+
+      const fileName = getFileName(sourcePath);
+      const newPath = calculateNewPath(sourcePath, targetFolderPath);
+
+      try {
+        // Get files that link to this file (only for .md files)
+        const isMarkdown = sourcePath.endsWith(".md");
+        const backlinks = isMarkdown
+          ? useLinksStore.getState().getBacklinks(sourcePath)
+          : [];
+
+        const { errors } = await moveFileWithLinkUpdates(
+          sourcePath,
+          targetFolderPath,
+          workspacePath,
+          backlinks
+        );
+
+        if (errors.length > 0) {
+          console.warn("Some link updates failed:", errors);
+        }
+
+        // Reload workspace to reflect changes
+        await loadWorkspace(workspacePath);
+
+        // Update editor if this was the open file
+        if (filePath === sourcePath) {
+          setFilePath(newPath);
+        }
+      } catch (err) {
+        console.error("Failed to move:", err);
+        alert(err instanceof Error ? err.message : `Failed to move "${fileName}"`);
+      }
+    },
+    [workspacePath, loadWorkspace, filePath, setFilePath]
+  );
+
   // Handle internal link click - navigate to file and optionally scroll to heading
   const pendingHeadingRef = useRef<string | undefined>(undefined);
 
@@ -506,6 +548,7 @@ function App() {
                 onCreateFolder={handleCreateFolder}
                 onRename={handleRename}
                 onDelete={handleDelete}
+                onMove={handleMove}
               />
             )}
           </>
