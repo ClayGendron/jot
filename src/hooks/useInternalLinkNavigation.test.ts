@@ -8,32 +8,48 @@ import { useInternalLinkNavigation } from "./useInternalLinkNavigation";
 
 // Mock the workspace store
 vi.mock("@/stores/workspaceStore", () => {
-  const mockFiles = [
-    { name: "note.md", path: "/workspace/note.md", displayPath: "note.md" },
-    { name: "guide.md", path: "/workspace/docs/guide.md", displayPath: "docs/guide.md" },
+  // FileTree structure that the hook now uses directly
+  const mockFileTree = [
+    {
+      name: "note.md",
+      path: "/workspace/note.md",
+      is_dir: false,
+      is_markdown: true,
+      modified: 1700000000,
+      children: null,
+    },
+    {
+      name: "docs",
+      path: "/workspace/docs",
+      is_dir: true,
+      is_markdown: false,
+      modified: 1700000000,
+      children: [
+        {
+          name: "guide.md",
+          path: "/workspace/docs/guide.md",
+          is_dir: false,
+          is_markdown: true,
+          modified: 1700000001,
+          children: null,
+        },
+      ],
+    },
   ];
-
-  const selectAllFilesForSuggestion = () => mockFiles;
 
   return {
     useWorkspaceStore: vi.fn((selector) => {
       const state = {
         workspacePath: "/workspace",
-        fileTree: [],
+        fileTree: mockFileTree,
       };
 
       if (typeof selector === "function") {
-        // Check if it's the selectAllFilesForSuggestion selector by name
-        if (selector.name === "selectAllFilesForSuggestion" || selector === selectAllFilesForSuggestion) {
-          return mockFiles;
-        }
-        // Otherwise, call the selector with state
         return selector(state);
       }
 
-      return state.workspacePath;
+      return state;
     }),
-    selectAllFilesForSuggestion,
   };
 });
 

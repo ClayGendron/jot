@@ -116,14 +116,13 @@ export function FileTree({
   onRename,
   onDelete,
 }: FileTreeProps) {
-  const {
-    fileTree,
-    selectedPath,
-    expandedPaths,
-    setSelectedPath,
-    toggleExpanded,
-    workspacePath,
-  } = useWorkspaceStore();
+  // Use individual selectors to avoid React 19 + Zustand issues
+  const fileTree = useWorkspaceStore((state) => state.fileTree);
+  const selectedPath = useWorkspaceStore((state) => state.selectedPath);
+  const expandedPaths = useWorkspaceStore((state) => state.expandedPaths);
+  const setSelectedPath = useWorkspaceStore((state) => state.setSelectedPath);
+  const toggleExpanded = useWorkspaceStore((state) => state.toggleExpanded);
+  const workspacePath = useWorkspaceStore((state) => state.workspacePath);
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;

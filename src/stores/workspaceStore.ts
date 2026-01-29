@@ -30,6 +30,7 @@ export interface WorkspaceActions {
   // Workspace
   setWorkspacePath: (path: string | null) => void;
   setFileTree: (entries: FileEntry[]) => void;
+  loadWorkspace: (path: string, entries: FileEntry[]) => void;
 
   // Selection
   setSelectedPath: (path: string | null) => void;
@@ -82,6 +83,16 @@ export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>(
       }),
 
     setFileTree: (entries) => set({ fileTree: entries }),
+
+    loadWorkspace: (path, entries) =>
+      set({
+        workspacePath: path,
+        fileTree: entries,
+        selectedPath: null,
+        expandedPaths: new Set(),
+        error: null,
+        isLoading: false,
+      }),
 
     setSelectedPath: (path) => set({ selectedPath: path }),
 

@@ -83,6 +83,33 @@ describe("workspaceStore", () => {
       const state = useWorkspaceStore.getState();
       expect(state.fileTree).toEqual(mockFileTree);
     });
+
+    it("loadWorkspace atomically sets path and file tree together", () => {
+      const { loadWorkspace } = useWorkspaceStore.getState();
+
+      loadWorkspace("/workspace", mockFileTree);
+
+      const state = useWorkspaceStore.getState();
+      expect(state.workspacePath).toBe("/workspace");
+      expect(state.fileTree).toEqual(mockFileTree);
+      expect(state.selectedPath).toBeNull();
+      expect(state.expandedPaths.size).toBe(0);
+      expect(state.error).toBeNull();
+      expect(state.isLoading).toBe(false);
+    });
+
+    it("loadWorkspace does not clear fileTree like setWorkspacePath does", () => {
+      const { loadWorkspace } = useWorkspaceStore.getState();
+
+      // This is the key test - loadWorkspace sets both atomically
+      // so fileTree is NOT cleared after setting workspacePath
+      loadWorkspace("/workspace", mockFileTree);
+
+      const state = useWorkspaceStore.getState();
+      // fileTree should have the entries, not be empty
+      expect(state.fileTree.length).toBeGreaterThan(0);
+      expect(state.fileTree).toEqual(mockFileTree);
+    });
   });
 
   describe("selection", () => {

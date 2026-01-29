@@ -13,7 +13,10 @@ import { useEditorStore } from "@/stores/editorStore";
  * - Error state with muted warning
  */
 export function SaveIndicator() {
-  const { saveStatus, saveError, lastSaved } = useEditorStore();
+  // Use individual selectors to avoid React 19 + Zustand issues
+  const saveStatus = useEditorStore((state) => state.saveStatus);
+  const saveError = useEditorStore((state) => state.saveError);
+  const lastSaved = useEditorStore((state) => state.lastSaved);
 
   if (saveStatus === "idle" && !lastSaved) {
     return null;

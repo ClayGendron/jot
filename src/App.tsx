@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef, useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { Editor } from "@/components/editor/Editor";
 import { FileTree, DocumentOutline, BacklinksPanel } from "@/components/sidebar";
 import { SaveIndicator } from "@/components/ui/SaveIndicator";
 import { useEditorStore } from "@/stores/editorStore";
-import { useWorkspaceStore, selectAllFilesForSuggestion } from "@/stores/workspaceStore";
-import { useLinksStore, selectBacklinksForFile } from "@/stores/linksStore";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { useLinksStore } from "@/stores/linksStore";
+import { getBacklinksForFile } from "@/lib/links/backlinks";
 import { useAutosave } from "@/hooks/useAutosave";
 import { useDocumentOutline } from "@/hooks/useDocumentOutline";
 import {
@@ -18,6 +20,7 @@ import {
   joinPath,
   getFileName,
   getParentDir,
+  type FileEntry,
 } from "@/lib/tauri/files";
 import "./index.css";
 
@@ -27,23 +30,50 @@ type SidebarTab = "files" | "outline" | "backlinks";
  * Main application component
  */
 function App() {
-  const { sidebarOpen, toggleSidebar, isDirty, filePath, setFilePath, setContent, markSaved } =
-    useEditorStore();
-  const {
-    workspacePath,
-    setWorkspacePath,
-    setFileTree,
-    setLoading,
-    setError,
-    isLoading,
-  } = useWorkspaceStore();
+  // Use individual selectors to avoid React 19 + Zustand issues
+  const sidebarOpen = useEditorStore((state) => state.sidebarOpen);
+  const toggleSidebar = useEditorStore((state) => state.toggleSidebar);
+  const isDirty = useEditorStore((state) => state.isDirty);
+  const filePath = useEditorStore((state) => state.filePath);
+  const setFilePath = useEditorStore((state) => state.setFilePath);
+  const setContent = useEditorStore((state) => state.setContent);
+  const markSaved = useEditorStore((state) => state.markSaved);
 
-  // Get files list for backlinks building
-  const allFiles = useWorkspaceStore(selectAllFilesForSuggestion);
+  const workspacePath = useWorkspaceStore((state) => state.workspacePath);
+  const storeLoadWorkspace = useWorkspaceStore((state) => state.loadWorkspace);
+  const setLoading = useWorkspaceStore((state) => state.setLoading);
+  const setError = useWorkspaceStore((state) => state.setError);
+  const isLoading = useWorkspaceStore((state) => state.isLoading);
+  const fileTree = useWorkspaceStore((state) => state.fileTree);
 
-  // Backlinks store
-  const { buildIndex } = useLinksStore();
-  const backlinks = useLinksStore(selectBacklinksForFile(filePath));
+  // Get files list for backlinks building - derive from fileTree
+  const allFiles = useMemo(() => {
+    const files: Array<{ name: string; path: string; displayPath: string }> = [];
+    const collectFiles = (entries: FileEntry[]) => {
+      for (const entry of entries) {
+        if (entry.is_markdown) {
+          const displayPath = workspacePath
+            ? entry.path.replace(workspacePath + "/", "")
+            : entry.name;
+          files.push({ name: entry.name, path: entry.path, displayPath });
+        }
+        if (entry.children) {
+          collectFiles(entry.children);
+        }
+      }
+    };
+    collectFiles(fileTree);
+    return files;
+  }, [fileTree, workspacePath]);
+
+  // Backlinks store - use shallow comparison for the index
+  const { buildIndex, backlinksIndex } = useLinksStore(
+    useShallow((state) => ({ buildIndex: state.buildIndex, backlinksIndex: state.backlinksIndex }))
+  );
+  const backlinks = useMemo(
+    () => (filePath ? getBacklinksForFile(backlinksIndex, filePath) : []),
+    [backlinksIndex, filePath]
+  );
 
   const [editorContent, setEditorContent] = useState("");
   const [activeTab, setActiveTab] = useState<SidebarTab>("files");
@@ -84,8 +114,7 @@ function App() {
 
       try {
         const entries = await readDirectory(path);
-        setFileTree(entries);
-        setWorkspacePath(path);
+        storeLoadWorkspace(path, entries);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load workspace");
         console.error("Failed to load workspace:", err);
@@ -93,7 +122,7 @@ function App() {
         setLoading(false);
       }
     },
-    [setFileTree, setWorkspacePath, setLoading, setError]
+    [storeLoadWorkspace, setLoading, setError]
   );
 
   // Open folder dialog

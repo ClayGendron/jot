@@ -50,7 +50,9 @@ function ToolbarDivider() {
  * - Insert: Link, Image
  */
 export function EditorToolbar({ editor }: EditorToolbarProps) {
-  const { sourceMode, toggleSourceMode } = useEditorStore();
+  // Use individual selectors to avoid React 19 + Zustand issues
+  const sourceMode = useEditorStore((state) => state.sourceMode);
+  const toggleSourceMode = useEditorStore((state) => state.toggleSourceMode);
 
   // Text formatting
   const toggleBold = useCallback(

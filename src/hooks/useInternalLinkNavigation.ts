@@ -4,10 +4,11 @@
  * Detects clicks on internal links and triggers navigation to the target file.
  */
 
-import { useCallback, useEffect } from "react";
-import { useWorkspaceStore, selectAllFilesForSuggestion } from "@/stores/workspaceStore";
+import { useCallback, useEffect, useMemo } from "react";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { resolveInternalLink, isInternalLink, isSameFileHeadingLink } from "@/lib/links/resolver";
+import type { FileEntry } from "@/lib/tauri/files";
 
 export interface UseInternalLinkNavigationOptions {
   /** Callback when an internal link is clicked */
@@ -34,15 +35,27 @@ export function useInternalLinkNavigation({
   containerRef,
   enabled = true,
 }: UseInternalLinkNavigationOptions): UseInternalLinkNavigationResult {
+  // Use individual selectors to avoid React 19 + Zustand snapshot caching issues
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
-  const files = useWorkspaceStore(selectAllFilesForSuggestion);
+  const fileTree = useWorkspaceStore((state) => state.fileTree);
   const currentFilePath = useEditorStore((state) => state.filePath);
 
-  // Convert SuggestionFile[] to FileInfo[] for resolver
-  const fileInfos = files.map((f) => ({
-    name: f.name,
-    path: f.path,
-  }));
+  // Derive file list from fileTree using useMemo for stable references
+  const fileInfos = useMemo(() => {
+    const result: Array<{ name: string; path: string }> = [];
+    const collectFiles = (entries: FileEntry[]) => {
+      for (const entry of entries) {
+        if (entry.is_markdown) {
+          result.push({ name: entry.name, path: entry.path });
+        }
+        if (entry.children) {
+          collectFiles(entry.children);
+        }
+      }
+    };
+    collectFiles(fileTree);
+    return result;
+  }, [fileTree]);
 
   const handleLinkClick = useCallback(
     (href: string) => {
