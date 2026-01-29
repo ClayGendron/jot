@@ -601,37 +601,23 @@ workspace/
 - Epic 11.1-11.2: Performance
 ### Known Bugs
 
-#### 🔴 CRITICAL: File Corruption on Save (HTML Encoding)
+#### 🟡 CRITICAL: File Corruption on Save (HTML Encoding)
 
-**Priority**: P0 | **Status**: 🔴 Open
+**Priority**: P0 | **Status**: 🟡 In Progress
 
 **Symptom**: Markdown files saved with HTML-encoded content like `&lt;p&gt;# Title&amp;gt;` instead of clean markdown.
 
 **Impact**: User data loss - files become corrupted and unreadable as proper markdown.
 
-**Root Cause**: When `markdownToHtml` conversion fails or produces unexpected output, TipTap treats content as plain text, wrapping it in `<p>` tags and HTML-escaping special characters. The `htmlToMarkdown` function then writes this corrupted content to disk.
+**Root Cause**: Custom markdown conversion functions don't handle all edge cases correctly.
 
-**Reproduction**:
+**Solution**: Replace custom converters with battle-tested libraries:
+- **markdown-it** for Markdown → HTML (CommonMark compliant, Shiki-compatible)
+- **turndown** for HTML → Markdown (standard, well-maintained)
 
-- Open a complex markdown file with code blocks containing HTML-like content
-- Edit and save
-- File may be saved with HTML entities instead of markdown
-**Fix Required**:
+**Future Enhancement**: Add `tiptap-extension-code-block-shiki` for VS Code-quality syntax highlighting.
 
-1. Identify which markdown patterns cause conversion failure
-1. Fix `htmlToMarkdown` to handle all TipTap HTML output correctly
-1. Fix `markdownToHtml` to handle all valid markdown syntax
-1. Add comprehensive round-trip tests for edge cases (code blocks with HTML, nested formatting, etc.)
-1. Ensure output is always clean markdown - no HTML entities in final output
-**Tests Needed**:
-
-- Round-trip: `htmlToMarkdown(markdownToHtml(md)) === md` for all supported syntax
-- Code blocks with `<`, `>`, `&` characters
-- Nested formatting (bold inside italic, etc.)
-- Complex tables with special characters
-- Files with frontmatter (if supported)
 **Files Involved**:
-
-- `src/lib/markdown/markdownToHtml.ts` - Must handle all markdown syntax
-- `src/lib/markdown/htmlToMarkdown.ts` - Must produce clean markdown
-- `src/lib/markdown/conversion.test.ts` - Add comprehensive round-trip tests
+- `src/lib/markdown/markdownToHtml.ts` - Replace with markdown-it
+- `src/lib/markdown/htmlToMarkdown.ts` - Replace with turndown
+- `src/lib/markdown/conversion.test.ts` - Comprehensive round-trip tests
