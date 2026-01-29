@@ -16,21 +16,29 @@ describe("generateHeadingId", () => {
   });
 
   it("removes special characters", () => {
+    // github-slugger removes punctuation
     expect(generateHeadingId("Hello, World!")).toBe("hello-world");
   });
 
   it("handles multiple spaces", () => {
-    expect(generateHeadingId("Hello   World")).toBe("hello-world");
+    // github-slugger converts each space to a hyphen
+    expect(generateHeadingId("Hello   World")).toBe("hello---world");
   });
 
-  it("removes leading and trailing hyphens", () => {
-    expect(generateHeadingId(" Hello World ")).toBe("hello-world");
+  it("handles leading and trailing spaces", () => {
+    // github-slugger preserves leading/trailing as hyphens
+    expect(generateHeadingId(" Hello World ")).toBe("-hello-world-");
   });
 
   it("handles numbers", () => {
     expect(generateHeadingId("Chapter 1: Introduction")).toBe(
       "chapter-1-introduction"
     );
+  });
+
+  it("handles unicode characters", () => {
+    // github-slugger handles unicode properly
+    expect(generateHeadingId("Café au lait")).toBe("café-au-lait");
   });
 });
 

@@ -13,6 +13,8 @@ import { generateHeadingId } from "@/lib/markdown/parser";
  */
 
 describe("HeadingWithId extension - generateHeadingId", () => {
+  // Tests updated to match github-slugger behavior (GitHub's actual algorithm)
+
   it("generates id from simple text", () => {
     expect(generateHeadingId("My Title")).toBe("my-title");
   });
@@ -31,15 +33,18 @@ describe("HeadingWithId extension - generateHeadingId", () => {
   });
 
   it("handles multiple spaces", () => {
-    expect(generateHeadingId("Multiple   Spaces")).toBe("multiple-spaces");
+    // github-slugger preserves each space as a hyphen
+    expect(generateHeadingId("Multiple   Spaces")).toBe("multiple---spaces");
   });
 
   it("handles leading/trailing spaces", () => {
-    expect(generateHeadingId("  Trimmed  ")).toBe("trimmed");
+    // github-slugger preserves leading/trailing as hyphens
+    expect(generateHeadingId("  Trimmed  ")).toBe("--trimmed--");
   });
 
   it("handles consecutive special characters", () => {
-    expect(generateHeadingId("Test---Case")).toBe("test-case");
+    // github-slugger preserves consecutive hyphens
+    expect(generateHeadingId("Test---Case")).toBe("test---case");
   });
 
   it("handles empty string", () => {
@@ -58,5 +63,10 @@ describe("HeadingWithId extension - generateHeadingId", () => {
   it("handles underscores and dashes", () => {
     expect(generateHeadingId("snake_case")).toBe("snake_case");
     expect(generateHeadingId("kebab-case")).toBe("kebab-case");
+  });
+
+  it("handles unicode characters", () => {
+    expect(generateHeadingId("Café au lait")).toBe("café-au-lait");
+    expect(generateHeadingId("日本語")).toBe("日本語");
   });
 });

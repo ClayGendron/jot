@@ -1,35 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Heading } from "@/lib/markdown/parser";
 import { generateHeadingId } from "@/lib/markdown/parser";
+import { extractHeadingsFromHtml } from "@/lib/links/linkService";
 
-/**
- * Extract headings from HTML content (TipTap editor output)
- */
-export function extractHeadingsFromHtml(html: string): Heading[] {
-  if (!html) return [];
-
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-  const headings: Heading[] = [];
-
-  // Find all heading elements (h1-h6)
-  const headingElements = doc.querySelectorAll("h1, h2, h3, h4, h5, h6");
-
-  headingElements.forEach((element) => {
-    const level = parseInt(element.tagName.charAt(1), 10) as 1 | 2 | 3 | 4 | 5 | 6;
-    const text = element.textContent?.trim() || "";
-
-    if (text) {
-      headings.push({
-        level,
-        text,
-        id: generateHeadingId(text),
-      });
-    }
-  });
-
-  return headings;
-}
+// Re-export for backward compatibility
+export { extractHeadingsFromHtml };
 
 interface UseDocumentOutlineOptions {
   /** HTML content from the editor */

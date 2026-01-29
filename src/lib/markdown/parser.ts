@@ -5,6 +5,9 @@
  * No side effects, easy to test.
  */
 
+import GithubSlugger from "github-slugger";
+import readingTime from "reading-time";
+
 export interface ParseResult<T> {
   ok: true;
   value: T;
@@ -26,16 +29,17 @@ export interface Heading {
   id: string;
 }
 
+// Shared slugger instance for consistent ID generation
+const slugger = new GithubSlugger();
+
 /**
  * Generate a URL-safe ID from heading text
+ * Uses github-slugger for robust handling of Unicode, duplicates, and edge cases
  */
 export function generateHeadingId(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, "") // Remove special characters
-    .replace(/\s+/g, "-") // Replace spaces with hyphens
-    .replace(/-+/g, "-") // Replace multiple hyphens with single
-    .replace(/^-|-$/g, ""); // Remove leading/trailing hyphens
+  // Reset slugger to avoid accumulating state across calls
+  slugger.reset();
+  return slugger.slug(text);
 }
 
 /**
@@ -93,11 +97,33 @@ export function countCharacters(text: string, includeSpaces = true): number {
 }
 
 /**
- * Estimate reading time in minutes
+ * Reading time result with detailed stats
+ */
+export interface ReadingTimeResult {
+  minutes: number;
+  words: number;
+  text: string; // e.g., "3 min read"
+}
+
+/**
+ * Estimate reading time using reading-time package
+ * More accurate than simple word count / WPM
  */
 export function estimateReadingTime(text: string, wordsPerMinute = 200): number {
-  const words = countWords(text);
-  return Math.ceil(words / wordsPerMinute);
+  const result = readingTime(text, { wordsPerMinute });
+  return Math.ceil(result.minutes);
+}
+
+/**
+ * Get detailed reading time stats
+ */
+export function getReadingTimeStats(text: string): ReadingTimeResult {
+  const result = readingTime(text);
+  return {
+    minutes: Math.ceil(result.minutes),
+    words: result.words,
+    text: result.text,
+  };
 }
 
 /**

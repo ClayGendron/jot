@@ -6,6 +6,9 @@
  */
 
 import { generateHeadingId, type Heading } from "@/lib/markdown/parser";
+import he from "he";
+import normalizePathLib from "normalize-path";
+import isPathInside from "is-path-inside";
 
 /**
  * Represents an internal link extracted from content
@@ -17,25 +20,33 @@ export interface InternalLink {
 }
 
 /**
- * Normalize a path relative to the workspace
- * Resolves relative paths like ../foo and ./bar
+ * Normalize and resolve a path relative to the workspace
+ * Uses normalize-path for cross-platform consistency
  */
 export function normalizePath(path: string, workspacePath: string): string {
   // Handle empty or null paths
-  if (!path) return workspacePath;
+  if (!path) return normalizePathLib(workspacePath);
 
-  // If already absolute and within workspace, normalize it
-  if (path.startsWith(workspacePath)) {
-    return normalizePath(path.slice(workspacePath.length + 1), workspacePath);
+  // Normalize both paths using the library
+  const normalizedWorkspace = normalizePathLib(workspacePath);
+  let normalizedPath = normalizePathLib(path);
+
+  // If already absolute and within workspace, just normalize it
+  if (normalizedPath.startsWith(normalizedWorkspace + "/")) {
+    return normalizedPath;
+  }
+  if (normalizedPath === normalizedWorkspace) {
+    return normalizedWorkspace;
   }
 
-  // Handle leading ./
-  if (path.startsWith("./")) {
-    path = path.slice(2);
+  // Handle relative paths by joining with workspace
+  // Remove leading ./ if present
+  if (normalizedPath.startsWith("./")) {
+    normalizedPath = normalizedPath.slice(2);
   }
 
-  // Split into parts and resolve .. and .
-  const parts = path.split("/").filter(Boolean);
+  // Resolve .. segments manually since we need to stay within workspace
+  const parts = normalizedPath.split("/").filter(Boolean);
   const resolved: string[] = [];
 
   for (const part of parts) {
@@ -51,25 +62,27 @@ export function normalizePath(path: string, workspacePath: string): string {
 
   // Join back with workspace path
   return resolved.length > 0
-    ? `${workspacePath}/${resolved.join("/")}`
-    : workspacePath;
+    ? `${normalizedWorkspace}/${resolved.join("/")}`
+    : normalizedWorkspace;
 }
 
 /**
  * Check if a path is within the workspace (security check for path traversal)
+ * Handles both relative and absolute paths
  */
 export function isWithinWorkspace(
   path: string,
   workspacePath: string
 ): boolean {
-  // Normalize both paths for consistent comparison
-  const normalizedPath = normalizePath(path, workspacePath);
-  const normalizedWorkspace = workspacePath.replace(/\/+$/, "");
+  const normalizedWorkspace = normalizePathLib(workspacePath);
 
-  // The normalized path must start with the workspace path
+  // First normalize the path relative to workspace (handles .., etc)
+  const resolvedPath = normalizePath(path, workspacePath);
+
+  // Now check if it's within the workspace
   return (
-    normalizedPath === normalizedWorkspace ||
-    normalizedPath.startsWith(normalizedWorkspace + "/")
+    resolvedPath === normalizedWorkspace ||
+    isPathInside(resolvedPath, normalizedWorkspace)
   );
 }
 
@@ -216,6 +229,7 @@ export function buildAbsolutePath(
 
 /**
  * Escape text for safe use in HTML attributes
+ * Escapes &, ", ', <, > for use in attribute values
  */
 export function escapeHtmlAttr(text: string): string {
   return text
@@ -228,10 +242,19 @@ export function escapeHtmlAttr(text: string): string {
 
 /**
  * Escape text for safe use in HTML content
+ * Only escapes &, <, > - quotes are safe in content
  */
 export function escapeHtmlContent(text: string): string {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+/**
+ * Decode HTML entities back to characters
+ * Uses 'he' library for comprehensive entity decoding
+ */
+export function decodeHtmlEntities(text: string): string {
+  return he.decode(text);
 }
