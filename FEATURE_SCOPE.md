@@ -574,9 +574,15 @@ workspace/
 - E8.3.1: Clean toolbar at top of document ✅
 - E8.3.2: Toolbar includes all formatting options ✅
 - E1.1.2: Source/WYSIWYG view toggle ✅
+- E1.1.7: Internal links with `[[filename]]` syntax and autocomplete ✅
+- E9.1.1: Wiki-style links with autocomplete as you type ✅
+- E9.1.2: Links stored as standard markdown `[text](file.md)` ✅
+- E9.1.3: Click internal link to navigate to document ✅
 
 ### Remaining P0 Work
-- E1.1.7, E1.1.8: Internal links (`[[filename]]`)
+- E1.1.8: Internal links to specific headings (`[[filename#heading]]`)
+- E9.1.4: Non-existent file links styled differently, create on click
+- E9.1.5: Backlinks panel showing documents linking to current
 - E2.1.4: Auto-link update on rename
 - E2.1.5: Drag-drop file move
 - E2.1.7: Sort by name/date
@@ -588,6 +594,5 @@ workspace/
 - Epic 6.1-6.4: Export
 - Epic 7.1-7.3: Themes/typography/preferences
 - Epic 8.2: Tabs
-- Epic 9.1: Internal links
 - Epic 10.1: iOS app
 - Epic 11.1-11.2: Performance
