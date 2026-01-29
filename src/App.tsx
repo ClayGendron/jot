@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { Editor } from "@/components/editor/Editor";
-import { FileTree } from "@/components/sidebar/FileTree";
+import { FileTree, DocumentOutline } from "@/components/sidebar";
 import { SaveIndicator } from "@/components/ui/SaveIndicator";
 import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useAutosave } from "@/hooks/useAutosave";
+import { useDocumentOutline } from "@/hooks/useDocumentOutline";
 import {
   readDirectory,
   readFile,
@@ -18,6 +19,8 @@ import {
   getParentDir,
 } from "@/lib/tauri/files";
 import "./index.css";
+
+type SidebarTab = "files" | "outline";
 
 /**
  * Main application component
@@ -35,6 +38,14 @@ function App() {
   } = useWorkspaceStore();
 
   const [editorContent, setEditorContent] = useState("");
+  const [activeTab, setActiveTab] = useState<SidebarTab>("files");
+  const mainContentRef = useRef<HTMLElement | null>(null);
+
+  // Document outline hook
+  const { headings, activeHeadingId, scrollToHeading } = useDocumentOutline({
+    content: editorContent,
+    scrollContainerRef: mainContentRef,
+  });
 
   // Autosave hook
   const { saveNow, checkCrashRecovery, recoverFromCrash } =
@@ -258,7 +269,7 @@ function App() {
       <aside className={`sidebar ${sidebarOpen ? "" : "collapsed"}`}>
         <div className="sidebar-header">
           <h2 className="sidebar-title">
-            {workspacePath ? getFileName(workspacePath) : "Files"}
+            {workspacePath ? getFileName(workspacePath) : "Jot"}
           </h2>
           <div className="sidebar-actions">
             <button
@@ -279,28 +290,59 @@ function App() {
           </div>
         </div>
 
-        {!workspacePath ? (
-          <button className="open-folder-btn" onClick={handleOpenFolder}>
-            <FolderOpenIcon />
-            <span>Open Folder</span>
+        {/* Sidebar Tabs */}
+        <div className="sidebar-tabs">
+          <button
+            className={`sidebar-tab ${activeTab === "files" ? "active" : ""}`}
+            onClick={() => setActiveTab("files")}
+          >
+            <FilesTabIcon />
+            <span>Files</span>
           </button>
-        ) : isLoading ? (
-          <div className="file-tree-empty-state">
-            <p>Loading...</p>
-          </div>
+          <button
+            className={`sidebar-tab ${activeTab === "outline" ? "active" : ""}`}
+            onClick={() => setActiveTab("outline")}
+            disabled={!filePath}
+            title={!filePath ? "Open a file to see outline" : undefined}
+          >
+            <OutlineTabIcon />
+            <span>Outline</span>
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === "files" ? (
+          <>
+            {!workspacePath ? (
+              <button className="open-folder-btn" onClick={handleOpenFolder}>
+                <FolderOpenIcon />
+                <span>Open Folder</span>
+              </button>
+            ) : isLoading ? (
+              <div className="file-tree-empty-state">
+                <p>Loading...</p>
+              </div>
+            ) : (
+              <FileTree
+                onFileSelect={handleFileSelect}
+                onCreateFile={handleCreateFile}
+                onCreateFolder={handleCreateFolder}
+                onRename={handleRename}
+                onDelete={handleDelete}
+              />
+            )}
+          </>
         ) : (
-          <FileTree
-            onFileSelect={handleFileSelect}
-            onCreateFile={handleCreateFile}
-            onCreateFolder={handleCreateFolder}
-            onRename={handleRename}
-            onDelete={handleDelete}
+          <DocumentOutline
+            headings={headings}
+            activeHeadingId={activeHeadingId}
+            onHeadingClick={scrollToHeading}
           />
         )}
       </aside>
 
       {/* Main Content */}
-      <main className="main-content">
+      <main className="main-content" ref={mainContentRef}>
         {/* Title bar */}
         <div className="title-bar">
           <div className="title-bar-left">
@@ -399,6 +441,45 @@ function NewFileIcon() {
       <polyline points="14 2 14 8 20 8" />
       <line x1="12" y1="18" x2="12" y2="12" />
       <line x1="9" y1="15" x2="15" y2="15" />
+    </svg>
+  );
+}
+
+function FilesTabIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+    </svg>
+  );
+}
+
+function OutlineTabIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" />
+      <line x1="3" y1="12" x2="3.01" y2="12" />
+      <line x1="3" y1="18" x2="3.01" y2="18" />
     </svg>
   );
 }

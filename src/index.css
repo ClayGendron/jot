@@ -1048,3 +1048,310 @@ body {
     background-color: var(--color-ink-light);
   }
 }
+
+/* ==========================================
+   Sidebar Tabs
+   Toggle between Files and Outline views
+   ========================================== */
+
+.sidebar-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-paper-warm);
+}
+
+.sidebar-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: var(--color-ink-muted);
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.sidebar-tab:hover {
+  color: var(--color-ink-light);
+}
+
+.sidebar-tab.active {
+  color: var(--color-ink);
+}
+
+.sidebar-tab.active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0.75rem;
+  right: 0.75rem;
+  height: 2px;
+  background: var(--color-accent);
+  border-radius: 1px 1px 0 0;
+}
+
+.sidebar-tab svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ==========================================
+   Document Outline
+   Hierarchical heading navigation
+   ========================================== */
+
+.document-outline {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Filter input - styled like a marginal note */
+.outline-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-paper);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.outline-filter.focused {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.outline-filter svg {
+  flex-shrink: 0;
+  color: var(--color-ink-muted);
+}
+
+.outline-filter-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  color: var(--color-ink);
+  outline: none;
+}
+
+.outline-filter-input::placeholder {
+  color: var(--color-ink-muted);
+  font-style: italic;
+}
+
+.outline-filter-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-border);
+  color: var(--color-ink-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.outline-filter-clear:hover {
+  background: var(--color-border-strong);
+  color: var(--color-ink);
+}
+
+.outline-filter-hint {
+  padding: 0.125rem 0.375rem;
+  background: var(--color-border);
+  border: none;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  color: var(--color-ink-muted);
+}
+
+/* Outline list */
+.outline-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.25rem 0;
+}
+
+/* Individual outline item */
+.outline-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: calc(100% - 0.5rem);
+  margin: 0 0.25rem;
+  padding: 0.5rem;
+  padding-right: 0.75rem;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  text-align: left;
+  color: var(--color-ink-light);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.outline-item:hover {
+  background: var(--color-border);
+  color: var(--color-ink);
+}
+
+.outline-item.active {
+  background: var(--color-accent-soft);
+  color: var(--color-ink);
+}
+
+/* Depth indicator line - connects nested headings */
+.outline-depth-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--color-border);
+}
+
+.outline-item:hover .outline-depth-line,
+.outline-item.active .outline-depth-line {
+  background: var(--color-accent);
+  opacity: 0.5;
+}
+
+/* Level indicator pill */
+.outline-level {
+  flex-shrink: 0;
+  padding: 0.125rem 0.375rem;
+  background: var(--color-border);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.5625rem;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.outline-item:hover .outline-level,
+.outline-item.active .outline-level {
+  background: var(--color-accent);
+  color: white;
+}
+
+/* H1 headings get special treatment */
+.outline-item[data-level="1"] .outline-level {
+  background: var(--color-accent);
+  color: white;
+}
+
+/* Heading text */
+.outline-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+/* H1 headings use serif font */
+.outline-item[data-level="1"] .outline-text {
+  font-family: var(--font-serif);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+/* Active marker - animated dot */
+.outline-active-marker {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  animation: outline-pulse 2s ease-in-out infinite;
+}
+
+@keyframes outline-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.85);
+  }
+}
+
+/* No results state */
+.outline-no-results {
+  padding: 1.5rem 1rem;
+  text-align: center;
+  color: var(--color-ink-muted);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-style: italic;
+}
+
+/* Empty state */
+.outline-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.outline-empty-icon {
+  color: var(--color-border-strong);
+  margin-bottom: 1rem;
+  opacity: 0.6;
+}
+
+.outline-empty-title {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-ink-light);
+}
+
+.outline-empty-hint {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  color: var(--color-ink-muted);
+  font-style: italic;
+}
+
+/* Footer stats */
+.outline-footer {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-paper-warm);
+}
+
+.outline-stats {
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  color: var(--color-ink-muted);
+  letter-spacing: 0.02em;
+}
