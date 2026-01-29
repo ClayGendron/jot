@@ -753,29 +753,42 @@ workspace/
 
 ### Known Bugs
 
-#### 🟡 CRITICAL: File Corruption on Save (HTML Encoding)
+#### 🟢 RESOLVED: File Corruption on Save (HTML Encoding)
 
-**Priority**: P0 | **Status**: 🟡 In Progress
+**Priority**: P0 | **Status**: 🟢 Done
 
 **Symptom**: Markdown files saved with HTML-encoded content like `&lt;p&gt;# Title&amp;gt;` instead of clean markdown.
 
-**Impact**: User data loss - files become corrupted and unreadable as proper markdown.
-
-**Root Cause**: Custom markdown conversion functions don’t handle all edge cases correctly.
-
-**Solution**: Replace custom converters with battle-tested libraries:
+**Resolution**: Replaced custom markdown converters with battle-tested libraries:
 
 -   **markdown-it** for Markdown → HTML (CommonMark compliant, Shiki-compatible)
-    
--   **turndown** for HTML → Markdown (standard, well-maintained)
-    
+-   **turndown** for HTML → Markdown (robust conversion with custom rules)
+
+**Commits**:
+-   `98fb644` - feat(markdown): replace custom converters with markdown-it + turndown
+-   `4dcf2a6` - fix(lib): remove reading-time package (not browser-compatible)
+
+**Tests Added**:
+-   `src/lib/markdown/fileConversion.test.ts` - 30 comprehensive round-trip tests
+-   Tests cover: JSX, SQL, YAML, TypeScript generics, unicode, nested structures, task lists, tables, and more
 
 **Future Enhancement**: Add `tiptap-extension-code-block-shiki` for VS Code-quality syntax highlighting.
 
-**Files Involved**:
+---
 
--   `src/lib/markdown/markdownToHtml.ts` - Replace with markdown-it
-    
--   `src/lib/markdown/htmlToMarkdown.ts` - Replace with turndown
-    
--   `src/lib/markdown/conversion.test.ts` - Comprehensive round-trip tests
+### Infrastructure Improvements
+
+#### Utility Package Replacements (2026-01-29)
+
+Replaced custom utility implementations with battle-tested packages:
+
+| Package | Purpose | Replaces |
+|---------|---------|----------|
+| `github-slugger` | Heading ID generation | Custom slug function |
+| `normalize-path` | Cross-platform paths | Manual path handling |
+| `is-path-inside` | Path security checks | String prefix check |
+| `he` | HTML entity decoding | N/A (new capability) |
+
+**Commit**: `2bbcb0c` - refactor(lib): replace custom utilities with battle-tested packages
+
+**Note**: `reading-time` was initially added but removed - it uses Node.js streams incompatible with browser environments.
