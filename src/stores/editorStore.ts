@@ -7,6 +7,8 @@ import { create } from "zustand";
  * Pure state updates, side effects handled in components/hooks.
  */
 
+export type SaveStatus = "idle" | "saving" | "saved" | "error";
+
 export interface DocumentState {
   /** Current file path (null if untitled) */
   filePath: string | null;
@@ -16,6 +18,10 @@ export interface DocumentState {
   isDirty: boolean;
   /** Last saved timestamp */
   lastSaved: Date | null;
+  /** Current save operation status */
+  saveStatus: SaveStatus;
+  /** Error message if save failed */
+  saveError: string | null;
 }
 
 export interface EditorUIState {
@@ -36,6 +42,7 @@ export interface EditorState extends DocumentState, EditorUIState {
   markSaved: () => void;
   markDirty: () => void;
   resetDocument: () => void;
+  setSaveStatus: (status: SaveStatus, error?: string | null) => void;
 
   // UI actions
   toggleSidebar: () => void;
@@ -49,6 +56,8 @@ const initialDocumentState: DocumentState = {
   content: "",
   isDirty: false,
   lastSaved: null,
+  saveStatus: "idle",
+  saveError: null,
 };
 
 const initialUIState: EditorUIState = {
@@ -82,6 +91,12 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   resetDocument: () => set(initialDocumentState),
 
+  setSaveStatus: (status, error = null) =>
+    set({
+      saveStatus: status,
+      saveError: error,
+    }),
+
   // UI actions
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
 
@@ -100,6 +115,8 @@ export const selectDocument = (state: EditorState): DocumentState => ({
   content: state.content,
   isDirty: state.isDirty,
   lastSaved: state.lastSaved,
+  saveStatus: state.saveStatus,
+  saveError: state.saveError,
 });
 
 export const selectUIState = (state: EditorState): EditorUIState => ({

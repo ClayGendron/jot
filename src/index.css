@@ -916,3 +916,135 @@ body {
   width: 18px;
   height: 18px;
 }
+
+/* ==========================================
+   Save Indicator
+   Editorial "margin note" aesthetic
+   ========================================== */
+
+.save-indicator {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.75rem;
+  font-family: var(--font-serif);
+  font-size: 0.6875rem;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  color: var(--color-ink-muted);
+  opacity: 0.7;
+}
+
+.save-indicator-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.save-indicator-text {
+  text-transform: lowercase;
+}
+
+.save-indicator-time {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Saving state - subtle pulsing dot */
+.save-indicator--saving {
+  opacity: 1;
+}
+
+.save-indicator-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--color-ink-muted);
+  animation: save-dot-pulse 1s ease-in-out infinite;
+}
+
+@keyframes save-dot-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+/* Saved state - gentle reveal with calligraphic flourish */
+.save-indicator--saved {
+  opacity: 1;
+}
+
+.save-indicator-content--reveal {
+  animation: save-reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes save-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.save-indicator-icon--check {
+  color: #5a8f5a;
+}
+
+.save-indicator-check-path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: save-check-draw 0.35s ease-out 0.1s forwards;
+}
+
+@keyframes save-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Error state - muted warning */
+.save-indicator--error {
+  opacity: 1;
+}
+
+.save-indicator-content--error {
+  color: var(--color-accent);
+}
+
+.save-indicator-icon--error {
+  animation: save-error-shake 0.4s ease;
+}
+
+@keyframes save-error-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-2px); }
+  40%, 80% { transform: translateX(2px); }
+}
+
+/* Idle state - very subtle timestamp */
+.save-indicator-content--idle {
+  opacity: 0.5;
+  transition: opacity var(--transition-fast);
+}
+
+.save-indicator:hover .save-indicator-content--idle {
+  opacity: 0.8;
+}
+
+/* Dark theme adjustments */
+@media (prefers-color-scheme: dark) {
+  .save-indicator-icon--check {
+    color: #7ab87a;
+  }
+
+  .save-indicator-dot {
+    background-color: var(--color-ink-light);
+  }
+}

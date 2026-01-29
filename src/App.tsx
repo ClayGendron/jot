@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Editor } from "@/components/editor/Editor";
 import { FileTree } from "@/components/sidebar/FileTree";
+import { SaveIndicator } from "@/components/ui/SaveIndicator";
 import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { useAutosave } from "@/hooks/useAutosave";
 import {
   readDirectory,
   readFile,
-  writeFile,
   createFile,
   createFolder,
   renamePath,
@@ -34,6 +35,27 @@ function App() {
   } = useWorkspaceStore();
 
   const [editorContent, setEditorContent] = useState("");
+
+  // Autosave hook
+  const { saveNow, checkCrashRecovery, recoverFromCrash } =
+    useAutosave(editorContent);
+
+  // Check for crash recovery on mount
+  useEffect(() => {
+    const recoveryData = checkCrashRecovery();
+    if (recoveryData && recoveryData.content) {
+      const shouldRecover = window.confirm(
+        "It looks like Jot didn't close properly. Would you like to recover your unsaved changes?"
+      );
+      if (shouldRecover) {
+        recoverFromCrash(recoveryData);
+        setEditorContent(recoveryData.content);
+        if (recoveryData.filePath) {
+          setFilePath(recoveryData.filePath);
+        }
+      }
+    }
+  }, [checkCrashRecovery, recoverFromCrash, setFilePath]);
 
   // Load workspace directory
   const loadWorkspace = useCallback(
@@ -67,9 +89,14 @@ function App() {
     }
   }, [loadWorkspace]);
 
-  // Open file
+  // Open file - saves current file first if dirty
   const handleFileSelect = useCallback(
     async (path: string) => {
+      // Save current file if it has unsaved changes
+      if (isDirty && filePath) {
+        saveNow();
+      }
+
       try {
         const content = await readFile(path);
         setEditorContent(content);
@@ -80,27 +107,22 @@ function App() {
         console.error("Failed to open file:", err);
       }
     },
-    [setFilePath, setContent, markSaved]
+    [isDirty, filePath, saveNow, setFilePath, setContent, markSaved]
   );
 
-  // Save file
-  const handleSave = useCallback(async () => {
+  // Save file (immediate save via Cmd+S)
+  const handleSave = useCallback(() => {
     if (!filePath) return;
+    saveNow();
+  }, [filePath, saveNow]);
 
-    try {
-      await writeFile(filePath, editorContent);
-      markSaved();
-    } catch (err) {
-      console.error("Failed to save file:", err);
-    }
-  }, [filePath, editorContent, markSaved]);
-
-  // Auto-save on content change (debounced in editor)
+  // Handle content changes - syncs both local and store state, marks dirty for autosave
   const handleEditorUpdate = useCallback(
     (content: string) => {
       setEditorContent(content);
+      setContent(content); // Sync to store and mark dirty
     },
-    []
+    [setContent]
   );
 
   // Keyboard shortcuts
@@ -293,6 +315,7 @@ function App() {
               {filePath ? getFileName(filePath) : "Untitled"}
               {isDirty && <span className="unsaved-dot">•</span>}
             </span>
+            <SaveIndicator />
           </div>
         </div>
 

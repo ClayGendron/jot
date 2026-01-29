@@ -78,7 +78,7 @@ workspace/
 ## Epic 1: Core Editor
 
 ### 1.1 WYSIWYG Markdown Editing
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟡 In Progress
 
 | ID | User Story | Acceptance Criteria |
 |----|------------|---------------------|
@@ -103,7 +103,7 @@ workspace/
 | E1.2.5 | As a user, diagrams respect my theme (light/dark) | Mermaid diagrams adapt colors to current theme |
 
 ### 1.3 Code Blocks
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟡 In Progress
 
 | ID | User Story | Acceptance Criteria |
 |----|------------|---------------------|
@@ -126,7 +126,7 @@ workspace/
 ## Epic 2: File Management
 
 ### 2.1 File Tree Navigation
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟡 In Progress
 
 | ID | User Story | Acceptance Criteria |
 |----|------------|---------------------|
@@ -164,7 +164,7 @@ workspace/
 ## Epic 3: Autosave & Version History
 
 ### 3.1 Automatic Saving
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟡 In Progress
 
 | ID | User Story | Acceptance Criteria |
 |----|------------|---------------------|
@@ -340,7 +340,7 @@ workspace/
 ## Epic 8: User Interface
 
 ### 8.1 Layout & Panels
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟡 In Progress
 
 | ID | User Story | Acceptance Criteria |
 |----|------------|---------------------|
@@ -362,7 +362,7 @@ workspace/
 | E8.2.5 | As a user, I can pin tabs | Right-click > Pin, pinned tabs stay left |
 
 ### 8.3 Formatting Toolbar
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟡 In Progress
 
 | ID | User Story | Acceptance Criteria |
 |----|------------|---------------------|
@@ -540,5 +540,51 @@ workspace/
 
 ---
 
-*Document last updated: 2025-01-29*
+*Document last updated: 2026-01-29*
 *Version: 1.0-draft*
+
+---
+
+## Implementation Progress
+
+### Completed User Stories
+- E1.1.1: TipTap editor renders markdown as user types ✅
+- E1.1.3: Keyboard shortcuts for formatting (Cmd+B, Cmd+I, etc.) ✅
+- E1.1.4: Formatting toolbar with headings, bold, italic, lists, etc. ✅
+- E1.1.5: Tables with visual editing ✅
+- E1.1.6: Image insertion and preview ✅
+- E1.3.1: Fenced code blocks with language selector ✅
+- E1.3.2: Syntax highlighting for 100+ languages ✅
+- E2.1.1: File tree showing markdown files and folders ✅
+- E2.1.2: Expand/collapse folders ✅
+- E2.1.3: Create new files/folders via context menu ✅
+- E2.1.6: Delete files with confirmation dialog ✅
+- E3.1.1: Auto-save after 1 second of inactivity ✅
+- E3.1.2: Save status indicator ("Saving...", "Saved") ✅
+- E3.1.3: Cmd/Ctrl+S triggers immediate save ✅
+- E3.1.4: Crash recovery via localStorage ✅
+- E8.1.1: Three-panel layout (sidebar, editor) ✅
+- E8.1.2: Collapse/expand sidebar with Cmd+B ✅
+- E8.3.1: Clean toolbar at top of document ✅
+- E8.3.2: Toolbar includes all formatting options ✅
+
+### Remaining P0 Work
+- E1.1.2: Source/WYSIWYG view toggle
+- E1.1.7, E1.1.8: Internal links (`[[filename]]`)
+- E1.3.3: Copy code button
+- E1.3.4: Line numbers toggle
+- E2.1.4: Auto-link update on rename
+- E2.1.5: Drag-drop file move
+- E2.1.7: Sort by name/date
+- Epic 1.2: Mermaid diagrams
+- Epic 2.2: Document outline
+- Epic 2.3: Workspace management
+- Epic 3.2: Version history
+- Epic 4.1-4.2: Search
+- Epic 5.1-5.2: Spell/grammar check
+- Epic 6.1-6.4: Export
+- Epic 7.1-7.3: Themes/typography/preferences
+- Epic 8.2: Tabs
+- Epic 9.1: Internal links
+- Epic 10.1: iOS app
+- Epic 11.1-11.2: Performance

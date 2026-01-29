@@ -9,6 +9,8 @@ describe("editorStore", () => {
       content: "",
       isDirty: false,
       lastSaved: null,
+      saveStatus: "idle",
+      saveError: null,
       sidebarOpen: true,
       focusMode: false,
       theme: "system",
@@ -24,6 +26,8 @@ describe("editorStore", () => {
       expect(state.content).toBe("");
       expect(state.isDirty).toBe(false);
       expect(state.lastSaved).toBeNull();
+      expect(state.saveStatus).toBe("idle");
+      expect(state.saveError).toBeNull();
     });
 
     it("setContent updates content and marks dirty", () => {
@@ -71,6 +75,25 @@ describe("editorStore", () => {
       expect(state.content).toBe("");
       expect(state.filePath).toBeNull();
       expect(state.isDirty).toBe(false);
+      expect(state.saveStatus).toBe("idle");
+    });
+
+    it("setSaveStatus updates save status", () => {
+      const { setSaveStatus } = useEditorStore.getState();
+
+      setSaveStatus("saving");
+      expect(useEditorStore.getState().saveStatus).toBe("saving");
+      expect(useEditorStore.getState().saveError).toBeNull();
+
+      setSaveStatus("saved");
+      expect(useEditorStore.getState().saveStatus).toBe("saved");
+
+      setSaveStatus("error", "Failed to save");
+      expect(useEditorStore.getState().saveStatus).toBe("error");
+      expect(useEditorStore.getState().saveError).toBe("Failed to save");
+
+      setSaveStatus("idle");
+      expect(useEditorStore.getState().saveStatus).toBe("idle");
     });
   });
 
