@@ -482,6 +482,10 @@ function ErrorIcon() {
  *
  * In Editor.tsx, both CodeBlockWithCopy and MermaidBlock should be registered,
  * with MermaidBlock having a higher priority to intercept mermaid blocks.
+ *
+ * IMPORTANT: We disable input rules and keyboard shortcuts to prevent this extension
+ * from intercepting regular code block creation. Only HTML parsing should create
+ * mermaidBlock nodes (from existing ```mermaid blocks in documents).
  */
 export const MermaidBlock = CodeBlockLowlight.extend({
   name: "mermaidBlock",
@@ -514,6 +518,17 @@ export const MermaidBlock = CodeBlockLowlight.extend({
         },
       },
     ];
+  },
+
+  // Disable input rules - we don't want ``` to create mermaid blocks
+  // Regular code blocks are handled by CodeBlockWithCopy
+  addInputRules() {
+    return [];
+  },
+
+  // Disable keyboard shortcuts inherited from CodeBlockLowlight
+  addKeyboardShortcuts() {
+    return {};
   },
 
   addNodeView() {
