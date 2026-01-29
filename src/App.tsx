@@ -14,6 +14,7 @@ import {
   openFolderDialog,
   joinPath,
   getFileName,
+  getParentDir,
 } from "@/lib/tauri/files";
 import "./index.css";
 
@@ -183,7 +184,7 @@ function App() {
       const newName = window.prompt("New name:", currentName);
       if (!newName || newName === currentName) return;
 
-      const parentPath = path.substring(0, path.lastIndexOf("/"));
+      const parentPath = getParentDir(path);
       const newPath = joinPath(parentPath, newName);
 
       try {

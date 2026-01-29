@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
 
 /// Represents a file or folder in the file tree
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -140,7 +139,9 @@ pub fn rename_path(old_path: &str, new_path: &str) -> Result<(), String> {
     fs::rename(old_path, new_path).map_err(|e| format!("Failed to rename: {}", e))
 }
 
-/// Delete a file or folder (moves to trash on supported platforms)
+/// Delete a file or folder permanently
+/// WARNING: This permanently deletes files, not moves to trash
+/// TODO: Consider using the `trash` crate for safer deletion
 #[tauri::command]
 pub fn delete_path(path: &str) -> Result<(), String> {
     let path = Path::new(path);
