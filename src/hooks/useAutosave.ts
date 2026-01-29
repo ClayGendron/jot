@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { writeFile } from "@/lib/tauri/files";
+import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
 
 const AUTOSAVE_DELAY_MS = 1000;
 const SAVED_INDICATOR_DURATION_MS = 2000;
@@ -93,7 +94,9 @@ export function useAutosave(content: string) {
     setSaveStatus("saving");
 
     try {
-      await writeFile(currentFilePath, currentContent);
+      // Convert HTML to Markdown before saving (canonical format on disk is Markdown)
+      const markdownContent = htmlToMarkdown(currentContent);
+      await writeFile(currentFilePath, markdownContent);
       markSaved();
       setSaveStatus("saved");
       clearCrashRecovery();

@@ -53,20 +53,6 @@ vi.mock("@/stores/workspaceStore", () => {
   };
 });
 
-// Mock the editor store
-vi.mock("@/stores/editorStore", () => ({
-  useEditorStore: vi.fn((selector) => {
-    const state = {
-      filePath: "/workspace/current.md",
-    };
-
-    if (typeof selector === "function") {
-      return selector(state);
-    }
-
-    return state;
-  }),
-}));
 
 describe("useInternalLinkNavigation", () => {
   let onNavigate: (path: string, heading?: string) => void;
@@ -164,10 +150,13 @@ describe("useInternalLinkNavigation", () => {
     expect(onBrokenLinkClick).toHaveBeenCalledWith("/workspace/missing.md");
   });
 
-  it("handles same-file heading links", () => {
+  it("handles same-file heading links with onScrollToHeading callback", () => {
+    const onScrollToHeading = vi.fn();
+
     const { result } = renderHook(() =>
       useInternalLinkNavigation({
         onNavigate,
+        onScrollToHeading,
         containerRef,
         enabled: true,
       })
@@ -175,13 +164,18 @@ describe("useInternalLinkNavigation", () => {
 
     result.current.handleLinkClick("#introduction");
 
-    expect(onNavigate).toHaveBeenCalledWith("/workspace/current.md", "introduction");
+    // Should call onScrollToHeading instead of onNavigate for same-file headings
+    expect(onScrollToHeading).toHaveBeenCalledWith("introduction");
+    expect(onNavigate).not.toHaveBeenCalled();
   });
 
   it("handles same-file heading links with multiple words", () => {
+    const onScrollToHeading = vi.fn();
+
     const { result } = renderHook(() =>
       useInternalLinkNavigation({
         onNavigate,
+        onScrollToHeading,
         containerRef,
         enabled: true,
       })
@@ -189,6 +183,36 @@ describe("useInternalLinkNavigation", () => {
 
     result.current.handleLinkClick("#getting-started");
 
-    expect(onNavigate).toHaveBeenCalledWith("/workspace/current.md", "getting-started");
+    expect(onScrollToHeading).toHaveBeenCalledWith("getting-started");
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it("falls back to document.getElementById for same-file heading links without callback", () => {
+    // Create a heading element to scroll to
+    const headingElement = document.createElement("h2");
+    headingElement.id = "test-heading";
+    headingElement.scrollIntoView = vi.fn();
+    document.body.appendChild(headingElement);
+
+    const { result } = renderHook(() =>
+      useInternalLinkNavigation({
+        onNavigate,
+        // No onScrollToHeading callback
+        containerRef,
+        enabled: true,
+      })
+    );
+
+    result.current.handleLinkClick("#test-heading");
+
+    // Should not call onNavigate, should scroll directly
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(headingElement.scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "start",
+    });
+
+    // Clean up
+    document.body.removeChild(headingElement);
   });
 });

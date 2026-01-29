@@ -22,6 +22,9 @@ import {
   getParentDir,
   type FileEntry,
 } from "@/lib/tauri/files";
+import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
+import { isWithinWorkspace } from "@/lib/links/linkService";
+import { createFileSafe } from "@/lib/tauri/links";
 import "./index.css";
 
 type SidebarTab = "files" | "outline" | "backlinks";
@@ -180,10 +183,13 @@ function App() {
       }
 
       try {
-        const content = await readFile(path);
-        setEditorContent(content);
+        // Read file content (Markdown on disk)
+        const markdownContent = await readFile(path);
+        // Convert Markdown to HTML for TipTap editor
+        const htmlContent = markdownToHtml(markdownContent);
+        setEditorContent(htmlContent);
         setFilePath(path);
-        setContent(content);
+        setContent(htmlContent);
         markSaved();
       } catch (err) {
         console.error("Failed to open file:", err);
@@ -337,6 +343,14 @@ function App() {
   // Handle internal link click - navigate to file and optionally scroll to heading
   const pendingHeadingRef = useRef<string | undefined>(undefined);
 
+  // Handle same-file heading navigation - scroll without reloading file
+  const handleScrollToHeading = useCallback((heading: string) => {
+    const headingElement = document.getElementById(heading);
+    if (headingElement) {
+      headingElement.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, []);
+
   const handleInternalLinkClick = useCallback(
     async (path: string, heading?: string) => {
       // Store the heading to scroll to after file loads
@@ -363,20 +377,25 @@ function App() {
   // Handle broken link click - offer to create the file
   const handleBrokenLinkClick = useCallback(
     async (intendedPath: string) => {
+      // Security check: validate path is within workspace (defense in depth)
+      if (workspacePath && !isWithinWorkspace(intendedPath, workspacePath)) {
+        console.warn(`Blocked path traversal attempt: ${intendedPath}`);
+        alert("Cannot create file outside workspace.");
+        return;
+      }
+
       const fileName = getFileName(intendedPath);
       const shouldCreate = window.confirm(
         `"${fileName}" doesn't exist. Would you like to create it?`
       );
 
-      if (shouldCreate) {
+      if (shouldCreate && workspacePath) {
         try {
-          // Create the file
-          await createFile(intendedPath);
+          // Create the file using safe version (Rust validates path is within workspace)
+          await createFileSafe(intendedPath, workspacePath);
 
           // Reload workspace to show new file
-          if (workspacePath) {
-            await loadWorkspace(workspacePath);
-          }
+          await loadWorkspace(workspacePath);
 
           // Open the new file
           await handleFileSelect(intendedPath);
@@ -510,6 +529,7 @@ function App() {
             onUpdate={handleEditorUpdate}
             placeholder="Start writing..."
             onInternalLinkClick={handleInternalLinkClick}
+            onScrollToHeading={handleScrollToHeading}
             onBrokenLinkClick={handleBrokenLinkClick}
           />
         ) : (

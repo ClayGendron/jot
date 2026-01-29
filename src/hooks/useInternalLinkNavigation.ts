@@ -6,13 +6,15 @@
 
 import { useCallback, useEffect, useMemo } from "react";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { useEditorStore } from "@/stores/editorStore";
 import { resolveInternalLink, isInternalLink, isSameFileHeadingLink } from "@/lib/links/resolver";
+import { isWithinWorkspace } from "@/lib/links/linkService";
 import type { FileEntry } from "@/lib/tauri/files";
 
 export interface UseInternalLinkNavigationOptions {
-  /** Callback when an internal link is clicked */
+  /** Callback when an internal link is clicked (for cross-file navigation) */
   onNavigate: (path: string, heading?: string) => void;
+  /** Callback when a same-file heading link is clicked - just scroll, don't reload file */
+  onScrollToHeading?: (heading: string) => void;
   /** Callback when a broken link is clicked - receives the intended file path */
   onBrokenLinkClick?: (intendedPath: string) => void;
   /** Container element to listen for clicks */
@@ -31,6 +33,7 @@ export interface UseInternalLinkNavigationResult {
  */
 export function useInternalLinkNavigation({
   onNavigate,
+  onScrollToHeading,
   onBrokenLinkClick,
   containerRef,
   enabled = true,
@@ -38,7 +41,6 @@ export function useInternalLinkNavigation({
   // Use individual selectors to avoid React 19 + Zustand snapshot caching issues
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const fileTree = useWorkspaceStore((state) => state.fileTree);
-  const currentFilePath = useEditorStore((state) => state.filePath);
 
   // Derive file list from fileTree using useMemo for stable references
   const fileInfos = useMemo(() => {
@@ -62,15 +64,17 @@ export function useInternalLinkNavigation({
       // Handle same-file heading links (#heading)
       if (isSameFileHeadingLink(href)) {
         const heading = href.slice(1); // Remove the leading #
-        if (currentFilePath) {
-          // Navigate to the same file with heading
-          onNavigate(currentFilePath, heading);
-        } else {
-          // No current file, just scroll to the heading element directly
-          const headingElement = document.getElementById(heading);
-          if (headingElement) {
-            headingElement.scrollIntoView({ behavior: "smooth", block: "start" });
-          }
+
+        // Use the dedicated scroll callback if provided (avoids file reload)
+        if (onScrollToHeading) {
+          onScrollToHeading(heading);
+          return;
+        }
+
+        // Fallback: scroll directly to the heading element
+        const headingElement = document.getElementById(heading);
+        if (headingElement) {
+          headingElement.scrollIntoView({ behavior: "smooth", block: "start" });
         }
         return;
       }
@@ -92,6 +96,12 @@ export function useInternalLinkNavigation({
           ? pathWithoutAnchor
           : `${workspacePath}/${pathWithoutAnchor}`;
 
+        // Security check: validate path is within workspace (prevent path traversal)
+        if (!isWithinWorkspace(intendedPath, workspacePath)) {
+          console.warn(`Blocked path traversal attempt: ${href}`);
+          return;
+        }
+
         if (onBrokenLinkClick) {
           onBrokenLinkClick(intendedPath);
         } else {
@@ -99,7 +109,7 @@ export function useInternalLinkNavigation({
         }
       }
     },
-    [workspacePath, fileInfos, onNavigate, onBrokenLinkClick, currentFilePath]
+    [workspacePath, fileInfos, onNavigate, onScrollToHeading, onBrokenLinkClick]
   );
 
   // Click event listener for the container

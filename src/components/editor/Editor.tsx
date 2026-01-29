@@ -2,7 +2,6 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Typography from "@tiptap/extension-typography";
-import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import Highlight from "@tiptap/extension-highlight";
 import TaskList from "@tiptap/extension-task-list";
@@ -14,10 +13,11 @@ import { TableHeader } from "@tiptap/extension-table-header";
 import { common, createLowlight } from "lowlight";
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { useEditorStore } from "@/stores/editorStore";
-import { useWorkspaceStore } from "@/stores/workspaceStore";
-import type { FileEntry } from "@/lib/tauri/files";
+import { useWorkspaceStore, selectAllFilesForSuggestion } from "@/stores/workspaceStore";
 import { EditorToolbar } from "./EditorToolbar";
 import { CodeBlockWithCopy } from "./extensions/CodeBlockWithCopy";
+import { HeadingWithId } from "./extensions/HeadingWithId";
+import { InternalLinkMark } from "./extensions/InternalLinkMark";
 import { InternalLink } from "./extensions/InternalLink";
 import { createSuggestionRender } from "./extensions/internalLinkSuggestionRender";
 import { SourceEditor } from "./SourceEditor";
@@ -34,8 +34,10 @@ interface EditorProps {
   onUpdate?: (content: string) => void;
   placeholder?: string;
   autofocus?: boolean;
-  /** Callback when an internal link is clicked */
+  /** Callback when an internal link is clicked (cross-file navigation) */
   onInternalLinkClick?: (path: string, heading?: string) => void;
+  /** Callback when a same-file heading link is clicked - scroll without file reload */
+  onScrollToHeading?: (heading: string) => void;
   /** Callback when a broken link is clicked - receives the intended file path */
   onBrokenLinkClick?: (intendedPath: string) => void;
 }
@@ -56,6 +58,7 @@ export function Editor({
   placeholder = "Start writing...",
   autofocus = true,
   onInternalLinkClick,
+  onScrollToHeading,
   onBrokenLinkClick,
 }: EditorProps) {
   // Use individual selectors to avoid React 19 + Zustand issues
@@ -69,27 +72,8 @@ export function Editor({
   // Ref for the editor container (for internal link click handling)
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Get files for internal link suggestions - use individual selectors to avoid React 19 + Zustand issues
-  const fileTree = useWorkspaceStore((state) => state.fileTree);
-  const workspacePath = useWorkspaceStore((state) => state.workspacePath);
-  const files = useMemo(() => {
-    const result: Array<{ name: string; path: string; displayPath: string }> = [];
-    const collectFiles = (entries: FileEntry[]) => {
-      for (const entry of entries) {
-        if (entry.is_markdown) {
-          const displayPath = workspacePath
-            ? entry.path.replace(workspacePath + "/", "")
-            : entry.name;
-          result.push({ name: entry.name, path: entry.path, displayPath });
-        }
-        if (entry.children) {
-          collectFiles(entry.children);
-        }
-      }
-    };
-    collectFiles(fileTree);
-    return result;
-  }, [fileTree, workspacePath]);
+  // Get files for internal link suggestions - use centralized selector
+  const files = useWorkspaceStore(selectAllFilesForSuggestion);
   const getFiles = useCallback(() => files, [files]);
 
   // Get current file path and content for same-file heading links
@@ -118,6 +102,7 @@ export function Editor({
   // Set up internal link click handling
   useInternalLinkNavigation({
     onNavigate: handleInternalLinkNavigate,
+    onScrollToHeading,
     onBrokenLinkClick,
     containerRef,
     enabled: !!onInternalLinkClick && !sourceMode,
@@ -131,9 +116,11 @@ export function Editor({
     extensions: [
       StarterKit.configure({
         codeBlock: false, // We use CodeBlockWithCopy instead
-        heading: {
-          levels: [1, 2, 3, 4, 5, 6],
-        },
+        heading: false, // We use HeadingWithId instead
+      }),
+      // Custom heading extension with auto-generated IDs for link navigation
+      HeadingWithId.configure({
+        levels: [1, 2, 3, 4, 5, 6],
       }),
       Placeholder.configure({
         placeholder,
@@ -145,7 +132,8 @@ export function Editor({
         oneQuarter: false,
         threeQuarters: false,
       }),
-      Link.configure({
+      // Custom link extension with internal link attributes (class, data-internal-link)
+      InternalLinkMark.configure({
         openOnClick: false, // We handle this manually
         HTMLAttributes: {
           rel: "noopener noreferrer",

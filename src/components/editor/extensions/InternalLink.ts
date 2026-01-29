@@ -8,6 +8,7 @@
 import { Extension } from "@tiptap/core";
 import { PluginKey } from "@tiptap/pm/state";
 import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
+import { escapeHtmlAttr, escapeHtmlContent } from "@/lib/links/linkService";
 
 export interface InternalLinkOptions {
   suggestion: Omit<SuggestionOptions, "editor">;
@@ -47,11 +48,18 @@ export const InternalLink = Extension.create<InternalLinkOptions>({
             linkText = props.name.replace(/\.md$/, "");
           }
 
+          // Escape HTML to prevent XSS attacks
+          const safeHref = escapeHtmlAttr(href);
+          const safeLinkText = escapeHtmlContent(linkText);
+
+          // Insert the link with proper escaping
           editor
             .chain()
             .focus()
             .deleteRange(range)
-            .insertContent(`<a href="${href}" class="internal-link" data-internal-link="true">${linkText}</a>`)
+            .insertContent(
+              `<a href="${safeHref}" class="internal-link" data-internal-link="true">${safeLinkText}</a>`
+            )
             .run();
         },
         allow: ({ editor, range }) => {

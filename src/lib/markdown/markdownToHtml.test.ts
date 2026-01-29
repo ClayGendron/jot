@@ -13,28 +13,36 @@ describe("markdownToHtml", () => {
   });
 
   describe("headings", () => {
-    it("converts h1", () => {
-      expect(markdownToHtml("# Title")).toBe("<h1>Title</h1>");
+    it("converts h1 with id", () => {
+      expect(markdownToHtml("# Title")).toBe('<h1 id="title">Title</h1>');
     });
 
-    it("converts h2", () => {
-      expect(markdownToHtml("## Subtitle")).toBe("<h2>Subtitle</h2>");
+    it("converts h2 with id", () => {
+      expect(markdownToHtml("## Subtitle")).toBe('<h2 id="subtitle">Subtitle</h2>');
     });
 
-    it("converts h3", () => {
-      expect(markdownToHtml("### Section")).toBe("<h3>Section</h3>");
+    it("converts h3 with id", () => {
+      expect(markdownToHtml("### Section")).toBe('<h3 id="section">Section</h3>');
     });
 
-    it("converts h4", () => {
-      expect(markdownToHtml("#### Subsection")).toBe("<h4>Subsection</h4>");
+    it("converts h4 with id", () => {
+      expect(markdownToHtml("#### Subsection")).toBe('<h4 id="subsection">Subsection</h4>');
     });
 
-    it("converts h5", () => {
-      expect(markdownToHtml("##### Minor")).toBe("<h5>Minor</h5>");
+    it("converts h5 with id", () => {
+      expect(markdownToHtml("##### Minor")).toBe('<h5 id="minor">Minor</h5>');
     });
 
-    it("converts h6", () => {
-      expect(markdownToHtml("###### Smallest")).toBe("<h6>Smallest</h6>");
+    it("converts h6 with id", () => {
+      expect(markdownToHtml("###### Smallest")).toBe('<h6 id="smallest">Smallest</h6>');
+    });
+
+    it("generates id from heading text with spaces", () => {
+      expect(markdownToHtml("# Hello World")).toBe('<h1 id="hello-world">Hello World</h1>');
+    });
+
+    it("removes special characters from heading id", () => {
+      expect(markdownToHtml("# What's New?")).toBe('<h1 id="whats-new">What\'s New?</h1>');
     });
   });
 
@@ -275,9 +283,9 @@ const x = 1;
 \`\`\`
 `;
       const result = markdownToHtml(md);
-      expect(result).toContain("<h1>Title</h1>");
+      expect(result).toContain('<h1 id="title">Title</h1>');
       expect(result).toContain("<p>Introduction paragraph.</p>");
-      expect(result).toContain("<h2>Section</h2>");
+      expect(result).toContain('<h2 id="section">Section</h2>');
       expect(result).toContain("<li>Item 1</li>");
       expect(result).toContain('class="language-javascript"');
     });

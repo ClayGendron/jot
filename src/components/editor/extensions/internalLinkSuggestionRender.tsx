@@ -15,7 +15,10 @@ import {
 } from "./InternalLinkSuggestion";
 import type { SuggestionProps, SuggestionKeyDownProps } from "@tiptap/suggestion";
 import type { SuggestionFile } from "@/stores/workspaceStore";
-import { extractHeadings } from "@/lib/markdown/parser";
+import {
+  extractHeadingsFromHtml,
+  extractHeadingsFromMarkdown,
+} from "@/lib/links/linkService";
 
 export interface CreateSuggestionRenderOptions {
   getFiles: () => SuggestionFile[];
@@ -100,8 +103,9 @@ export function createSuggestionRender({ getFiles, readFileContent, getCurrentFi
         if (!filePart && getCurrentFilePath && getCurrentFileContent) {
           const currentPath = getCurrentFilePath();
           if (currentPath) {
-            const content = getCurrentFileContent();
-            const headings = extractHeadings(content);
+            // Content from editor is HTML, use HTML extraction
+            const htmlContent = getCurrentFileContent();
+            const headings = extractHeadingsFromHtml(htmlContent);
             const headingItems: HeadingSuggestionItem[] = headings.map((h) => ({
               type: "heading" as const,
               name: h.text,
@@ -129,8 +133,9 @@ export function createSuggestionRender({ getFiles, readFileContent, getCurrentFi
             if (!headingItems || currentHeadingsFile !== matchedFile.path) {
               currentHeadingsFile = matchedFile.path;
               try {
-                const content = await readFileContent(matchedFile.path);
-                const headings = extractHeadings(content);
+                // Content read from disk is Markdown (after Phase 0 migration)
+                const markdownContent = await readFileContent(matchedFile.path);
+                const headings = extractHeadingsFromMarkdown(markdownContent);
                 headingItems = headings.map((h) => ({
                   type: "heading" as const,
                   name: h.text,
@@ -146,8 +151,7 @@ export function createSuggestionRender({ getFiles, readFileContent, getCurrentFi
             }
 
             // Filter headings by the heading query part
-            const filteredHeadings = filterHeadings(headingItems, headingPart);
-            return filteredHeadings;
+            return filterHeadings(headingItems ?? [], headingPart);
           }
         }
 

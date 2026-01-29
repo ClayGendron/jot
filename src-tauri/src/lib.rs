@@ -123,6 +123,19 @@ fn jot_create_file(path: &str) -> Result<(), String> {
     fs::write(path, "").map_err(|e| format!("Failed to create file: {}", e))
 }
 
+/// Create a new file with workspace validation (safe version)
+/// Validates that the path is within the workspace before creating
+#[tauri::command]
+fn jot_create_file_safe(path: &str, workspace_path: &str) -> Result<(), String> {
+    // Validate path is within workspace
+    if !jot_is_within_workspace(path, workspace_path) {
+        return Err(format!("Path '{}' is outside workspace", path));
+    }
+
+    // Delegate to regular create file
+    jot_create_file(path)
+}
+
 /// Create a new folder
 #[tauri::command]
 fn jot_create_folder(path: &str) -> Result<(), String> {
@@ -189,6 +202,52 @@ fn jot_path_exists(path: &str) -> bool {
     Path::new(path).exists()
 }
 
+/// Normalize a path and resolve .. and . components
+/// Returns the normalized path or error if it would escape the workspace
+#[tauri::command]
+fn jot_normalize_path(path: &str, workspace_path: &str) -> Result<String, String> {
+    let workspace = Path::new(workspace_path).canonicalize()
+        .map_err(|e| format!("Invalid workspace path: {}", e))?;
+
+    // Build the full path
+    let full_path = if Path::new(path).is_absolute() {
+        PathBuf::from(path)
+    } else {
+        workspace.join(path)
+    };
+
+    // Normalize the path (resolve .. and .)
+    let mut normalized = PathBuf::new();
+    for component in full_path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                // Don't go above workspace
+                if normalized.starts_with(&workspace) && normalized != workspace {
+                    normalized.pop();
+                }
+            }
+            std::path::Component::CurDir => {}
+            _ => normalized.push(component),
+        }
+    }
+
+    // Ensure result is within workspace
+    if !normalized.starts_with(&workspace) {
+        return Err(format!("Path escapes workspace: {}", path));
+    }
+
+    Ok(normalized.to_string_lossy().to_string())
+}
+
+/// Check if a path is within the workspace
+#[tauri::command]
+fn jot_is_within_workspace(path: &str, workspace_path: &str) -> bool {
+    match jot_normalize_path(path, workspace_path) {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
+
 /// Watch for file changes (placeholder for future implementation)
 #[tauri::command]
 fn jot_watch_directory(_path: &str) -> Result<(), String> {
@@ -207,12 +266,15 @@ pub fn run() {
             jot_read_file,
             jot_write_file,
             jot_create_file,
+            jot_create_file_safe,
             jot_create_folder,
             jot_rename_path,
             jot_delete_path,
             jot_get_file_info,
             jot_path_exists,
             jot_watch_directory,
+            jot_normalize_path,
+            jot_is_within_workspace,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

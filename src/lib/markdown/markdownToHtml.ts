@@ -6,6 +6,7 @@
  */
 
 import { isInternalLink } from "../links/resolver";
+import { generateHeadingId } from "./parser";
 
 /**
  * Convert Markdown string to HTML
@@ -67,13 +68,12 @@ export function markdownToHtml(markdown: string): string {
  * Process block-level elements
  */
 function processBlockElements(html: string): string {
-  // Headings
-  html = html.replace(/^######\s+(.+)$/gm, "<h6>$1</h6>");
-  html = html.replace(/^#####\s+(.+)$/gm, "<h5>$1</h5>");
-  html = html.replace(/^####\s+(.+)$/gm, "<h4>$1</h4>");
-  html = html.replace(/^###\s+(.+)$/gm, "<h3>$1</h3>");
-  html = html.replace(/^##\s+(.+)$/gm, "<h2>$1</h2>");
-  html = html.replace(/^#\s+(.+)$/gm, "<h1>$1</h1>");
+  // Headings - process with IDs for internal link navigation
+  html = html.replace(/^(#{1,6})\s+(.+)$/gm, (_, hashes, text) => {
+    const level = hashes.length;
+    const id = generateHeadingId(text);
+    return `<h${level} id="${id}">${text}</h${level}>`;
+  });
 
   // Horizontal rules
   html = html.replace(/^[-*_]{3,}$/gm, "<hr />");
