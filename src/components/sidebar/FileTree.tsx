@@ -1,7 +1,8 @@
-import { useCallback, useState, useRef, useEffect } from "react";
+import { useCallback, useState, useRef, useEffect, useMemo } from "react";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import type { FileEntry } from "@/lib/tauri/files";
 import { validateMove } from "@/lib/links/moveFile";
+import { sortFileEntries } from "@/lib/files/sortFiles";
 
 interface FileTreeItemProps {
   entry: FileEntry;
@@ -177,6 +178,14 @@ export function FileTree({
   const setSelectedPath = useWorkspaceStore((state) => state.setSelectedPath);
   const toggleExpanded = useWorkspaceStore((state) => state.toggleExpanded);
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
+  const sortBy = useWorkspaceStore((state) => state.sortBy);
+  const sortDirection = useWorkspaceStore((state) => state.sortDirection);
+
+  // Compute sorted file tree (memoized to avoid unnecessary re-sorts)
+  const sortedFileTree = useMemo(
+    () => sortFileEntries(fileTree, sortBy, sortDirection),
+    [fileTree, sortBy, sortDirection]
+  );
 
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -403,7 +412,7 @@ export function FileTree({
       onDrop={handleRootDrop}
       onDragEnd={handleDragEnd}
     >
-      {fileTree.map((entry) => (
+      {sortedFileTree.map((entry) => (
         <FileTreeItem
           key={entry.path}
           entry={entry}

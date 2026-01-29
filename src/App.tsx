@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Editor } from "@/components/editor/Editor";
-import { FileTree, DocumentOutline, BacklinksPanel } from "@/components/sidebar";
+import {
+  FileTree,
+  DocumentOutline,
+  BacklinksPanel,
+  SortDropdown,
+} from "@/components/sidebar";
 import { SaveIndicator } from "@/components/ui/SaveIndicator";
 import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
@@ -542,14 +547,19 @@ function App() {
                 <p>Loading...</p>
               </div>
             ) : (
-              <FileTree
-                onFileSelect={handleFileSelect}
-                onCreateFile={handleCreateFile}
-                onCreateFolder={handleCreateFolder}
-                onRename={handleRename}
-                onDelete={handleDelete}
-                onMove={handleMove}
-              />
+              <>
+                <div className="file-tree-controls">
+                  <SortDropdown />
+                </div>
+                <FileTree
+                  onFileSelect={handleFileSelect}
+                  onCreateFile={handleCreateFile}
+                  onCreateFolder={handleCreateFolder}
+                  onRename={handleRename}
+                  onDelete={handleDelete}
+                  onMove={handleMove}
+                />
+              </>
             )}
           </>
         )}
