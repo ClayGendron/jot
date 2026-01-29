@@ -33,6 +33,8 @@ export interface EditorUIState {
   theme: "light" | "dark" | "system";
   /** Show raw markdown vs WYSIWYG */
   sourceMode: boolean;
+  /** Show line numbers in code blocks */
+  showLineNumbers: boolean;
 }
 
 export interface EditorState extends DocumentState, EditorUIState {
@@ -48,6 +50,7 @@ export interface EditorState extends DocumentState, EditorUIState {
   toggleSidebar: () => void;
   toggleFocusMode: () => void;
   toggleSourceMode: () => void;
+  toggleLineNumbers: () => void;
   setTheme: (theme: "light" | "dark" | "system") => void;
 }
 
@@ -65,6 +68,7 @@ const initialUIState: EditorUIState = {
   focusMode: false,
   theme: "system",
   sourceMode: false,
+  showLineNumbers: false,
 };
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -104,6 +108,9 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   toggleSourceMode: () => set((state) => ({ sourceMode: !state.sourceMode })),
 
+  toggleLineNumbers: () =>
+    set((state) => ({ showLineNumbers: !state.showLineNumbers })),
+
   setTheme: (theme) => set({ theme }),
 }));
 
@@ -124,4 +131,5 @@ export const selectUIState = (state: EditorState): EditorUIState => ({
   focusMode: state.focusMode,
   theme: state.theme,
   sourceMode: state.sourceMode,
+  showLineNumbers: state.showLineNumbers,
 });

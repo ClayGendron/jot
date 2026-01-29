@@ -103,7 +103,7 @@ workspace/
 | E1.2.5 | As a user, diagrams respect my theme (light/dark) | Mermaid diagrams adapt colors to current theme |
 
 ### 1.3 Code Blocks
-**Priority**: P0 | **Status**: 🟡 In Progress
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 |----|------------|---------------------|
@@ -555,6 +555,8 @@ workspace/
 - E1.1.6: Image insertion and preview ✅
 - E1.3.1: Fenced code blocks with language selector ✅
 - E1.3.2: Syntax highlighting for 100+ languages ✅
+- E1.3.3: Copy code button on hover ✅
+- E1.3.4: Line numbers toggle ✅
 - E2.1.1: File tree showing markdown files and folders ✅
 - E2.1.2: Expand/collapse folders ✅
 - E2.1.3: Create new files/folders via context menu ✅
@@ -575,8 +577,6 @@ workspace/
 ### Remaining P0 Work
 - E1.1.2: Source/WYSIWYG view toggle
 - E1.1.7, E1.1.8: Internal links (`[[filename]]`)
-- E1.3.3: Copy code button
-- E1.3.4: Line numbers toggle
 - E2.1.4: Auto-link update on rename
 - E2.1.5: Drag-drop file move
 - E2.1.7: Sort by name/date

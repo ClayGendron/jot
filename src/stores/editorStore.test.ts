@@ -15,6 +15,7 @@ describe("editorStore", () => {
       focusMode: false,
       theme: "system",
       sourceMode: false,
+      showLineNumbers: false,
     });
   });
 
@@ -105,6 +106,7 @@ describe("editorStore", () => {
       expect(state.focusMode).toBe(false);
       expect(state.theme).toBe("system");
       expect(state.sourceMode).toBe(false);
+      expect(state.showLineNumbers).toBe(false);
     });
 
     it("toggleSidebar flips sidebar state", () => {
@@ -148,6 +150,18 @@ describe("editorStore", () => {
 
       setTheme("light");
       expect(useEditorStore.getState().theme).toBe("light");
+    });
+
+    it("toggleLineNumbers flips line numbers state", () => {
+      const { toggleLineNumbers } = useEditorStore.getState();
+
+      expect(useEditorStore.getState().showLineNumbers).toBe(false);
+
+      toggleLineNumbers();
+      expect(useEditorStore.getState().showLineNumbers).toBe(true);
+
+      toggleLineNumbers();
+      expect(useEditorStore.getState().showLineNumbers).toBe(false);
     });
   });
 });

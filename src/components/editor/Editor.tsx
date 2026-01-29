@@ -11,11 +11,11 @@ import { Table } from "@tiptap/extension-table";
 import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
-import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import { useCallback, useEffect } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { EditorToolbar } from "./EditorToolbar";
+import { CodeBlockWithCopy } from "./extensions/CodeBlockWithCopy";
 
 // Create lowlight instance with common languages
 const lowlight = createLowlight(common);
@@ -48,7 +48,7 @@ export function Editor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        codeBlock: false, // We use CodeBlockLowlight instead
+        codeBlock: false, // We use CodeBlockWithCopy instead
         heading: {
           levels: [1, 2, 3, 4, 5, 6],
         },
@@ -84,7 +84,7 @@ export function Editor({
       TableRow,
       TableCell,
       TableHeader,
-      CodeBlockLowlight.configure({
+      CodeBlockWithCopy.configure({
         lowlight,
         defaultLanguage: "plaintext",
       }),
