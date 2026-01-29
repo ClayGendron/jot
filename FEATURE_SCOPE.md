@@ -153,7 +153,7 @@ workspace/
 
 ### 2.1 File Tree Navigation
 
-**Priority**: P0 | **Status**: 🟡 In Progress
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -735,12 +735,12 @@ workspace/
 
 -   E2.1.4: Auto-link update on rename ✅
 
+-   E2.1.5: Drag-drop file move with auto-link update ✅
+
+-   E2.1.7: Sort files by name/date with dropdown ✅
+
 
 ### Remaining P0 Work
-
--   E2.1.5: Drag-drop file move
-
--   E2.1.7: Sort by name/date
     
 -   Epic 2.3: Workspace management
     
