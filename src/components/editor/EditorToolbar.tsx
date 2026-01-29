@@ -1,5 +1,6 @@
 import { type Editor } from "@tiptap/react";
 import { useCallback } from "react";
+import { useEditorStore } from "@/stores/editorStore";
 
 interface EditorToolbarProps {
   editor: Editor;
@@ -49,6 +50,8 @@ function ToolbarDivider() {
  * - Insert: Link, Image
  */
 export function EditorToolbar({ editor }: EditorToolbarProps) {
+  const { sourceMode, toggleSourceMode } = useEditorStore();
+
   // Text formatting
   const toggleBold = useCallback(
     () => editor.chain().focus().toggleBold().run(),
@@ -162,6 +165,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={toggleBold}
           isActive={editor.isActive("bold")}
           title="Bold"
+          disabled={sourceMode}
         >
           <BoldIcon />
         </ToolbarButton>
@@ -169,6 +173,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={toggleItalic}
           isActive={editor.isActive("italic")}
           title="Italic"
+          disabled={sourceMode}
         >
           <ItalicIcon />
         </ToolbarButton>
@@ -176,6 +181,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={toggleStrike}
           isActive={editor.isActive("strike")}
           title="Strikethrough"
+          disabled={sourceMode}
         >
           <StrikeIcon />
         </ToolbarButton>
@@ -183,6 +189,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={toggleHighlight}
           isActive={editor.isActive("highlight")}
           title="Highlight"
+          disabled={sourceMode}
         >
           <HighlightIcon />
         </ToolbarButton>
@@ -190,6 +197,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={toggleCode}
           isActive={editor.isActive("code")}
           title="Inline Code"
+          disabled={sourceMode}
         >
           <CodeIcon />
         </ToolbarButton>
@@ -203,6 +211,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={setParagraph}
           isActive={editor.isActive("paragraph")}
           title="Paragraph"
+          disabled={sourceMode}
         >
           P
         </ToolbarButton>
@@ -210,6 +219,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={() => setHeading(1)}
           isActive={editor.isActive("heading", { level: 1 })}
           title="Heading 1"
+          disabled={sourceMode}
         >
           H1
         </ToolbarButton>
@@ -217,6 +227,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={() => setHeading(2)}
           isActive={editor.isActive("heading", { level: 2 })}
           title="Heading 2"
+          disabled={sourceMode}
         >
           H2
         </ToolbarButton>
@@ -224,6 +235,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={() => setHeading(3)}
           isActive={editor.isActive("heading", { level: 3 })}
           title="Heading 3"
+          disabled={sourceMode}
         >
           H3
         </ToolbarButton>
@@ -237,6 +249,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={toggleBulletList}
           isActive={editor.isActive("bulletList")}
           title="Bullet List"
+          disabled={sourceMode}
         >
           <BulletListIcon />
         </ToolbarButton>
@@ -244,6 +257,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={toggleOrderedList}
           isActive={editor.isActive("orderedList")}
           title="Numbered List"
+          disabled={sourceMode}
         >
           <OrderedListIcon />
         </ToolbarButton>
@@ -251,6 +265,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={toggleTaskList}
           isActive={editor.isActive("taskList")}
           title="Task List"
+          disabled={sourceMode}
         >
           <TaskListIcon />
         </ToolbarButton>
@@ -264,6 +279,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={toggleBlockquote}
           isActive={editor.isActive("blockquote")}
           title="Quote"
+          disabled={sourceMode}
         >
           <QuoteIcon />
         </ToolbarButton>
@@ -271,13 +287,14 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={toggleCodeBlock}
           isActive={editor.isActive("codeBlock")}
           title="Code Block"
+          disabled={sourceMode}
         >
           <CodeBlockIcon />
         </ToolbarButton>
-        <ToolbarButton onClick={insertHorizontalRule} title="Horizontal Rule">
+        <ToolbarButton onClick={insertHorizontalRule} title="Horizontal Rule" disabled={sourceMode}>
           <HorizontalRuleIcon />
         </ToolbarButton>
-        <ToolbarButton onClick={insertTable} title="Insert Table">
+        <ToolbarButton onClick={insertTable} title="Insert Table" disabled={sourceMode}>
           <TableIcon />
         </ToolbarButton>
       </div>
@@ -290,12 +307,29 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           onClick={setLink}
           isActive={editor.isActive("link")}
           title="Link"
+          disabled={sourceMode}
         >
           <LinkIcon />
         </ToolbarButton>
-        <ToolbarButton onClick={insertImage} title="Image">
+        <ToolbarButton onClick={insertImage} title="Image" disabled={sourceMode}>
           <ImageIcon />
         </ToolbarButton>
+      </div>
+
+      <ToolbarDivider />
+
+      {/* View Mode Toggle */}
+      <div className="toolbar-group">
+        <button
+          type="button"
+          onClick={toggleSourceMode}
+          title={sourceMode ? "Switch to WYSIWYG (⌘/)" : "Switch to Source (⌘/)"}
+          className={`view-toggle-btn ${sourceMode ? "is-active" : ""}`}
+          data-testid="view-mode-toggle"
+        >
+          {sourceMode ? <WysiwygIcon /> : <SourceIcon />}
+          <span>{sourceMode ? "WYSIWYG" : "Source"}</span>
+        </button>
       </div>
     </div>
   );
@@ -594,6 +628,45 @@ function ImageIcon() {
       <rect x="3" y="3" width="18" height="18" rx="2" />
       <circle cx="8.5" cy="8.5" r="1.5" />
       <path d="m21 15-5-5L5 21" />
+    </svg>
+  );
+}
+
+/** Source code icon - angle brackets */
+function SourceIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="16 18 22 12 16 6" />
+      <polyline points="8 6 2 12 8 18" />
+    </svg>
+  );
+}
+
+/** WYSIWYG icon - text lines with formatting */
+function WysiwygIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="4" y1="6" x2="20" y2="6" />
+      <line x1="4" y1="12" x2="16" y2="12" />
+      <line x1="4" y1="18" x2="12" y2="18" />
     </svg>
   );
 }

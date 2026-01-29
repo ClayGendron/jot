@@ -12,10 +12,13 @@ import { TableRow } from "@tiptap/extension-table-row";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import { common, createLowlight } from "lowlight";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { EditorToolbar } from "./EditorToolbar";
 import { CodeBlockWithCopy } from "./extensions/CodeBlockWithCopy";
+import { SourceEditor } from "./SourceEditor";
+import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
+import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 
 // Create lowlight instance with common languages
 const lowlight = createLowlight(common);
@@ -43,7 +46,12 @@ export function Editor({
   placeholder = "Start writing...",
   autofocus = true,
 }: EditorProps) {
-  const { setContent, content, focusMode } = useEditorStore();
+  const { setContent, content, focusMode, sourceMode, toggleSourceMode } =
+    useEditorStore();
+
+  // Track markdown source when in source mode
+  const [markdownSource, setMarkdownSource] = useState("");
+  const wasInSourceMode = useRef(false);
 
   const editor = useEditor({
     extensions: [
@@ -111,11 +119,38 @@ export function Editor({
     }
   }, [editor, initialContent]);
 
+  // Handle mode switching
+  useEffect(() => {
+    if (!editor) return;
+
+    if (sourceMode && !wasInSourceMode.current) {
+      // Switching TO source mode: convert HTML to Markdown
+      const html = editor.getHTML();
+      const markdown = htmlToMarkdown(html);
+      setMarkdownSource(markdown);
+      wasInSourceMode.current = true;
+    } else if (!sourceMode && wasInSourceMode.current) {
+      // Switching FROM source mode: convert Markdown to HTML
+      const html = markdownToHtml(markdownSource);
+      editor.commands.setContent(html);
+      setContent(html);
+      onUpdate?.(html);
+      wasInSourceMode.current = false;
+    }
+  }, [sourceMode, editor, markdownSource, setContent, onUpdate]);
+
+  // Handle source editor changes
+  const handleSourceChange = useCallback(
+    (newMarkdown: string) => {
+      setMarkdownSource(newMarkdown);
+      // Don't update HTML content until mode switch
+    },
+    []
+  );
+
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
-      if (!editor) return;
-
       const isMod = event.metaKey || event.ctrlKey;
 
       // Cmd/Ctrl + S: Save (prevent default, we autosave)
@@ -123,8 +158,14 @@ export function Editor({
         event.preventDefault();
         // Trigger manual save if needed
       }
+
+      // Cmd/Ctrl + /: Toggle source mode
+      if (isMod && event.key === "/") {
+        event.preventDefault();
+        toggleSourceMode();
+      }
     },
-    [editor]
+    [toggleSourceMode]
   );
 
   useEffect(() => {
@@ -138,11 +179,20 @@ export function Editor({
 
   return (
     <div
-      className={`editor-container ${focusMode ? "focus-mode" : ""}`}
+      className={`editor-container ${focusMode ? "focus-mode" : ""} ${sourceMode ? "source-mode-active" : ""}`}
       data-testid="editor-container"
     >
       <EditorToolbar editor={editor} />
-      <EditorContent editor={editor} />
+      {sourceMode ? (
+        <SourceEditor
+          value={markdownSource}
+          onChange={handleSourceChange}
+          placeholder={placeholder}
+          autofocus
+        />
+      ) : (
+        <EditorContent editor={editor} />
+      )}
     </div>
   );
 }
