@@ -22,6 +22,7 @@ import { createSuggestionRender } from "./extensions/internalLinkSuggestionRende
 import { SourceEditor } from "./SourceEditor";
 import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
 import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
+import { useInternalLinkNavigation } from "@/hooks/useInternalLinkNavigation";
 
 // Create lowlight instance with common languages
 const lowlight = createLowlight(common);
@@ -31,6 +32,8 @@ interface EditorProps {
   onUpdate?: (content: string) => void;
   placeholder?: string;
   autofocus?: boolean;
+  /** Callback when an internal link is clicked */
+  onInternalLinkClick?: (path: string, heading?: string) => void;
 }
 
 /**
@@ -48,9 +51,13 @@ export function Editor({
   onUpdate,
   placeholder = "Start writing...",
   autofocus = true,
+  onInternalLinkClick,
 }: EditorProps) {
   const { setContent, content, focusMode, sourceMode, toggleSourceMode } =
     useEditorStore();
+
+  // Ref for the editor container (for internal link click handling)
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Get files for internal link suggestions
   const files = useWorkspaceStore(selectAllFilesForSuggestion);
@@ -61,6 +68,21 @@ export function Editor({
     () => createSuggestionRender({ getFiles }),
     [getFiles]
   );
+
+  // Handle internal link navigation
+  const handleInternalLinkNavigate = useCallback(
+    (path: string, heading?: string) => {
+      onInternalLinkClick?.(path, heading);
+    },
+    [onInternalLinkClick]
+  );
+
+  // Set up internal link click handling
+  useInternalLinkNavigation({
+    onNavigate: handleInternalLinkNavigate,
+    containerRef,
+    enabled: !!onInternalLinkClick && !sourceMode,
+  });
 
   // Track markdown source when in source mode
   const [markdownSource, setMarkdownSource] = useState("");
@@ -197,6 +219,7 @@ export function Editor({
 
   return (
     <div
+      ref={containerRef}
       className={`editor-container ${focusMode ? "focus-mode" : ""} ${sourceMode ? "source-mode-active" : ""}`}
       data-testid="editor-container"
     >

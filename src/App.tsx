@@ -263,6 +263,32 @@ function App() {
     [workspacePath, loadWorkspace, filePath, setFilePath, setContent]
   );
 
+  // Handle internal link click - navigate to file and optionally scroll to heading
+  const pendingHeadingRef = useRef<string | undefined>(undefined);
+
+  const handleInternalLinkClick = useCallback(
+    async (path: string, heading?: string) => {
+      // Store the heading to scroll to after file loads
+      pendingHeadingRef.current = heading;
+
+      // Navigate to the file
+      await handleFileSelect(path);
+
+      // If there's a heading anchor, scroll to it after a brief delay
+      // (allow content to render)
+      if (heading) {
+        setTimeout(() => {
+          const headingElement = document.getElementById(heading);
+          if (headingElement) {
+            headingElement.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+          pendingHeadingRef.current = undefined;
+        }, 100);
+      }
+    },
+    [handleFileSelect]
+  );
+
   return (
     <div className="app-layout">
       {/* Sidebar */}
@@ -367,6 +393,7 @@ function App() {
             initialContent={editorContent}
             onUpdate={handleEditorUpdate}
             placeholder="Start writing..."
+            onInternalLinkClick={handleInternalLinkClick}
           />
         ) : (
           <div className="empty-state">
