@@ -194,7 +194,7 @@ workspace/
 
 ### 3.1 Automatic Saving
 
-**Priority**: P0 | **Status**: 🟡 In Progress
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -205,7 +205,7 @@ workspace/
 
 ### 3.2 Version History
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -739,12 +739,20 @@ workspace/
 
 -   E2.1.7: Sort files by name/date with dropdown ✅
 
+-   E3.2.1: View version history via title bar button ✅
+
+-   E3.2.2: Timestamped snapshots with date grouping and preview ✅
+
+-   E3.2.3: Restore any previous version with confirmation ✅
+
+-   E3.2.4: Compare versions with split/unified diff view ✅
+
+-   E3.2.5: SQLite storage with 30-day configurable retention ✅
+
 
 ### Remaining P0 Work
-    
+
 -   Epic 2.3: Workspace management
-    
--   Epic 3.2: Version history
     
 -   Epic 4.1-4.2: Search
     
