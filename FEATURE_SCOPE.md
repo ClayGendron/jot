@@ -573,9 +573,9 @@ workspace/
 - E8.1.2: Collapse/expand sidebar with Cmd+B ✅
 - E8.3.1: Clean toolbar at top of document ✅
 - E8.3.2: Toolbar includes all formatting options ✅
+- E1.1.2: Source/WYSIWYG view toggle ✅
 
 ### Remaining P0 Work
-- E1.1.2: Source/WYSIWYG view toggle
 - E1.1.7, E1.1.8: Internal links (`[[filename]]`)
 - E2.1.4: Auto-link update on rename
 - E2.1.5: Drag-drop file move
