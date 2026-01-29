@@ -6,7 +6,6 @@
  */
 
 import GithubSlugger from "github-slugger";
-import readingTime from "reading-time";
 
 export interface ParseResult<T> {
   ok: true;
@@ -97,33 +96,13 @@ export function countCharacters(text: string, includeSpaces = true): number {
 }
 
 /**
- * Reading time result with detailed stats
- */
-export interface ReadingTimeResult {
-  minutes: number;
-  words: number;
-  text: string; // e.g., "3 min read"
-}
-
-/**
- * Estimate reading time using reading-time package
- * More accurate than simple word count / WPM
+ * Estimate reading time in minutes
+ * Simple browser-compatible implementation
  */
 export function estimateReadingTime(text: string, wordsPerMinute = 200): number {
-  const result = readingTime(text, { wordsPerMinute });
-  return Math.ceil(result.minutes);
-}
-
-/**
- * Get detailed reading time stats
- */
-export function getReadingTimeStats(text: string): ReadingTimeResult {
-  const result = readingTime(text);
-  return {
-    minutes: Math.ceil(result.minutes),
-    words: result.words,
-    text: result.text,
-  };
+  const words = countWords(text);
+  if (words === 0) return 0;
+  return Math.ceil(words / wordsPerMinute);
 }
 
 /**

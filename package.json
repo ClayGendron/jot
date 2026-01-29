@@ -46,7 +46,6 @@
     "normalize-path": "^3.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "reading-time": "^1.5.0",
     "tippy.js": "^6.3.7",
     "turndown": "^7.2.2",
     "zustand": "^5.0.10"
