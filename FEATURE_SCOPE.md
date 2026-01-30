@@ -101,7 +101,7 @@ workspace/
 
 ### 1.1 WYSIWYG Markdown Editing
 
-**Priority**: P0 | **Status**: 🟡 In Progress
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -434,7 +434,7 @@ workspace/
 
 ### 9.1 Internal Links
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -826,19 +826,30 @@ workspace/
 
 -   Epic 5.1-5.2: Spell/grammar check
 
--   Epic 6.1-6.4: Export
-
--   ~~Epic 7.1: Themes (built-in themes, accent colors)~~ ✅
-
--   ~~Epic 7.2-7.3: Typography/preferences~~ ✅
-
--   ~~Epic 8.2: Tabs~~ ✅
-
--   ~~Epic 8.3: Formatting Toolbar~~ ✅
+-   Epic 6.1-6.2, 6.4: Export (PDF, Word, Copy Formatted)
 
 -   Epic 10.1: iOS app
 
 -   Epic 11.1-11.2: Performance
+
+### Completed P0 Epics
+
+-   ~~Epic 1.1: WYSIWYG Markdown Editing~~ ✅
+-   ~~Epic 1.2: Mermaid Diagram Support~~ ✅
+-   ~~Epic 1.3: Code Blocks~~ ✅
+-   ~~Epic 2.1: File Tree Navigation~~ ✅
+-   ~~Epic 2.2: Document Outline~~ ✅
+-   ~~Epic 2.3: Workspace Management~~ ✅
+-   ~~Epic 3.1: Automatic Saving~~ ✅
+-   ~~Epic 3.2: Version History~~ ✅
+-   ~~Epic 4.1: Keyword Search~~ ✅
+-   ~~Epic 7.1: Themes & Appearance~~ ✅
+-   ~~Epic 7.2: Typography~~ ✅
+-   ~~Epic 7.3: Editor Preferences~~ ✅
+-   ~~Epic 8.1: Layout & Panels~~ ✅
+-   ~~Epic 8.2: Tabs & Multi-file~~ ✅
+-   ~~Epic 8.3: Formatting Toolbar~~ ✅
+-   ~~Epic 9.1: Internal Links~~ ✅
     
 
 ### Known Bugs
