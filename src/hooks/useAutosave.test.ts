@@ -11,7 +11,7 @@ vi.mock("@/lib/tauri/files", () => ({
 
 // Mock the save service
 vi.mock("@/services/saveService", () => ({
-  saveDocumentPipeline: vi.fn().mockResolvedValue(true),
+  saveDocumentPipeline: vi.fn().mockResolvedValue({ saved: true, isClean: true }),
 }));
 
 import { writeFile } from "@/lib/tauri/files";
@@ -158,6 +158,76 @@ describe("useAutosave", () => {
 
       // Storage should be cleared
       expect(localStorage.getItem("jot_crash_recovery")).toBeNull();
+    });
+
+    it("clears crash recovery only when isClean is true", async () => {
+      // Set up crash recovery data
+      const recoveryData = {
+        filePath: "/test/file.md",
+        content: "important unsaved content",
+        timestamp: Date.now(),
+      };
+      localStorage.setItem("jot_crash_recovery", JSON.stringify(recoveryData));
+
+      // Mock save returning isClean: true
+      mockSaveDocumentPipeline.mockResolvedValueOnce({ saved: true, isClean: true });
+
+      useTabsStore.setState({
+        tabs: [{
+          id: "tab-1",
+          filePath: "/test/file.md",
+          displayName: "file",
+          content: "test content",
+          isDirty: true,
+          isPinned: false,
+          scrollTop: 0,
+        }],
+        activeTabId: "tab-1",
+      });
+
+      const { result } = renderHook(() => useAutosave("test content"));
+
+      await act(async () => {
+        result.current.saveNow();
+      });
+
+      // Crash recovery should be cleared when isClean is true
+      expect(localStorage.getItem("jot_crash_recovery")).toBeNull();
+    });
+
+    it("retains crash recovery when isClean is false (content changed during save)", async () => {
+      // Set up crash recovery data
+      const recoveryData = {
+        filePath: "/test/file.md",
+        content: "important unsaved content",
+        timestamp: Date.now(),
+      };
+      localStorage.setItem("jot_crash_recovery", JSON.stringify(recoveryData));
+
+      // Mock save returning isClean: false (content changed during save)
+      mockSaveDocumentPipeline.mockResolvedValueOnce({ saved: true, isClean: false });
+
+      useTabsStore.setState({
+        tabs: [{
+          id: "tab-1",
+          filePath: "/test/file.md",
+          displayName: "file",
+          content: "test content",
+          isDirty: true,
+          isPinned: false,
+          scrollTop: 0,
+        }],
+        activeTabId: "tab-1",
+      });
+
+      const { result } = renderHook(() => useAutosave("test content"));
+
+      await act(async () => {
+        result.current.saveNow();
+      });
+
+      // Crash recovery should NOT be cleared - document is still dirty
+      expect(localStorage.getItem("jot_crash_recovery")).not.toBeNull();
     });
   });
 

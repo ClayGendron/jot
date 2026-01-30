@@ -43,27 +43,37 @@ export function computeSimpleHash(content: string): string {
 }
 
 /**
+ * Result of a save operation
+ */
+export interface SaveResult {
+  /** Whether the save operation was attempted and succeeded */
+  saved: boolean;
+  /** Whether the document is now clean (no unsaved changes) */
+  isClean: boolean;
+}
+
+/**
  * Unified save pipeline - ALL save paths must use this.
  * Ensures consistency: write → version history → hash → store → index
  *
  * @param tabId - Tab to save
  * @param isActiveDoc - If true, update SaveIndicator; if false, save silently
- * @returns true if save succeeded, false if skipped (not dirty or not found)
+ * @returns SaveResult with saved (operation succeeded) and isClean (no pending changes)
  */
 export async function saveDocumentPipeline(
   tabId: string,
   isActiveDoc: boolean
-): Promise<boolean> {
+): Promise<SaveResult> {
   const tab = useTabsStore.getState().tabs.find((t) => t.id === tabId);
 
   // Guard: no-op if tab not found or not dirty
   if (!tab) {
     console.warn(`saveDocumentPipeline: Tab ${tabId} not found`);
-    return false;
+    return { saved: false, isClean: false };
   }
 
   if (!tab.isDirty) {
-    return false; // Nothing to save
+    return { saved: false, isClean: true }; // Already clean, nothing to save
   }
 
   // Capture HTML content snapshot at START of save
@@ -78,8 +88,9 @@ export async function saveDocumentPipeline(
   }
 
   try {
-    // 2. Convert HTML → Markdown
-    const markdown = htmlToMarkdown(tab.content);
+    // 2. Convert HTML → Markdown using the SNAPSHOT (not current tab.content)
+    // This ensures we save exactly what we captured and will compare against
+    const markdown = htmlToMarkdown(htmlAtSaveStart);
 
     // 3. Normalize line endings for consistent hashing
     const normalizedMarkdown = markdown.replace(/\r\n/g, "\n");
@@ -106,12 +117,19 @@ export async function saveDocumentPipeline(
     // 8. GUARD: Check if content changed during save using EXACT HTML comparison
     // If user edited while save was in progress, don't mark as saved
     const currentTab = useTabsStore.getState().tabs.find((t) => t.id === tabId);
-    if (currentTab && currentTab.content === htmlAtSaveStart) {
+    const contentUnchanged = Boolean(currentTab && currentTab.content === htmlAtSaveStart);
+
+    if (contentUnchanged) {
       // Content unchanged during save - safe to mark as saved
       useTabsStore.getState().markTabSaved(tabId);
       if (isActiveDoc) {
         useEditorStore.getState().markSaved();
+        useEditorStore.getState().setSaveStatus("saved");
       }
+    } else if (isActiveDoc) {
+      // Content changed during save - show "saved" briefly but document is still dirty
+      // Reset to idle immediately since we didn't actually finish saving everything
+      useEditorStore.getState().setSaveStatus("idle");
     }
     // If content changed during save, leave isDirty=true (next autosave will handle it)
 
@@ -124,12 +142,7 @@ export async function saveDocumentPipeline(
       );
     }
 
-    // 10. Update SaveIndicator for active doc
-    if (isActiveDoc) {
-      useEditorStore.getState().setSaveStatus("saved");
-    }
-
-    return true;
+    return { saved: true, isClean: contentUnchanged };
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Failed to save file";
@@ -176,17 +189,17 @@ export async function saveAllDirtyTabs(
  *
  * @param filePath - Path of the file to save
  * @param isActiveDoc - Whether this is the active document
- * @returns true if save succeeded
+ * @returns SaveResult with saved (operation succeeded) and isClean (no pending changes)
  */
 export async function saveDocumentByPath(
   filePath: string,
   isActiveDoc: boolean
-): Promise<boolean> {
+): Promise<SaveResult> {
   const tab = useTabsStore.getState().tabs.find((t) => t.filePath === filePath);
 
   if (!tab) {
     console.warn(`saveDocumentByPath: No tab found for ${filePath}`);
-    return false;
+    return { saved: false, isClean: false };
   }
 
   return saveDocumentPipeline(tab.id, isActiveDoc);

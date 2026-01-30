@@ -104,13 +104,14 @@ describe("saveDocumentPipeline", () => {
     mockSaveVersion.mockClear();
   });
 
-  it("returns false if tab not found", async () => {
+  it("returns saved:false if tab not found", async () => {
     const result = await saveDocumentPipeline("nonexistent-id", true);
-    expect(result).toBe(false);
+    expect(result.saved).toBe(false);
+    expect(result.isClean).toBe(false);
     expect(mockWriteFile).not.toHaveBeenCalled();
   });
 
-  it("returns false if tab is not dirty", async () => {
+  it("returns saved:false, isClean:true if tab is not dirty", async () => {
     // Add a clean tab
     useTabsStore.setState({
       tabs: [
@@ -128,11 +129,12 @@ describe("saveDocumentPipeline", () => {
     });
 
     const result = await saveDocumentPipeline("tab-1", true);
-    expect(result).toBe(false);
+    expect(result.saved).toBe(false);
+    expect(result.isClean).toBe(true); // Already clean
     expect(mockWriteFile).not.toHaveBeenCalled();
   });
 
-  it("saves dirty tab successfully", async () => {
+  it("saves dirty tab successfully and returns isClean:true", async () => {
     // Add a dirty tab
     useTabsStore.setState({
       tabs: [
@@ -151,7 +153,8 @@ describe("saveDocumentPipeline", () => {
 
     const result = await saveDocumentPipeline("tab-1", true);
 
-    expect(result).toBe(true);
+    expect(result.saved).toBe(true);
+    expect(result.isClean).toBe(true);
     expect(mockWriteFile).toHaveBeenCalledWith("/workspace/test.md", "Hello world");
     expect(mockSaveVersion).toHaveBeenCalled();
   });
@@ -294,7 +297,8 @@ describe("saveDocumentPipeline", () => {
 
     // Should not throw, version history is non-critical
     const result = await saveDocumentPipeline("tab-1", true);
-    expect(result).toBe(true);
+    expect(result.saved).toBe(true);
+    expect(result.isClean).toBe(true);
     expect(mockWriteFile).toHaveBeenCalled();
   });
 
@@ -319,7 +323,7 @@ describe("saveDocumentPipeline", () => {
     await expect(saveDocumentPipeline("tab-1", true)).rejects.toThrow("Write failed");
   });
 
-  it("keeps isDirty true if content changed during save", async () => {
+  it("keeps isDirty true and returns isClean:false if content changed during save", async () => {
     const originalContent = "<p>original</p>";
 
     useTabsStore.setState({
@@ -357,7 +361,11 @@ describe("saveDocumentPipeline", () => {
       });
     });
 
-    await saveDocumentPipeline("tab-1", true);
+    const result = await saveDocumentPipeline("tab-1", true);
+
+    // Save succeeded but document is not clean
+    expect(result.saved).toBe(true);
+    expect(result.isClean).toBe(false);
 
     // Tab should remain dirty because content changed during save
     const tab = useTabsStore.getState().tabs.find((t) => t.id === "tab-1");
@@ -382,11 +390,54 @@ describe("saveDocumentPipeline", () => {
       activeTabId: "tab-1",
     });
 
-    await saveDocumentPipeline("tab-1", true);
+    const result = await saveDocumentPipeline("tab-1", true);
 
     // Content unchanged, should be marked as saved
+    expect(result.saved).toBe(true);
+    expect(result.isClean).toBe(true);
     const tab = useTabsStore.getState().tabs.find((t) => t.id === "tab-1");
     expect(tab?.isDirty).toBe(false);
+  });
+
+  it("sets SaveIndicator to idle (not saved) when content changed during save", async () => {
+    useTabsStore.setState({
+      tabs: [
+        {
+          id: "tab-1",
+          filePath: "/workspace/test.md",
+          displayName: "test",
+          content: "<p>original</p>",
+          isDirty: true,
+          isPinned: false,
+          scrollTop: 0,
+        },
+      ],
+      activeTabId: "tab-1",
+    });
+
+    // Simulate content change during save
+    mockWriteFile.mockImplementationOnce(async () => {
+      useTabsStore.setState({
+        tabs: [
+          {
+            id: "tab-1",
+            filePath: "/workspace/test.md",
+            displayName: "test",
+            content: "<p>edited</p>",
+            isDirty: true,
+            isPinned: false,
+            scrollTop: 0,
+          },
+        ],
+        activeTabId: "tab-1",
+      });
+    });
+
+    await saveDocumentPipeline("tab-1", true);
+
+    // SaveIndicator should be idle, not "saved" (would be misleading)
+    const status = useEditorStore.getState().saveStatus;
+    expect(status).toBe("idle");
   });
 });
 

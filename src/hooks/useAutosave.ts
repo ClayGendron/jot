@@ -88,11 +88,15 @@ export function useAutosave(content: string) {
         // - Hash computation
         // - Backlinks index update
         // - Store state updates
-        const saved = await saveDocumentPipeline(tabIdToSave, true);
+        const result = await saveDocumentPipeline(tabIdToSave, true);
 
-        if (saved) {
+        // Only clear crash recovery if the document is actually clean
+        // If content changed during save, isDirty is still true and we need recovery data
+        if (result.isClean) {
           clearCrashRecovery();
+        }
 
+        if (result.saved && result.isClean) {
           // Clear any pending indicator timeout
           if (savedIndicatorTimeoutRef.current) {
             clearTimeout(savedIndicatorTimeoutRef.current);
@@ -103,6 +107,7 @@ export function useAutosave(content: string) {
             setSaveStatus("idle");
           }, SAVED_INDICATOR_DURATION_MS);
         }
+        // If saved but not clean (content changed during save), pipeline already set status to idle
       } catch (error) {
         // Pipeline already sets error status, but log for debugging
         console.error("Autosave failed:", error);
