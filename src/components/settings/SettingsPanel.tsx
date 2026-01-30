@@ -12,6 +12,10 @@ import {
   MAX_LINE_WIDTH_MIN,
   MAX_LINE_WIDTH_MAX,
 } from "@/lib/settings/typography";
+import { ThemePicker } from "./ThemePicker";
+import { AccentColorPicker } from "./AccentColorPicker";
+import type { ThemeName } from "@/lib/settings/themes";
+import { getTheme } from "@/lib/settings/themes";
 
 interface SettingsPanelProps {
   onClose: () => void;
@@ -29,6 +33,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   // Editor store - current values
   const theme = useEditorStore((s) => s.theme);
   const setTheme = useEditorStore((s) => s.setTheme);
+  const themeName = useEditorStore((s) => s.themeName);
+  const setThemeName = useEditorStore((s) => s.setThemeName);
+  const accentColorId = useEditorStore((s) => s.accentColorId);
+  const setAccentColorId = useEditorStore((s) => s.setAccentColorId);
   const fontFamily = useEditorStore((s) => s.fontFamily);
   const setFontFamily = useEditorStore((s) => s.setFontFamily);
   const fontSize = useEditorStore((s) => s.fontSize);
@@ -45,13 +53,35 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   // Settings store - persistence
   const updateAppearance = useSettingsStore((s) => s.updateAppearance);
 
-  // Theme change handler
+  // Theme change handler (legacy light/dark/system)
   const handleThemeChange = useCallback(
     (newTheme: Theme) => {
       setTheme(newTheme);
       updateAppearance({ theme: newTheme });
     },
     [setTheme, updateAppearance]
+  );
+
+  // Theme preset change handler
+  const handleThemeNameChange = useCallback(
+    (newThemeName: ThemeName) => {
+      setThemeName(newThemeName);
+      // Also update legacy theme for backwards compatibility
+      const themePreset = getTheme(newThemeName);
+      const legacyTheme: Theme = themePreset.isDark ? "dark" : "light";
+      setTheme(legacyTheme);
+      updateAppearance({ themeName: newThemeName, theme: legacyTheme });
+    },
+    [setThemeName, setTheme, updateAppearance]
+  );
+
+  // Accent color change handler
+  const handleAccentColorChange = useCallback(
+    (newAccentId: string | null) => {
+      setAccentColorId(newAccentId);
+      updateAppearance({ accentColorId: newAccentId });
+    },
+    [setAccentColorId, updateAppearance]
   );
 
   // Font family change handler
@@ -128,32 +158,41 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           <section className="settings-section">
             <h3 className="settings-section-title">Appearance</h3>
 
-            {/* Theme */}
-            <div className="settings-row">
+            {/* Theme Picker */}
+            <div className="settings-row settings-row-vertical">
               <label className="settings-label">Theme</label>
-              <div className="settings-button-group">
-                <button
-                  className={`settings-button ${theme === "light" ? "active" : ""}`}
-                  onClick={() => handleThemeChange("light")}
-                >
-                  <SunIcon />
-                  Light
-                </button>
-                <button
-                  className={`settings-button ${theme === "dark" ? "active" : ""}`}
-                  onClick={() => handleThemeChange("dark")}
-                >
-                  <MoonIcon />
-                  Dark
-                </button>
-                <button
-                  className={`settings-button ${theme === "system" ? "active" : ""}`}
-                  onClick={() => handleThemeChange("system")}
-                >
-                  <MonitorIcon />
-                  System
-                </button>
+              <ThemePicker
+                selectedTheme={themeName}
+                onSelectTheme={handleThemeNameChange}
+              />
+            </div>
+
+            {/* Accent Color */}
+            <div className="settings-row settings-row-vertical">
+              <label className="settings-label">Accent color</label>
+              <AccentColorPicker
+                themeName={themeName}
+                selectedAccentId={accentColorId}
+                onSelectAccent={handleAccentColorChange}
+              />
+            </div>
+
+            {/* System preference toggle */}
+            <div className="settings-row toggle-row">
+              <div className="settings-toggle-info">
+                <label className="settings-label">Follow system</label>
+                <span className="settings-description">
+                  Automatically switch themes based on system preference
+                </span>
               </div>
+              <button
+                className={`settings-toggle ${theme === "system" ? "active" : ""}`}
+                onClick={() => handleThemeChange(theme === "system" ? "light" : "system")}
+                role="switch"
+                aria-checked={theme === "system"}
+              >
+                <span className="settings-toggle-knob" />
+              </button>
             </div>
           </section>
 
@@ -337,33 +376,6 @@ function CloseIcon() {
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
-
-function SunIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-    </svg>
-  );
-}
-
-function MonitorIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect width="20" height="14" x="2" y="3" rx="2" />
-      <line x1="8" x2="16" y1="21" y2="21" />
-      <line x1="12" x2="12" y1="17" y2="21" />
     </svg>
   );
 }

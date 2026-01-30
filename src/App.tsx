@@ -46,6 +46,8 @@ import { createFileSafe } from "@/lib/tauri/links";
 import { renameFileWithLinkUpdates } from "@/lib/links/linkUpdater";
 import { moveFileWithLinkUpdates, calculateNewPath } from "@/lib/links/moveFile";
 import { clampFontSize, FONT_SIZE_STEP, FONT_SIZE_DEFAULT } from "@/lib/settings/typography";
+import { getEffectiveAccent, resolveSystemTheme } from "@/lib/settings/themes";
+import type { ThemeName } from "@/lib/settings/themes";
 import "./index.css";
 
 type SidebarTab = "files" | "outline" | "backlinks";
@@ -68,6 +70,10 @@ function App() {
   const markSaved = useEditorStore((state) => state.markSaved);
   const theme = useEditorStore((state) => state.theme);
   const setTheme = useEditorStore((state) => state.setTheme);
+  const themeName = useEditorStore((state) => state.themeName);
+  const setThemeName = useEditorStore((state) => state.setThemeName);
+  const accentColorId = useEditorStore((state) => state.accentColorId);
+  const setAccentColorId = useEditorStore((state) => state.setAccentColorId);
   const setFontFamily = useEditorStore((state) => state.setFontFamily);
   const fontSize = useEditorStore((state) => state.fontSize);
   const setFontSize = useEditorStore((state) => state.setFontSize);
@@ -201,6 +207,9 @@ function App() {
   useEffect(() => {
     if (settingsLoaded && appearancePrefs) {
       setTheme(appearancePrefs.theme);
+      // Load new theme system preferences
+      if (appearancePrefs.themeName) setThemeName(appearancePrefs.themeName);
+      if (appearancePrefs.accentColorId !== undefined) setAccentColorId(appearancePrefs.accentColorId);
       setFontFamily(appearancePrefs.fontFamily);
       if (appearancePrefs.fontSize) setFontSize(appearancePrefs.fontSize);
       if (appearancePrefs.lineHeight) setLineHeight(appearancePrefs.lineHeight);
@@ -213,16 +222,38 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsLoaded]);
 
-  // Apply theme to document element when theme changes
+  // Apply theme to document element when theme or themeName changes
   useEffect(() => {
     const root = document.documentElement;
     if (theme === "system") {
       // Remove data-theme to let CSS media queries handle it
+      // System preference will use paper (light) or midnight (dark)
       root.removeAttribute("data-theme");
     } else {
-      root.setAttribute("data-theme", theme);
+      // Use themeName for the full theme palette, fallback to theme for legacy compatibility
+      root.setAttribute("data-theme", themeName || theme);
     }
-  }, [theme]);
+  }, [theme, themeName]);
+
+  // Apply custom accent color when accentColorId changes
+  useEffect(() => {
+    const root = document.documentElement;
+    // Resolve the effective theme name (handle system preference)
+    const effectiveThemeName: ThemeName =
+      theme === "system" ? resolveSystemTheme() : (themeName || "paper");
+    const accent = getEffectiveAccent(effectiveThemeName, accentColorId);
+
+    // Apply custom accent via CSS custom properties
+    root.style.setProperty("--custom-accent-color", accent.color);
+    root.style.setProperty("--custom-accent-soft", accent.soft);
+
+    // Set the flag to enable accent override
+    if (accentColorId) {
+      root.setAttribute("data-accent-color", accentColorId);
+    } else {
+      root.removeAttribute("data-accent-color");
+    }
+  }, [theme, themeName, accentColorId]);
 
   // Apply typography settings to CSS custom properties
   useEffect(() => {

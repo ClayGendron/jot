@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { ThemeName } from "@/lib/settings/themes";
 
 /**
  * Editor state management using Zustand
@@ -39,8 +40,12 @@ export interface EditorUIState {
   sidebarOpen: boolean;
   /** Whether editor is in focus mode */
   focusMode: boolean;
-  /** Current theme */
+  /** Current theme (legacy: light/dark/system) */
   theme: "light" | "dark" | "system";
+  /** Theme preset name */
+  themeName: ThemeName;
+  /** Custom accent color ID (null uses theme default) */
+  accentColorId: string | null;
   /** Editor font family */
   fontFamily: FontFamily;
   /** Font size in pixels */
@@ -77,6 +82,8 @@ export interface EditorState extends DocumentState, EditorUIState {
   toggleLineNumbers: () => void;
   toggleTypewriterMode: () => void;
   setTheme: (theme: "light" | "dark" | "system") => void;
+  setThemeName: (themeName: ThemeName) => void;
+  setAccentColorId: (accentColorId: string | null) => void;
   setFontFamily: (fontFamily: FontFamily) => void;
   setFontSize: (size: number) => void;
   setLineHeight: (height: number) => void;
@@ -108,6 +115,8 @@ const initialUIState: EditorUIState = {
   sidebarOpen: true,
   focusMode: false,
   theme: "system",
+  themeName: "paper",
+  accentColorId: null,
   fontFamily: "serif",
   fontSize: 18,
   lineHeight: 1.8,
@@ -164,6 +173,10 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   setTheme: (theme) => set({ theme }),
 
+  setThemeName: (themeName) => set({ themeName }),
+
+  setAccentColorId: (accentColorId) => set({ accentColorId }),
+
   setFontFamily: (fontFamily) => set({ fontFamily }),
 
   setFontSize: (fontSize) => set({ fontSize }),
@@ -201,6 +214,8 @@ export const selectUIState = (state: EditorState): EditorUIState => ({
   sidebarOpen: state.sidebarOpen,
   focusMode: state.focusMode,
   theme: state.theme,
+  themeName: state.themeName,
+  accentColorId: state.accentColorId,
   fontFamily: state.fontFamily,
   fontSize: state.fontSize,
   lineHeight: state.lineHeight,

@@ -4,6 +4,9 @@
  * Defines types for global application settings and per-workspace settings.
  */
 
+import type { ThemeName } from "./themes";
+export type { ThemeName } from "./themes";
+
 /**
  * A recent workspace entry
  */
@@ -30,8 +33,12 @@ export interface LayoutPreferences {
  * Appearance preferences for theme and typography
  */
 export interface AppearancePreferences {
-  /** Color theme: light, dark, or follow system */
+  /** Color theme: light, dark, or follow system (legacy, maps to themeName) */
   theme: "light" | "dark" | "system";
+  /** Theme preset name (paper, midnight, sepia, highContrast, olive) */
+  themeName: ThemeName;
+  /** Custom accent color ID (null uses theme default) */
+  accentColorId: string | null;
   /** Editor font family */
   fontFamily: "serif" | "sans" | "mono";
   /** Font size in pixels */
@@ -110,6 +117,8 @@ export const DEFAULT_LAYOUT_PREFERENCES: LayoutPreferences = {
  */
 export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
   theme: "system",
+  themeName: "paper",
+  accentColorId: null,
   fontFamily: "serif",
   fontSize: 18,
   lineHeight: 1.8,
