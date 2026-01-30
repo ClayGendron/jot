@@ -66,6 +66,7 @@ export function GlobalSearchPanel({
     if (!searchTerm || searchTerm.length < 2) {
       setResults([]);
       setSearchError(null);
+      setIsSearching(false);
       return;
     }
 

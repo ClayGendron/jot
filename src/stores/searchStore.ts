@@ -45,10 +45,6 @@ export interface SearchState {
   globalPathFilter: string;
   globalResults: GlobalSearchResult[];
   globalIsSearching: boolean;
-
-  // Request lifecycle tracking (for race condition prevention)
-  activeDocumentRequestId: string | null;
-  activeGlobalRequestId: string | null;
 }
 
 export interface SearchActions {
@@ -72,11 +68,6 @@ export interface SearchActions {
   setGlobalIsSearching: (isSearching: boolean) => void;
   clearGlobalResults: () => void;
 
-  // Request lifecycle actions
-  setActiveDocumentRequest: (id: string | null) => void;
-  setActiveGlobalRequest: (id: string | null) => void;
-  isCurrentRequest: (scope: "document" | "global", id: string) => boolean;
-
   // Reset
   reset: () => void;
 }
@@ -99,13 +90,9 @@ const initialState: SearchState = {
   globalPathFilter: "",
   globalResults: [],
   globalIsSearching: false,
-
-  // Request lifecycle
-  activeDocumentRequestId: null,
-  activeGlobalRequestId: null,
 };
 
-export const useSearchStore = create<SearchState & SearchActions>((set, get) => ({
+export const useSearchStore = create<SearchState & SearchActions>((set) => ({
   ...initialState,
 
   // Document search actions
@@ -171,19 +158,6 @@ export const useSearchStore = create<SearchState & SearchActions>((set, get) => 
   setGlobalIsSearching: (isSearching) => set({ globalIsSearching: isSearching }),
 
   clearGlobalResults: () => set({ globalResults: [] }),
-
-  // Request lifecycle actions
-  setActiveDocumentRequest: (id) => set({ activeDocumentRequestId: id }),
-
-  setActiveGlobalRequest: (id) => set({ activeGlobalRequestId: id }),
-
-  isCurrentRequest: (scope, id) => {
-    const state = get();
-    if (scope === "document") {
-      return state.activeDocumentRequestId === id;
-    }
-    return state.activeGlobalRequestId === id;
-  },
 
   // Reset
   reset: () => set(initialState),

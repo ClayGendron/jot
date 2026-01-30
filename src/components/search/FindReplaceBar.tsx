@@ -70,6 +70,27 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
     }
   }, [editor, searchTerm, caseSensitive, useRegex, setMatchInfo]);
 
+  // Sync match counts when document changes (decorations update on edit)
+  useEffect(() => {
+    if (!editor || !searchTerm) return;
+
+    const updateMatchCounts = () => {
+      const storage = getSearchStorage(editor);
+      if (storage) {
+        const total = storage.results.length;
+        const current = total > 0 ? storage.resultIndex + 1 : 0;
+        setMatchInfo(current, total);
+      }
+    };
+
+    // Listen for editor updates (includes document changes)
+    editor.on("update", updateMatchCounts);
+
+    return () => {
+      editor.off("update", updateMatchCounts);
+    };
+  }, [editor, searchTerm, setMatchInfo]);
+
   // Navigation handlers (defined before handleKeyDown which uses them)
   const handleNext = useCallback(() => {
     if (!editor) return;
