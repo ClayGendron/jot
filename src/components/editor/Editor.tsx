@@ -132,15 +132,27 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
   const getCurrentFilePath = useCallback(() => filePath, [filePath]);
   const getCurrentFileContent = useCallback(() => content, [content]);
 
+  // Create a wrapper for readFile that captures workspace path
+  // This is needed because readFile now requires workspace validation
+  const readFileContent = useCallback(
+    async (path: string): Promise<string> => {
+      if (!workspacePath) {
+        throw new Error("No workspace is open");
+      }
+      return readFile(path, workspacePath);
+    },
+    [workspacePath]
+  );
+
   // Create suggestion render function (memoized)
   const suggestionRender = useMemo(
     () => createSuggestionRender({
       getFiles,
-      readFileContent: readFile,
+      readFileContent,
       getCurrentFilePath,
       getCurrentFileContent,
     }),
-    [getFiles, getCurrentFilePath, getCurrentFileContent]
+    [getFiles, readFileContent, getCurrentFilePath, getCurrentFileContent]
   );
 
   // Handle internal link navigation

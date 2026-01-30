@@ -51,5 +51,6 @@ export async function createFileSafe(
   path: string,
   workspacePath: string
 ): Promise<void> {
-  return invoke("jot_create_file_safe", { path, workspacePath });
+  // jot_create_file now validates workspace path internally
+  return invoke("jot_create_file", { path, workspacePath });
 }

@@ -148,11 +148,11 @@ export async function moveFileWithLinkUpdates(
   // Update links in each affected file BEFORE moving
   for (const file of affectedFiles) {
     try {
-      const content = await readFile(file.sourcePath);
+      const content = await readFile(file.sourcePath, workspacePath);
       const updated = updateLinksForMove(content, oldRelative, newRelative);
 
       if (updated !== content) {
-        await writeFile(file.sourcePath, updated);
+        await writeFile(file.sourcePath, updated, workspacePath);
         updatedFiles.push(file.sourcePath);
       }
     } catch (e) {
@@ -163,7 +163,7 @@ export async function moveFileWithLinkUpdates(
 
   // Move the actual file/folder AFTER updating links
   // renamePath handles moves (it's just a rename with different parent)
-  await renamePath(sourcePath, newPath);
+  await renamePath(sourcePath, newPath, workspacePath);
 
   return { newPath, updatedFiles, errors };
 }

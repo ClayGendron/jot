@@ -29,48 +29,49 @@ export async function readFolderChildren(path: string): Promise<FileEntry[]> {
 }
 
 /**
- * Read file contents
+ * Read file contents with workspace validation
  */
-export async function readFile(path: string): Promise<string> {
-  return invoke<string>("jot_read_file", { path });
+export async function readFile(path: string, workspacePath: string): Promise<string> {
+  return invoke<string>("jot_read_file", { path, workspacePath });
 }
 
 /**
- * Write content to file
+ * Write content to file with workspace validation and atomic writes
  */
-export async function writeFile(path: string, content: string): Promise<void> {
-  return invoke("jot_write_file", { path, content });
+export async function writeFile(path: string, content: string, workspacePath: string): Promise<void> {
+  return invoke("jot_write_file", { path, content, workspacePath });
 }
 
 /**
- * Create new file
+ * Create new file with workspace validation
  */
-export async function createFile(path: string): Promise<void> {
-  return invoke("jot_create_file", { path });
+export async function createFile(path: string, workspacePath: string): Promise<void> {
+  return invoke("jot_create_file", { path, workspacePath });
 }
 
 /**
- * Create new folder
+ * Create new folder with workspace validation
  */
-export async function createFolder(path: string): Promise<void> {
-  return invoke("jot_create_folder", { path });
+export async function createFolder(path: string, workspacePath: string): Promise<void> {
+  return invoke("jot_create_folder", { path, workspacePath });
 }
 
 /**
- * Rename file or folder
+ * Rename file or folder with workspace validation
  */
 export async function renamePath(
   oldPath: string,
-  newPath: string
+  newPath: string,
+  workspacePath: string
 ): Promise<void> {
-  return invoke("jot_rename_path", { oldPath, newPath });
+  return invoke("jot_rename_path", { oldPath, newPath, workspacePath });
 }
 
 /**
- * Delete file or folder
+ * Delete file or folder with workspace validation
  */
-export async function deletePath(path: string): Promise<void> {
-  return invoke("jot_delete_path", { path });
+export async function deletePath(path: string, workspacePath: string): Promise<void> {
+  return invoke("jot_delete_path", { path, workspacePath });
 }
 
 /**
@@ -114,24 +115,25 @@ export async function openFileDialog(): Promise<string | null> {
   return result as string | null;
 }
 
-/**
- * Get the file name from a path
- */
-export function getFileName(path: string): string {
-  return path.split(/[/\\]/).pop() || path;
-}
+// Re-export path utilities for backward compatibility
+// These are now implemented in @/lib/path/pathUtils
+export { getFileName } from "@/lib/path/pathUtils";
+
+import { normalizeForDisplay } from "@/lib/path/pathUtils";
 
 /**
  * Get the parent directory from a path
  */
 export function getParentDir(path: string): string {
-  const parts = path.split(/[/\\]/);
+  const normalized = normalizeForDisplay(path);
+  const parts = normalized.split("/");
   parts.pop();
   return parts.join("/") || "/";
 }
 
 /**
  * Join path segments
+ * Uses forward slashes for consistency (display purposes)
  */
 export function joinPath(...segments: string[]): string {
   return segments.join("/").replace(/\/+/g, "/");

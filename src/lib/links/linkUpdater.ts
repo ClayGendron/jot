@@ -86,11 +86,11 @@ export async function renameFileWithLinkUpdates(
   // Update links in each affected file BEFORE renaming
   for (const file of affectedFiles) {
     try {
-      const content = await readFile(file.sourcePath);
+      const content = await readFile(file.sourcePath, workspacePath);
       const updated = updateLinksInContent(content, oldRelative, newRelative);
 
       if (updated !== content) {
-        await writeFile(file.sourcePath, updated);
+        await writeFile(file.sourcePath, updated, workspacePath);
         updatedFiles.push(file.sourcePath);
       }
     } catch (e) {
@@ -100,7 +100,7 @@ export async function renameFileWithLinkUpdates(
   }
 
   // Rename the actual file AFTER updating links
-  await renamePath(oldPath, newPath);
+  await renamePath(oldPath, newPath, workspacePath);
 
   return { updatedFiles, errors };
 }

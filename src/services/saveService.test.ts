@@ -155,7 +155,7 @@ describe("saveDocumentPipeline", () => {
 
     expect(result.saved).toBe(true);
     expect(result.isClean).toBe(true);
-    expect(mockWriteFile).toHaveBeenCalledWith("/workspace/test.md", "Hello world");
+    expect(mockWriteFile).toHaveBeenCalledWith("/workspace/test.md", "Hello world", "/workspace");
     expect(mockSaveVersion).toHaveBeenCalled();
   });
 
@@ -274,7 +274,7 @@ describe("saveDocumentPipeline", () => {
     await saveDocumentPipeline("tab-1", true);
 
     // Should normalize to LF
-    expect(mockWriteFile).toHaveBeenCalledWith("/workspace/test.md", "Hello\nWorld");
+    expect(mockWriteFile).toHaveBeenCalledWith("/workspace/test.md", "Hello\nWorld", "/workspace");
   });
 
   it("handles version history errors gracefully", async () => {

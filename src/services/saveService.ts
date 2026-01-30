@@ -95,8 +95,11 @@ export async function saveDocumentPipeline(
     // 3. Normalize line endings for consistent hashing
     const normalizedMarkdown = markdown.replace(/\r\n/g, "\n");
 
-    // 4. Write to disk
-    await writeFile(tab.filePath, normalizedMarkdown);
+    // 4. Write to disk (requires workspace path for security validation)
+    if (!workspacePath) {
+      throw new Error("Cannot save: no workspace is open");
+    }
+    await writeFile(tab.filePath, normalizedMarkdown, workspacePath);
 
     // 5. Save version history (only if workspace is open)
     if (workspacePath) {

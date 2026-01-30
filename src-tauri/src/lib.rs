@@ -1,11 +1,81 @@
 use regex::RegexBuilder;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
+use tempfile::NamedTempFile;
 
 mod version_history;
 use version_history::{Version, VersionDiff, VersionMeta};
+
+// ==========================================
+// Security Helpers
+// ==========================================
+
+/// Validates that a path is within the workspace.
+/// For existing paths: canonicalize and check starts_with.
+/// For new paths (create/write): canonicalize parent and check.
+///
+/// # Arguments
+/// * `path` - The path to validate
+/// * `workspace` - The workspace root path
+/// * `must_exist` - If true, the path must exist; if false, only parent must exist
+fn validate_in_workspace(path: &str, workspace: &str, must_exist: bool) -> Result<(), String> {
+    let workspace_canonical = std::fs::canonicalize(workspace)
+        .map_err(|e| format!("Cannot resolve workspace: {}", e))?;
+
+    if must_exist {
+        // Path must exist - canonicalize it directly
+        let path_canonical = std::fs::canonicalize(path)
+            .map_err(|e| format!("Cannot resolve path: {}", e))?;
+        if !path_canonical.starts_with(&workspace_canonical) {
+            return Err("Path is outside workspace".to_string());
+        }
+    } else {
+        // Path may not exist - canonicalize parent directory
+        let target = Path::new(path);
+        let parent = target.parent()
+            .ok_or("Invalid path: no parent directory")?;
+
+        // Parent must exist for us to validate
+        let parent_canonical = std::fs::canonicalize(parent)
+            .map_err(|e| format!("Cannot resolve parent directory: {}", e))?;
+
+        if !parent_canonical.starts_with(&workspace_canonical) {
+            return Err("Path is outside workspace".to_string());
+        }
+    }
+    Ok(())
+}
+
+/// Atomic write helper - writes to temp file then renames.
+/// Handles Windows overwrite semantics (rename doesn't replace).
+fn atomic_write(path: &str, content: &str) -> Result<(), String> {
+    let target = Path::new(path);
+    let parent = target.parent()
+        .ok_or("Invalid path: no parent directory")?;
+
+    fs::create_dir_all(parent)
+        .map_err(|e| format!("Failed to create directories: {}", e))?;
+
+    // Create temp file in same directory for atomic rename
+    let mut temp = NamedTempFile::new_in(parent)
+        .map_err(|e| format!("Failed to create temp file: {}", e))?;
+
+    temp.write_all(content.as_bytes())
+        .map_err(|e| format!("Failed to write content: {}", e))?;
+
+    // Flush to ensure all data is written
+    temp.flush()
+        .map_err(|e| format!("Failed to flush content: {}", e))?;
+
+    // persist() handles platform-specific overwrite behavior
+    temp.persist(target)
+        .map_err(|e| format!("Failed to persist file: {}", e))?;
+
+    Ok(())
+}
 
 /// Represents a file or folder in the file tree
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,19 +89,24 @@ pub struct FileEntry {
 }
 
 /// Read directory contents recursively, filtering for markdown files and folders
+/// Uses spawn_blocking to avoid blocking the main thread during IO
 #[tauri::command]
-fn jot_read_directory(path: &str) -> Result<Vec<FileEntry>, String> {
-    let root = Path::new(path);
+async fn jot_read_directory(path: String) -> Result<Vec<FileEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = Path::new(&path);
 
-    if !root.exists() {
-        return Err(format!("Directory does not exist: {}", path));
-    }
+        if !root.exists() {
+            return Err(format!("Directory does not exist: {}", path));
+        }
 
-    if !root.is_dir() {
-        return Err(format!("Path is not a directory: {}", path));
-    }
+        if !root.is_dir() {
+            return Err(format!("Path is not a directory: {}", path));
+        }
 
-    read_dir_recursive(root, 0, 3) // Max depth of 3 for initial load
+        read_dir_recursive(root, 0, 3) // Max depth of 3 for initial load
+    })
+    .await
+    .map_err(|e| format!("Task join failed: {}", e))?
 }
 
 fn read_dir_recursive(dir: &Path, depth: usize, max_depth: usize) -> Result<Vec<FileEntry>, String> {
@@ -96,8 +171,17 @@ fn read_dir_recursive(dir: &Path, depth: usize, max_depth: usize) -> Result<Vec<
 
 /// Read a single directory's contents (one level deep)
 /// Used for lazy loading folders beyond initial depth limit
+/// Uses spawn_blocking to avoid blocking the main thread during IO
 #[tauri::command]
-fn jot_read_folder_children(path: &str) -> Result<Vec<FileEntry>, String> {
+async fn jot_read_folder_children(path: String) -> Result<Vec<FileEntry>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        read_folder_children_sync(&path)
+    })
+    .await
+    .map_err(|e| format!("Task join failed: {}", e))?
+}
+
+fn read_folder_children_sync(path: &str) -> Result<Vec<FileEntry>, String> {
     let dir = Path::new(path);
 
     if !dir.exists() {
@@ -160,26 +244,25 @@ fn jot_read_folder_children(path: &str) -> Result<Vec<FileEntry>, String> {
     Ok(entries)
 }
 
-/// Read a single file's contents
+/// Read a single file's contents with workspace validation
 #[tauri::command]
-fn jot_read_file(path: &str) -> Result<String, String> {
+fn jot_read_file(path: &str, workspace_path: &str) -> Result<String, String> {
+    validate_in_workspace(path, workspace_path, true)?;
     fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))
 }
 
-/// Write content to a file
+/// Write content to a file with workspace validation and atomic writes
 #[tauri::command]
-fn jot_write_file(path: &str, content: &str) -> Result<(), String> {
-    // Create parent directories if they don't exist
-    if let Some(parent) = Path::new(path).parent() {
-        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
-    }
-
-    fs::write(path, content).map_err(|e| format!("Failed to write file: {}", e))
+fn jot_write_file(path: &str, content: &str, workspace_path: &str) -> Result<(), String> {
+    validate_in_workspace(path, workspace_path, false)?;
+    atomic_write(path, content)
 }
 
-/// Create a new file
+/// Create a new file with workspace validation
 #[tauri::command]
-fn jot_create_file(path: &str) -> Result<(), String> {
+fn jot_create_file(path: &str, workspace_path: &str) -> Result<(), String> {
+    validate_in_workspace(path, workspace_path, false)?;
+
     let file_path = Path::new(path);
 
     if file_path.exists() {
@@ -194,28 +277,21 @@ fn jot_create_file(path: &str) -> Result<(), String> {
     fs::write(path, "").map_err(|e| format!("Failed to create file: {}", e))
 }
 
-/// Create a new file with workspace validation (safe version)
-/// Validates that the path is within the workspace before creating
+/// Create a new folder with workspace validation
 #[tauri::command]
-fn jot_create_file_safe(path: &str, workspace_path: &str) -> Result<(), String> {
-    // Validate path is within workspace
-    if !jot_is_within_workspace(path, workspace_path) {
-        return Err(format!("Path '{}' is outside workspace", path));
-    }
-
-    // Delegate to regular create file
-    jot_create_file(path)
-}
-
-/// Create a new folder
-#[tauri::command]
-fn jot_create_folder(path: &str) -> Result<(), String> {
+fn jot_create_folder(path: &str, workspace_path: &str) -> Result<(), String> {
+    validate_in_workspace(path, workspace_path, false)?;
     fs::create_dir_all(path).map_err(|e| format!("Failed to create folder: {}", e))
 }
 
-/// Rename a file or folder
+/// Rename a file or folder with workspace validation
 #[tauri::command]
-fn jot_rename_path(old_path: &str, new_path: &str) -> Result<(), String> {
+fn jot_rename_path(old_path: &str, new_path: &str, workspace_path: &str) -> Result<(), String> {
+    // Validate old path exists and is within workspace
+    validate_in_workspace(old_path, workspace_path, true)?;
+    // Validate new path parent is within workspace
+    validate_in_workspace(new_path, workspace_path, false)?;
+
     if Path::new(new_path).exists() {
         return Err("A file with that name already exists".to_string());
     }
@@ -223,11 +299,13 @@ fn jot_rename_path(old_path: &str, new_path: &str) -> Result<(), String> {
     fs::rename(old_path, new_path).map_err(|e| format!("Failed to rename: {}", e))
 }
 
-/// Delete a file or folder permanently
+/// Delete a file or folder permanently with workspace validation
 /// WARNING: This permanently deletes files, not moves to trash
 /// TODO: Consider using the `trash` crate for safer deletion
 #[tauri::command]
-fn jot_delete_path(path: &str) -> Result<(), String> {
+fn jot_delete_path(path: &str, workspace_path: &str) -> Result<(), String> {
+    validate_in_workspace(path, workspace_path, true)?;
+
     let path = Path::new(path);
 
     if path.is_dir() {
@@ -359,18 +437,33 @@ pub struct FileSearchResult {
 }
 
 /// Search all markdown files in the workspace
+/// Uses spawn_blocking to avoid blocking the main thread during IO
 #[tauri::command]
-fn jot_search_workspace(
+async fn jot_search_workspace(
+    workspace_path: String,
+    search_term: String,
+    case_sensitive: bool,
+    use_regex: bool,
+    path_filter: Option<String>,
+) -> Result<Vec<FileSearchResult>, String> {
+    if search_term.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    tauri::async_runtime::spawn_blocking(move || {
+        search_workspace_sync(&workspace_path, &search_term, case_sensitive, use_regex, path_filter.as_deref())
+    })
+    .await
+    .map_err(|e| format!("Task join failed: {}", e))?
+}
+
+fn search_workspace_sync(
     workspace_path: &str,
     search_term: &str,
     case_sensitive: bool,
     use_regex: bool,
     path_filter: Option<&str>,
 ) -> Result<Vec<FileSearchResult>, String> {
-    if search_term.is_empty() {
-        return Ok(Vec::new());
-    }
-
     let workspace = Path::new(workspace_path);
     if !workspace.exists() || !workspace.is_dir() {
         return Err(format!("Invalid workspace path: {}", workspace_path));
@@ -891,7 +984,6 @@ pub fn run() {
             jot_read_file,
             jot_write_file,
             jot_create_file,
-            jot_create_file_safe,
             jot_create_folder,
             jot_rename_path,
             jot_delete_path,

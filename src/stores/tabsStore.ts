@@ -76,11 +76,11 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
+import { getFileNameWithoutExt } from "@/lib/path/pathUtils";
+
 function getDisplayName(filePath: string): string {
-  const parts = filePath.split("/");
-  const fileName = parts[parts.length - 1];
-  // Remove .md extension for cleaner display
-  return fileName.replace(/\.md$/, "");
+  // Use path utility for cross-platform file name extraction
+  return getFileNameWithoutExt(filePath);
 }
 
 /**

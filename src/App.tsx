@@ -285,7 +285,7 @@ function App() {
       for (const persistedTab of openTabsFromSettings.tabs) {
         try {
           // Check if file still exists by trying to read it
-          const markdownContent = await readFile(persistedTab.filePath);
+          const markdownContent = await readFile(persistedTab.filePath, workspacePath);
           const htmlContent = markdownToHtml(markdownContent);
           const tabId = openTab(persistedTab.filePath, htmlContent);
 
@@ -503,7 +503,7 @@ function App() {
         const fileContents = await Promise.all(
           allFiles.map(async (file) => {
             try {
-              const content = await readFile(file.path);
+              const content = await readFile(file.path, workspacePath);
               return {
                 path: file.path,
                 name: file.name,
@@ -566,8 +566,12 @@ function App() {
       }
 
       try {
-        // Read file content (Markdown on disk)
-        const markdownContent = await readFile(path);
+        // Read file content (Markdown on disk) - requires workspace path for validation
+        if (!workspacePath) {
+          console.error("Cannot open file: no workspace is open");
+          return;
+        }
+        const markdownContent = await readFile(path, workspacePath);
         // Convert Markdown to HTML for TipTap editor
         const htmlContent = markdownToHtml(markdownContent);
 
@@ -583,7 +587,7 @@ function App() {
         console.error("Failed to open file:", err);
       }
     },
-    [isDirty, filePath, activeTabId, setFilePath, setContent, markSaved, findTabByPath, setActiveTab, openTab]
+    [isDirty, filePath, activeTabId, workspacePath, setFilePath, setContent, markSaved, findTabByPath, setActiveTab, openTab]
   );
 
   // Save file (immediate save via Cmd+S)
@@ -957,11 +961,13 @@ function App() {
       const newPath = joinPath(parentPath, fileName);
 
       try {
-        await createFile(newPath);
-        // Reload workspace to show new file
-        if (workspacePath) {
-          await loadWorkspace(workspacePath);
+        if (!workspacePath) {
+          alert("Cannot create file: no workspace is open");
+          return;
         }
+        await createFile(newPath, workspacePath);
+        // Reload workspace to show new file
+        await loadWorkspace(workspacePath);
         // Open the new file
         handleFileSelect(newPath);
       } catch (err) {
@@ -981,10 +987,12 @@ function App() {
       const newPath = joinPath(parentPath, name);
 
       try {
-        await createFolder(newPath);
-        if (workspacePath) {
-          await loadWorkspace(workspacePath);
+        if (!workspacePath) {
+          alert("Cannot create folder: no workspace is open");
+          return;
         }
+        await createFolder(newPath, workspacePath);
+        await loadWorkspace(workspacePath);
       } catch (err) {
         console.error("Failed to create folder:", err);
         alert(err instanceof Error ? err.message : "Failed to create folder");
@@ -1022,9 +1030,12 @@ function App() {
           if (errors.length > 0) {
             console.warn("Some link updates failed:", errors);
           }
-        } else {
+        } else if (workspacePath) {
           // No backlinks, just rename
-          await renamePath(path, newPath);
+          await renamePath(path, newPath, workspacePath);
+        } else {
+          alert("Cannot rename: no workspace is open");
+          return;
         }
 
         if (workspacePath) {
@@ -1052,10 +1063,12 @@ function App() {
       if (!confirmed) return;
 
       try {
-        await deletePath(path);
-        if (workspacePath) {
-          await loadWorkspace(workspacePath);
+        if (!workspacePath) {
+          alert("Cannot delete: no workspace is open");
+          return;
         }
+        await deletePath(path, workspacePath);
+        await loadWorkspace(workspacePath);
         // Clear editor if this was the open file
         if (filePath === path) {
           setFilePath(null);
