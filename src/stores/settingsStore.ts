@@ -3,11 +3,13 @@ import type {
   GlobalAppSettings,
   RecentWorkspace,
   LayoutPreferences,
+  AppearancePreferences,
   PersistedTabState,
 } from "@/lib/settings/types";
 import {
   DEFAULT_GLOBAL_SETTINGS,
   DEFAULT_LAYOUT_PREFERENCES,
+  DEFAULT_APPEARANCE_PREFERENCES,
   MAX_RECENT_WORKSPACES,
 } from "@/lib/settings/types";
 import {
@@ -30,6 +32,8 @@ export interface SettingsState {
   defaultWorkspacePath: string | null;
   /** Layout preferences (sidebar width, visibility) */
   layout: LayoutPreferences;
+  /** Appearance preferences (theme, font) */
+  appearance: AppearancePreferences;
   /** Open tabs for session restore */
   openTabs: PersistedTabState | null;
   /** Whether settings have been loaded from disk */
@@ -53,6 +57,8 @@ export interface SettingsActions {
   setDefaultWorkspace: (path: string | null) => Promise<void>;
   /** Update layout preferences */
   updateLayout: (layout: Partial<LayoutPreferences>) => Promise<void>;
+  /** Update appearance preferences */
+  updateAppearance: (appearance: Partial<AppearancePreferences>) => Promise<void>;
   /** Validate and clean up stale entries */
   cleanupStaleWorkspaces: () => Promise<void>;
   /** Save open tabs state */
@@ -65,6 +71,7 @@ const initialState: SettingsState = {
   recentWorkspaces: [],
   defaultWorkspacePath: null,
   layout: DEFAULT_LAYOUT_PREFERENCES,
+  appearance: DEFAULT_APPEARANCE_PREFERENCES,
   openTabs: null,
   isLoaded: false,
   isLoading: false,
@@ -84,6 +91,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
             recentWorkspaces: settings.recentWorkspaces,
             defaultWorkspacePath: settings.defaultWorkspacePath,
             layout: settings.layout ?? DEFAULT_LAYOUT_PREFERENCES,
+            appearance: settings.appearance ?? DEFAULT_APPEARANCE_PREFERENCES,
             openTabs: settings.openTabs ?? null,
             isLoaded: true,
             isLoading: false,
@@ -174,6 +182,15 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       await persistSettings(get());
     },
 
+    updateAppearance: async (appearanceUpdate: Partial<AppearancePreferences>) => {
+      const { appearance } = get();
+      const newAppearance = { ...appearance, ...appearanceUpdate };
+      set({ appearance: newAppearance });
+
+      // Persist to disk
+      await persistSettings(get());
+    },
+
     cleanupStaleWorkspaces: async () => {
       const { recentWorkspaces, defaultWorkspacePath } = get();
 
@@ -238,6 +255,7 @@ async function persistSettings(state: SettingsState): Promise<void> {
       recentWorkspaces: state.recentWorkspaces,
       defaultWorkspacePath: state.defaultWorkspacePath,
       layout: state.layout,
+      appearance: state.appearance,
       openTabs: state.openTabs ?? undefined,
       version: 1,
     };

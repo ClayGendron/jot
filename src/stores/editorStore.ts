@@ -32,6 +32,8 @@ export interface LayoutState {
   zenMode: boolean;
 }
 
+export type FontFamily = "serif" | "sans" | "mono";
+
 export interface EditorUIState {
   /** Whether sidebar is visible */
   sidebarOpen: boolean;
@@ -39,6 +41,8 @@ export interface EditorUIState {
   focusMode: boolean;
   /** Current theme */
   theme: "light" | "dark" | "system";
+  /** Editor font family */
+  fontFamily: FontFamily;
   /** Show raw markdown vs WYSIWYG */
   sourceMode: boolean;
   /** Show line numbers in code blocks */
@@ -64,6 +68,7 @@ export interface EditorState extends DocumentState, EditorUIState {
   toggleSourceMode: () => void;
   toggleLineNumbers: () => void;
   setTheme: (theme: "light" | "dark" | "system") => void;
+  setFontFamily: (fontFamily: FontFamily) => void;
   setSidebarWidth: (width: number) => void;
   toggleZenMode: () => void;
   setLayoutState: (layout: Partial<LayoutState>) => void;
@@ -91,6 +96,7 @@ const initialUIState: EditorUIState = {
   sidebarOpen: true,
   focusMode: false,
   theme: "system",
+  fontFamily: "serif",
   sourceMode: false,
   showLineNumbers: false,
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
@@ -139,6 +145,8 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   setTheme: (theme) => set({ theme }),
 
+  setFontFamily: (fontFamily) => set({ fontFamily }),
+
   setSidebarWidth: (sidebarWidth) =>
     set({
       sidebarWidth: Math.min(
@@ -168,6 +176,7 @@ export const selectUIState = (state: EditorState): EditorUIState => ({
   sidebarOpen: state.sidebarOpen,
   focusMode: state.focusMode,
   theme: state.theme,
+  fontFamily: state.fontFamily,
   sourceMode: state.sourceMode,
   showLineNumbers: state.showLineNumbers,
   sidebarWidth: state.sidebarWidth,

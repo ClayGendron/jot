@@ -90,6 +90,7 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
   const sourceMode = useEditorStore((state) => state.sourceMode);
   const toggleSourceMode = useEditorStore((state) => state.toggleSourceMode);
   const filePath = useEditorStore((state) => state.filePath);
+  const fontFamily = useEditorStore((state) => state.fontFamily);
 
   // Ref for the editor container (for internal link click handling)
   const containerRef = useRef<HTMLDivElement>(null);
@@ -224,7 +225,7 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
     autofocus,
     editorProps: {
       attributes: {
-        class: "tiptap-editor",
+        class: `tiptap-editor font-${fontFamily}`,
         spellcheck: "true",
       },
     },

@@ -1,6 +1,7 @@
 import { type Editor } from "@tiptap/react";
 import { useCallback } from "react";
 import { useEditorStore } from "@/stores/editorStore";
+import { ThemeStyleDropdown } from "./ThemeStyleDropdown";
 
 interface EditorToolbarProps {
   editor: Editor;
@@ -332,6 +333,13 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
           {sourceMode ? <WysiwygIcon /> : <SourceIcon />}
           <span>{sourceMode ? "WYSIWYG" : "Source"}</span>
         </button>
+      </div>
+
+      <ToolbarDivider />
+
+      {/* Theme & Style */}
+      <div className="toolbar-group">
+        <ThemeStyleDropdown />
       </div>
     </div>
   );

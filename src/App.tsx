@@ -64,6 +64,9 @@ function App() {
   const setFilePath = useEditorStore((state) => state.setFilePath);
   const setContent = useEditorStore((state) => state.setContent);
   const markSaved = useEditorStore((state) => state.markSaved);
+  const theme = useEditorStore((state) => state.theme);
+  const setTheme = useEditorStore((state) => state.setTheme);
+  const setFontFamily = useEditorStore((state) => state.setFontFamily);
 
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const storeLoadWorkspace = useWorkspaceStore((state) => state.loadWorkspace);
@@ -118,6 +121,7 @@ function App() {
   const recentWorkspaces = useSettingsStore((s) => s.recentWorkspaces);
   const defaultWorkspacePath = useSettingsStore((s) => s.defaultWorkspacePath);
   const layoutPrefs = useSettingsStore((s) => s.layout);
+  const appearancePrefs = useSettingsStore((s) => s.appearance);
   const openTabsFromSettings = useSettingsStore((s) => s.openTabs);
   const settingsLoaded = useSettingsStore((s) => s.isLoaded);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
@@ -178,6 +182,26 @@ function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsLoaded]);
+
+  // Sync appearance preferences from settings to editor store after settings load
+  useEffect(() => {
+    if (settingsLoaded && appearancePrefs) {
+      setTheme(appearancePrefs.theme);
+      setFontFamily(appearancePrefs.fontFamily);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsLoaded]);
+
+  // Apply theme to document element when theme changes
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "system") {
+      // Remove data-theme to let CSS media queries handle it
+      root.removeAttribute("data-theme");
+    } else {
+      root.setAttribute("data-theme", theme);
+    }
+  }, [theme]);
 
   // Track if tabs have been restored to avoid double restore
   const tabsRestoredRef = useRef(false);

@@ -409,7 +409,7 @@ workspace/
 
 ### 8.3 Formatting Toolbar
 
-**Priority**: P0 | **Status**: 🟡 In Progress
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -791,6 +791,8 @@ workspace/
 
 -   E8.2.5: Pin tabs via right-click context menu (pinned stay left) ✅
 
+-   E8.3.4: Theme/style access in toolbar (light/dark/system theme, font family) ✅
+
 
 ### Remaining P0 Work
 
@@ -804,7 +806,7 @@ workspace/
 
 -   ~~Epic 8.2: Tabs~~ ✅
 
--   Epic 8.3: Formatting Toolbar (E8.3.4 remaining)
+-   ~~Epic 8.3: Formatting Toolbar~~ ✅
 
 -   Epic 10.1: iOS app
 

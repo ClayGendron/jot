@@ -27,6 +27,16 @@ export interface LayoutPreferences {
 }
 
 /**
+ * Appearance preferences for theme and typography
+ */
+export interface AppearancePreferences {
+  /** Color theme: light, dark, or follow system */
+  theme: "light" | "dark" | "system";
+  /** Editor font family */
+  fontFamily: "serif" | "sans" | "mono";
+}
+
+/**
  * Persisted tab state for session restore
  */
 export interface PersistedTab {
@@ -59,6 +69,8 @@ export interface GlobalAppSettings {
   defaultWorkspacePath: string | null;
   /** Layout preferences (panel sizes, visibility) */
   layout?: LayoutPreferences;
+  /** Appearance preferences (theme, font) */
+  appearance?: AppearancePreferences;
   /** Open tabs state for session restore */
   openTabs?: PersistedTabState;
   /** Schema version for migrations */
@@ -83,6 +95,14 @@ export interface WorkspaceSettings {
 export const DEFAULT_LAYOUT_PREFERENCES: LayoutPreferences = {
   sidebarWidth: 260,
   sidebarOpen: true,
+};
+
+/**
+ * Default appearance preferences
+ */
+export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
+  theme: "system",
+  fontFamily: "serif",
 };
 
 /**

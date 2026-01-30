@@ -38,7 +38,7 @@
   --transition-smooth: 200ms ease;
 }
 
-/* Dark theme */
+/* Dark theme - System preference (fallback when no explicit theme set) */
 @media (prefers-color-scheme: dark) {
   @theme {
     --color-paper: #1a1a1a;
@@ -52,6 +52,47 @@
     --color-border: #2a2a2a;
     --color-border-strong: #3a3a3a;
   }
+}
+
+/* Explicit light theme (overrides system preference) */
+html[data-theme="light"] {
+  --color-paper: #faf8f5;
+  --color-paper-warm: #f5f2eb;
+  --color-ink: #1a1a1a;
+  --color-ink-light: #4a4a4a;
+  --color-ink-muted: #8a8a8a;
+  --color-accent: #c45d3e;
+  --color-accent-soft: #e8b4a4;
+  --color-highlight: #fff3cd;
+  --color-border: #e5e2dc;
+  --color-border-strong: #d0cdc5;
+}
+
+/* Explicit dark theme (overrides system preference) */
+html[data-theme="dark"] {
+  --color-paper: #1a1a1a;
+  --color-paper-warm: #222222;
+  --color-ink: #e8e6e3;
+  --color-ink-light: #b0ada8;
+  --color-ink-muted: #6a6a6a;
+  --color-accent: #e07a5f;
+  --color-accent-soft: #5c3d34;
+  --color-highlight: #3d3520;
+  --color-border: #2a2a2a;
+  --color-border-strong: #3a3a3a;
+}
+
+/* Font family classes for the editor */
+.tiptap-editor.font-serif {
+  font-family: var(--font-serif);
+}
+
+.tiptap-editor.font-sans {
+  font-family: var(--font-sans);
+}
+
+.tiptap-editor.font-mono {
+  font-family: var(--font-mono);
 }
 
 /* Base styles */
@@ -516,6 +557,139 @@ body {
 .toolbar-button svg {
   width: 16px;
   height: 16px;
+}
+
+/* Theme/Style Dropdown */
+.theme-dropdown {
+  position: relative;
+}
+
+.theme-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  min-width: 180px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  z-index: 200;
+  overflow: hidden;
+  animation: theme-dropdown-appear 0.15s ease;
+}
+
+@keyframes theme-dropdown-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.theme-dropdown-section {
+  padding: 0.5rem;
+}
+
+.theme-dropdown-section + .theme-dropdown-section {
+  padding-top: 0;
+}
+
+.theme-dropdown-label {
+  display: block;
+  padding: 0.25rem 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-ink-muted);
+}
+
+.theme-dropdown-divider {
+  height: 1px;
+  margin: 0.25rem 0.5rem;
+  background: var(--color-border);
+}
+
+.theme-dropdown-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  text-align: left;
+  color: var(--color-ink);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.theme-option:hover {
+  background: var(--color-paper-warm);
+}
+
+.theme-option.active {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.theme-option svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--color-ink-muted);
+}
+
+.theme-option.active svg {
+  color: var(--color-accent);
+}
+
+/* Font option styling */
+.font-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.theme-option.font-option {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.font-label {
+  font-weight: 500;
+}
+
+.font-description {
+  font-size: 0.6875rem;
+  color: var(--color-ink-muted);
+}
+
+.theme-option.font-option.active .font-description {
+  color: var(--color-accent);
+  opacity: 0.8;
 }
 
 /* ==========================================

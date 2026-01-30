@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import { useSettingsStore, selectWorkspaceByPath } from "./settingsStore";
-import { DEFAULT_LAYOUT_PREFERENCES } from "@/lib/settings/types";
+import { DEFAULT_LAYOUT_PREFERENCES, DEFAULT_APPEARANCE_PREFERENCES } from "@/lib/settings/types";
 
 // Mock the Tauri settings module
 vi.mock("@/lib/tauri/settings", () => ({
@@ -23,6 +23,7 @@ describe("settingsStore", () => {
       recentWorkspaces: [],
       defaultWorkspacePath: null,
       layout: DEFAULT_LAYOUT_PREFERENCES,
+      appearance: DEFAULT_APPEARANCE_PREFERENCES,
       isLoaded: false,
       isLoading: false,
       error: null,
@@ -264,6 +265,7 @@ describe("settingsStore", () => {
         ],
         defaultWorkspacePath: null,
         layout: DEFAULT_LAYOUT_PREFERENCES,
+        appearance: DEFAULT_APPEARANCE_PREFERENCES,
         openTabs: null,
         isLoaded: true,
         isLoading: false,
@@ -281,6 +283,7 @@ describe("settingsStore", () => {
         ],
         defaultWorkspacePath: null,
         layout: DEFAULT_LAYOUT_PREFERENCES,
+        appearance: DEFAULT_APPEARANCE_PREFERENCES,
         openTabs: null,
         isLoaded: true,
         isLoading: false,

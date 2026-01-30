@@ -19,6 +19,7 @@ describe("editorStore", () => {
       sidebarOpen: true,
       focusMode: false,
       theme: "system",
+      fontFamily: "serif",
       sourceMode: false,
       showLineNumbers: false,
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
@@ -169,6 +170,21 @@ describe("editorStore", () => {
 
       toggleLineNumbers();
       expect(useEditorStore.getState().showLineNumbers).toBe(false);
+    });
+
+    it("setFontFamily updates font family", () => {
+      const { setFontFamily } = useEditorStore.getState();
+
+      expect(useEditorStore.getState().fontFamily).toBe("serif");
+
+      setFontFamily("sans");
+      expect(useEditorStore.getState().fontFamily).toBe("sans");
+
+      setFontFamily("mono");
+      expect(useEditorStore.getState().fontFamily).toBe("mono");
+
+      setFontFamily("serif");
+      expect(useEditorStore.getState().fontFamily).toBe("serif");
     });
   });
 
