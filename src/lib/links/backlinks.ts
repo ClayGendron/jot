@@ -43,8 +43,17 @@ export function buildBacklinksIndex(
     const links = extractInternalLinks(file.content);
 
     for (const link of links) {
-      // Resolve the target path
-      const targetPath = resolveTargetPath(link.target, workspacePath);
+      // Resolve the target path using source file context (handles ../)
+      const targetPath = resolveTargetPathFromSource(
+        link.target,
+        file.path,
+        workspacePath
+      );
+
+      // Skip if resolution failed (path escapes workspace)
+      if (targetPath === null) {
+        continue;
+      }
 
       if (!index[targetPath]) {
         index[targetPath] = [];
@@ -73,19 +82,69 @@ export function getBacklinksForFile(
 }
 
 /**
- * Resolve a link target to a full file path
+ * Resolve a link target to a full file path, handling ../ relative paths
+ * @param target - The link target (e.g., "../sibling.md", "subfolder/file")
+ * @param sourceFilePath - Absolute path of the file containing the link
+ * @param workspacePath - Workspace root path
+ * @returns Resolved absolute path, or null if escapes workspace
  */
-function resolveTargetPath(target: string, workspacePath: string): string {
-  // Add .md extension if not present
-  const withExt = target.endsWith(".md") ? target : `${target}.md`;
+export function resolveTargetPathFromSource(
+  target: string,
+  sourceFilePath: string,
+  workspacePath: string
+): string | null {
+  // Normalize path separators (handle Windows)
+  const normalized = target.replace(/\\/g, "/").replace(/^\.\//, "");
 
-  // If already absolute, return as-is
-  if (withExt.startsWith("/")) {
-    return withExt;
+  // Add .md extension if not present
+  const withExt = normalized.endsWith(".md") ? normalized : `${normalized}.md`;
+
+  // Normalize workspace path for comparison
+  const normalizedWorkspace = workspacePath.replace(/\\/g, "/");
+
+  // If already absolute (starts with / or Windows drive letter), just validate within workspace
+  if (withExt.startsWith("/") || /^[A-Za-z]:/.test(withExt)) {
+    const normalizedTarget = withExt.replace(/\\/g, "/");
+    if (!normalizedTarget.startsWith(normalizedWorkspace)) {
+      return null;
+    }
+    return normalizedTarget;
   }
 
-  // Make relative to workspace
-  return `${workspacePath}/${withExt}`;
+  // Get source file's directory
+  const normalizedSourcePath = sourceFilePath.replace(/\\/g, "/");
+  const sourceDir = normalizedSourcePath.split("/").slice(0, -1).join("/");
+
+  // Resolve relative path from source directory
+  const fullPath = `${sourceDir}/${withExt}`;
+  const segments = fullPath.split("/");
+  const resolved: string[] = [];
+
+  // Track if path starts with / (Unix absolute path)
+  const isUnixAbsolute = fullPath.startsWith("/");
+
+  for (const segment of segments) {
+    if (segment === "..") {
+      if (resolved.length > 0) {
+        resolved.pop();
+      }
+    } else if (segment !== "." && segment !== "") {
+      resolved.push(segment);
+    }
+  }
+
+  // Reconstruct path, preserving Unix absolute path prefix
+  const resolvedPath = isUnixAbsolute
+    ? "/" + resolved.join("/")
+    : resolved.join("/");
+
+  // Guard: Ensure path stays within workspace
+  if (!resolvedPath.startsWith(normalizedWorkspace)) {
+    // Path escapes workspace - return null to indicate invalid
+    return null;
+  }
+
+  return resolvedPath;
 }
 
 /**

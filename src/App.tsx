@@ -546,8 +546,23 @@ function App() {
       }
 
       // Save current file if it has unsaved changes
-      if (isDirty && filePath) {
-        saveNow();
+      if (isDirty && filePath && activeTabId) {
+        try {
+          const result = await saveDocumentPipeline(activeTabId, true);
+          if (!result.saved) {
+            // Save failed - ask user whether to proceed
+            const proceed = window.confirm(
+              "Failed to save current file. Switch anyway and lose changes?"
+            );
+            if (!proceed) return;
+          }
+        } catch (error) {
+          console.error("Save failed:", error);
+          const proceed = window.confirm(
+            "Failed to save current file. Switch anyway and lose changes?"
+          );
+          if (!proceed) return;
+        }
       }
 
       try {
@@ -568,7 +583,7 @@ function App() {
         console.error("Failed to open file:", err);
       }
     },
-    [isDirty, filePath, saveNow, setFilePath, setContent, markSaved, findTabByPath, setActiveTab, openTab]
+    [isDirty, filePath, activeTabId, setFilePath, setContent, markSaved, findTabByPath, setActiveTab, openTab]
   );
 
   // Save file (immediate save via Cmd+S)
@@ -593,10 +608,24 @@ function App() {
 
   // Handle tab selection
   const handleTabSelect = useCallback(
-    (tabId: string) => {
+    async (tabId: string) => {
       // Save current file if dirty before switching
-      if (isDirty && filePath) {
-        saveNow();
+      if (isDirty && filePath && activeTabId && tabId !== activeTabId) {
+        try {
+          const result = await saveDocumentPipeline(activeTabId, true);
+          if (!result.saved) {
+            const proceed = window.confirm(
+              "Failed to save current file. Switch anyway and lose changes?"
+            );
+            if (!proceed) return;
+          }
+        } catch (error) {
+          console.error("Save failed:", error);
+          const proceed = window.confirm(
+            "Failed to save current file. Switch anyway and lose changes?"
+          );
+          if (!proceed) return;
+        }
       }
 
       const tab = tabs.find((t) => t.id === tabId);
@@ -612,7 +641,7 @@ function App() {
         markSaved();
       }
     },
-    [tabs, isDirty, filePath, saveNow, setActiveTab, setFilePath, setContent, markSaved]
+    [tabs, isDirty, filePath, activeTabId, setActiveTab, setFilePath, setContent, markSaved]
   );
 
   // Handle tab close

@@ -94,6 +94,72 @@ fn read_dir_recursive(dir: &Path, depth: usize, max_depth: usize) -> Result<Vec<
     Ok(entries)
 }
 
+/// Read a single directory's contents (one level deep)
+/// Used for lazy loading folders beyond initial depth limit
+#[tauri::command]
+fn jot_read_folder_children(path: &str) -> Result<Vec<FileEntry>, String> {
+    let dir = Path::new(path);
+
+    if !dir.exists() {
+        return Err(format!("Directory does not exist: {}", path));
+    }
+    if !dir.is_dir() {
+        return Err(format!("Path is not a directory: {}", path));
+    }
+
+    let mut entries: Vec<FileEntry> = Vec::new();
+    let read_dir = fs::read_dir(dir).map_err(|e| e.to_string())?;
+
+    for entry in read_dir {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        // Skip hidden files/folders and .jot directory
+        if name.starts_with('.') {
+            continue;
+        }
+
+        let metadata = entry.metadata().map_err(|e| e.to_string())?;
+        let is_dir = metadata.is_dir();
+        let is_markdown = !is_dir && name.ends_with(".md");
+
+        // Skip non-markdown files
+        if !is_dir && !is_markdown {
+            continue;
+        }
+
+        let modified = metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs() as i64);
+
+        // Subdirectories get empty children placeholder (for further lazy loading)
+        let children = if is_dir { Some(Vec::new()) } else { None };
+
+        entries.push(FileEntry {
+            name,
+            path: path.to_string_lossy().to_string(),
+            is_dir,
+            is_markdown,
+            modified,
+            children,
+        });
+    }
+
+    // Sort: folders first, then alphabetically (match existing sort logic)
+    entries.sort_by(|a, b| {
+        match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        }
+    });
+
+    Ok(entries)
+}
+
 /// Read a single file's contents
 #[tauri::command]
 fn jot_read_file(path: &str) -> Result<String, String> {
@@ -620,6 +686,49 @@ impl Default for LayoutPreferences {
     }
 }
 
+/// A persisted tab entry for session restore
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersistedTab {
+    pub file_path: String,
+    pub is_pinned: bool,
+}
+
+/// State for restoring open tabs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersistedTabState {
+    pub tabs: Vec<PersistedTab>,
+    pub active_tab_path: Option<String>,
+}
+
+/// Appearance preferences for theme and typography
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppearancePreferences {
+    pub theme: String,
+    pub theme_name: String,
+    #[serde(default)]
+    pub accent_color_id: Option<String>,
+    pub font_family: String,
+    pub font_size: i32,
+    pub line_height: f64,
+    pub max_line_width: i32,
+    pub typewriter_mode: bool,
+}
+
+impl Default for AppearancePreferences {
+    fn default() -> Self {
+        Self {
+            theme: "system".to_string(),
+            theme_name: "paper".to_string(),
+            accent_color_id: None,
+            font_family: "serif".to_string(),
+            font_size: 18,
+            line_height: 1.8,
+            max_line_width: 72,
+            typewriter_mode: false,
+        }
+    }
+}
+
 /// Global application settings (stored in app data directory)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GlobalAppSettings {
@@ -627,6 +736,10 @@ pub struct GlobalAppSettings {
     pub default_workspace_path: Option<String>,
     #[serde(default)]
     pub layout: Option<LayoutPreferences>,
+    #[serde(default)]
+    pub appearance: Option<AppearancePreferences>,
+    #[serde(default)]
+    pub open_tabs: Option<PersistedTabState>,
     pub version: i32,
 }
 
@@ -636,6 +749,8 @@ impl Default for GlobalAppSettings {
             recent_workspaces: Vec::new(),
             default_workspace_path: None,
             layout: Some(LayoutPreferences::default()),
+            appearance: Some(AppearancePreferences::default()),
+            open_tabs: None,
             version: 1,
         }
     }
@@ -772,6 +887,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .invoke_handler(tauri::generate_handler![
             jot_read_directory,
+            jot_read_folder_children,
             jot_read_file,
             jot_write_file,
             jot_create_file,

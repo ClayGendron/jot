@@ -60,13 +60,9 @@ export interface EditorUIState {
   sourceMode: boolean;
   /** Show line numbers in code blocks */
   showLineNumbers: boolean;
-  /** Sidebar width in pixels */
-  sidebarWidth: number;
-  /** Whether zen mode (distraction-free) is active */
-  zenMode: boolean;
 }
 
-export interface EditorState extends DocumentState, EditorUIState {
+export interface EditorState extends DocumentState, EditorUIState, LayoutState {
   // Document actions
   setContent: (content: string) => void;
   setFilePath: (path: string | null) => void;
@@ -124,6 +120,9 @@ const initialUIState: EditorUIState = {
   typewriterMode: false,
   sourceMode: false,
   showLineNumbers: false,
+};
+
+const initialLayoutState: LayoutState = {
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
   zenMode: false,
 };
@@ -132,6 +131,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   // Initial state
   ...initialDocumentState,
   ...initialUIState,
+  ...initialLayoutState,
 
   // Document actions
   setContent: (content) =>
@@ -223,8 +223,6 @@ export const selectUIState = (state: EditorState): EditorUIState => ({
   typewriterMode: state.typewriterMode,
   sourceMode: state.sourceMode,
   showLineNumbers: state.showLineNumbers,
-  sidebarWidth: state.sidebarWidth,
-  zenMode: state.zenMode,
 });
 
 export const selectLayoutState = (state: EditorState): LayoutState => ({

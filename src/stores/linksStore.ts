@@ -9,6 +9,7 @@ import { create } from "zustand";
 import {
   buildBacklinksIndex,
   getBacklinksForFile,
+  resolveTargetPathFromSource,
   type BacklinksIndex,
   type BacklinkEntry,
   type FileContent,
@@ -105,26 +106,17 @@ export const useLinksStore = create<LinksState>((set, get) => ({
 
     // 3. Add new backlinks
     for (const link of links) {
-      // Normalize separators and remove leading ./
-      // NOTE: We do NOT resolve ../ - that requires source file directory context
-      // TODO: Implement full relative path resolution using source file directory
-      let normalizedTarget = link.target
-        .replace(/\\/g, "/")           // Windows separators → /
-        .replace(/^\.\//, "")          // Remove leading ./
-        .replace(/\/\.\//g, "/");      // Remove embedded /./
+      // Resolve the target path using source file context (handles ../)
+      const targetPath = resolveTargetPathFromSource(
+        link.target,
+        filePath,
+        workspacePath
+      );
 
-      // Skip links with ../ - we can't resolve them correctly without source directory
-      if (normalizedTarget.includes("../")) {
-        continue;  // Don't index these - better to skip than mis-key
+      // Skip if resolution failed (path escapes workspace)
+      if (targetPath === null) {
+        continue;
       }
-
-      // Resolve the target path (same logic as buildBacklinksIndex)
-      const withExt = normalizedTarget.endsWith(".md")
-        ? normalizedTarget
-        : `${normalizedTarget}.md`;
-      const targetPath = withExt.startsWith("/")
-        ? withExt
-        : `${workspacePath}/${withExt}`;
 
       if (!newIndex[targetPath]) {
         newIndex[targetPath] = [];

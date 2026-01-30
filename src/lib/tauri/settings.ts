@@ -3,7 +3,11 @@ import type {
   GlobalAppSettings,
   WorkspaceSettings,
   LayoutPreferences,
+  AppearancePreferences,
+  PersistedTabState,
+  ThemeName,
 } from "@/lib/settings/types";
+import type { FontFamily } from "@/stores/editorStore";
 
 /**
  * Tauri settings response types (matching Rust structs with snake_case)
@@ -19,10 +23,33 @@ interface RustLayoutPreferences {
   sidebar_open: boolean;
 }
 
+interface RustPersistedTab {
+  file_path: string;
+  is_pinned: boolean;
+}
+
+interface RustPersistedTabState {
+  tabs: RustPersistedTab[];
+  active_tab_path: string | null;
+}
+
+interface RustAppearancePreferences {
+  theme: string;
+  theme_name: string;
+  accent_color_id: string | null;
+  font_family: string;
+  font_size: number;
+  line_height: number;
+  max_line_width: number;
+  typewriter_mode: boolean;
+}
+
 interface RustGlobalAppSettings {
   recent_workspaces: RustRecentWorkspace[];
   default_workspace_path: string | null;
   layout?: RustLayoutPreferences;
+  appearance?: RustAppearancePreferences;
+  open_tabs?: RustPersistedTabState;
   version: number;
 }
 
@@ -51,6 +78,64 @@ function toRustLayout(ts: LayoutPreferences): RustLayoutPreferences {
 }
 
 /**
+ * Convert Rust appearance (snake_case) to TypeScript (camelCase)
+ */
+function fromRustAppearance(rust: RustAppearancePreferences): AppearancePreferences {
+  return {
+    theme: rust.theme as "light" | "dark" | "system",
+    themeName: rust.theme_name as ThemeName,
+    accentColorId: rust.accent_color_id,
+    fontFamily: rust.font_family as FontFamily,
+    fontSize: rust.font_size,
+    lineHeight: rust.line_height,
+    maxLineWidth: rust.max_line_width,
+    typewriterMode: rust.typewriter_mode,
+  };
+}
+
+/**
+ * Convert TypeScript appearance (camelCase) to Rust (snake_case)
+ */
+function toRustAppearance(ts: AppearancePreferences): RustAppearancePreferences {
+  return {
+    theme: ts.theme,
+    theme_name: ts.themeName ?? "paper",
+    accent_color_id: ts.accentColorId ?? null,
+    font_family: ts.fontFamily,
+    font_size: ts.fontSize,
+    line_height: ts.lineHeight,
+    max_line_width: ts.maxLineWidth,
+    typewriter_mode: ts.typewriterMode,
+  };
+}
+
+/**
+ * Convert Rust open tabs (snake_case) to TypeScript (camelCase)
+ */
+function fromRustOpenTabs(rust: RustPersistedTabState): PersistedTabState {
+  return {
+    tabs: rust.tabs.map((t) => ({
+      filePath: t.file_path,
+      isPinned: t.is_pinned,
+    })),
+    activeTabPath: rust.active_tab_path,
+  };
+}
+
+/**
+ * Convert TypeScript open tabs (camelCase) to Rust (snake_case)
+ */
+function toRustOpenTabs(ts: PersistedTabState): RustPersistedTabState {
+  return {
+    tabs: ts.tabs.map((t) => ({
+      file_path: t.filePath,
+      is_pinned: t.isPinned,
+    })),
+    active_tab_path: ts.activeTabPath,
+  };
+}
+
+/**
  * Convert Rust settings (snake_case) to TypeScript (camelCase)
  */
 function fromRustGlobalSettings(rust: RustGlobalAppSettings): GlobalAppSettings {
@@ -62,6 +147,8 @@ function fromRustGlobalSettings(rust: RustGlobalAppSettings): GlobalAppSettings 
     })),
     defaultWorkspacePath: rust.default_workspace_path,
     layout: rust.layout ? fromRustLayout(rust.layout) : undefined,
+    appearance: rust.appearance ? fromRustAppearance(rust.appearance) : undefined,
+    openTabs: rust.open_tabs ? fromRustOpenTabs(rust.open_tabs) : undefined,
     version: rust.version,
   };
 }
@@ -78,6 +165,8 @@ function toRustGlobalSettings(ts: GlobalAppSettings): RustGlobalAppSettings {
     })),
     default_workspace_path: ts.defaultWorkspacePath,
     layout: ts.layout ? toRustLayout(ts.layout) : undefined,
+    appearance: ts.appearance ? toRustAppearance(ts.appearance) : undefined,
+    open_tabs: ts.openTabs ? toRustOpenTabs(ts.openTabs) : undefined,
     version: ts.version,
   };
 }

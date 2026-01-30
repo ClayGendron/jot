@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { FileEntry } from "@/lib/tauri/files";
+import { sortFileEntries } from "@/lib/files/sortFiles";
 
 /**
  * Workspace state management
@@ -24,6 +25,8 @@ export interface WorkspaceState {
   sortBy: "name" | "modified";
   /** Sort direction */
   sortDirection: "asc" | "desc";
+  /** Paths of folders currently being lazy loaded */
+  loadingPaths: Set<string>;
 }
 
 export interface WorkspaceActions {
@@ -54,6 +57,10 @@ export interface WorkspaceActions {
   removeEntry: (path: string) => void;
   updateEntry: (path: string, updates: Partial<FileEntry>) => void;
 
+  // Lazy loading
+  loadFolderChildren: (folderPath: string, children: FileEntry[]) => void;
+  setPathLoading: (path: string, loading: boolean) => void;
+
   // Reset
   reset: () => void;
 }
@@ -67,6 +74,7 @@ const initialState: WorkspaceState = {
   error: null,
   sortBy: "name",
   sortDirection: "asc",
+  loadingPaths: new Set(),
 };
 
 export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>(
@@ -223,6 +231,44 @@ export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>(
       };
 
       set({ fileTree: updateInTree(fileTree) });
+    },
+
+    loadFolderChildren: (folderPath, children) => {
+      const { fileTree, loadingPaths, sortBy, sortDirection } = get();
+
+      // Apply current sort to children
+      const sortedChildren = sortFileEntries(children, sortBy, sortDirection);
+
+      const updateTree = (entries: FileEntry[]): FileEntry[] => {
+        return entries.map((e) => {
+          if (e.path === folderPath && e.is_dir) {
+            return { ...e, children: sortedChildren };
+          }
+          if (e.children) {
+            return { ...e, children: updateTree(e.children) };
+          }
+          return e;
+        });
+      };
+
+      const newLoadingPaths = new Set(loadingPaths);
+      newLoadingPaths.delete(folderPath);
+
+      set({
+        fileTree: updateTree(fileTree),
+        loadingPaths: newLoadingPaths,
+      });
+    },
+
+    setPathLoading: (path, loading) => {
+      const { loadingPaths } = get();
+      const newLoadingPaths = new Set(loadingPaths);
+      if (loading) {
+        newLoadingPaths.add(path);
+      } else {
+        newLoadingPaths.delete(path);
+      }
+      set({ loadingPaths: newLoadingPaths });
     },
 
     reset: () => set(initialState),

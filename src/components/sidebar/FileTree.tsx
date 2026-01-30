@@ -1,6 +1,6 @@
 import { useCallback, useState, useRef, useEffect, useMemo } from "react";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
-import type { FileEntry } from "@/lib/tauri/files";
+import { readFolderChildren, type FileEntry } from "@/lib/tauri/files";
 import { validateMove } from "@/lib/links/moveFile";
 import { sortFileEntries } from "@/lib/files/sortFiles";
 
@@ -8,7 +8,7 @@ interface FileTreeItemProps {
   entry: FileEntry;
   depth: number;
   onSelect: (path: string) => void;
-  onToggle: (path: string) => void;
+  onToggle: (path: string, entry: FileEntry) => void;
   onContextMenu: (e: React.MouseEvent, entry: FileEntry) => void;
   onDragStart: (e: React.DragEvent, entry: FileEntry) => void;
   onDragOver: (e: React.DragEvent, entry: FileEntry) => void;
@@ -16,6 +16,7 @@ interface FileTreeItemProps {
   onDrop: (e: React.DragEvent, targetEntry: FileEntry) => void;
   selectedPath: string | null;
   expandedPaths: Set<string>;
+  loadingPaths: Set<string>;
   dragOverPath: string | null;
   isDragValid: boolean;
 }
@@ -32,16 +33,18 @@ function FileTreeItem({
   onDrop,
   selectedPath,
   expandedPaths,
+  loadingPaths,
   dragOverPath,
   isDragValid,
 }: FileTreeItemProps) {
   const isExpanded = expandedPaths.has(entry.path);
   const isSelected = selectedPath === entry.path;
   const isDragOver = dragOverPath === entry.path;
+  const isLoading = loadingPaths.has(entry.path);
 
   const handleClick = useCallback(() => {
     if (entry.is_dir) {
-      onToggle(entry.path);
+      onToggle(entry.path, entry);
     } else {
       onSelect(entry.path);
     }
@@ -120,33 +123,42 @@ function FileTreeItem({
       </button>
 
       {/* Children */}
-      {entry.is_dir && isExpanded && entry.children && (
+      {entry.is_dir && isExpanded && (
         <div className="file-tree-children">
-          {entry.children.map((child) => (
-            <FileTreeItem
-              key={child.path}
-              entry={child}
-              depth={depth + 1}
-              onSelect={onSelect}
-              onToggle={onToggle}
-              onContextMenu={onContextMenu}
-              onDragStart={onDragStart}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              onDrop={onDrop}
-              selectedPath={selectedPath}
-              expandedPaths={expandedPaths}
-              dragOverPath={dragOverPath}
-              isDragValid={isDragValid}
-            />
-          ))}
-          {entry.children.length === 0 && (
+          {isLoading ? (
+            <div
+              className="file-tree-loading"
+              style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
+            >
+              Loading...
+            </div>
+          ) : entry.children && entry.children.length === 0 ? (
             <div
               className="file-tree-empty"
               style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
             >
               Empty folder
             </div>
+          ) : (
+            entry.children?.map((child) => (
+              <FileTreeItem
+                key={child.path}
+                entry={child}
+                depth={depth + 1}
+                onSelect={onSelect}
+                onToggle={onToggle}
+                onContextMenu={onContextMenu}
+                onDragStart={onDragStart}
+                onDragOver={onDragOver}
+                onDragLeave={onDragLeave}
+                onDrop={onDrop}
+                selectedPath={selectedPath}
+                expandedPaths={expandedPaths}
+                loadingPaths={loadingPaths}
+                dragOverPath={dragOverPath}
+                isDragValid={isDragValid}
+              />
+            ))
           )}
         </div>
       )}
@@ -175,8 +187,11 @@ export function FileTree({
   const fileTree = useWorkspaceStore((state) => state.fileTree);
   const selectedPath = useWorkspaceStore((state) => state.selectedPath);
   const expandedPaths = useWorkspaceStore((state) => state.expandedPaths);
+  const loadingPaths = useWorkspaceStore((state) => state.loadingPaths);
   const setSelectedPath = useWorkspaceStore((state) => state.setSelectedPath);
   const toggleExpanded = useWorkspaceStore((state) => state.toggleExpanded);
+  const loadFolderChildren = useWorkspaceStore((state) => state.loadFolderChildren);
+  const setPathLoading = useWorkspaceStore((state) => state.setPathLoading);
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const sortBy = useWorkspaceStore((state) => state.sortBy);
   const sortDirection = useWorkspaceStore((state) => state.sortDirection);
@@ -221,6 +236,40 @@ export function FileTree({
       onFileSelect(path);
     },
     [setSelectedPath, onFileSelect]
+  );
+
+  // Handle folder toggle with lazy loading
+  const handleToggle = useCallback(
+    async (path: string, entry: FileEntry) => {
+      const isExpanded = expandedPaths.has(path);
+
+      // If collapsing, just toggle
+      if (isExpanded) {
+        toggleExpanded(path);
+        return;
+      }
+
+      // If expanding and folder needs lazy load (empty children, not already loading)
+      const needsLoad =
+        entry.is_dir &&
+        entry.children !== null &&
+        entry.children.length === 0 &&
+        !loadingPaths.has(path);
+
+      if (needsLoad) {
+        setPathLoading(path, true);
+        try {
+          const children = await readFolderChildren(path);
+          loadFolderChildren(path, children);
+        } catch (error) {
+          console.error("Failed to load folder children:", error);
+          setPathLoading(path, false);
+        }
+      }
+
+      toggleExpanded(path);
+    },
+    [expandedPaths, loadingPaths, toggleExpanded, loadFolderChildren, setPathLoading]
   );
 
   const handleContextMenu = useCallback(
@@ -418,7 +467,7 @@ export function FileTree({
           entry={entry}
           depth={0}
           onSelect={handleSelect}
-          onToggle={toggleExpanded}
+          onToggle={handleToggle}
           onContextMenu={handleContextMenu}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
@@ -426,6 +475,7 @@ export function FileTree({
           onDrop={handleDrop}
           selectedPath={selectedPath}
           expandedPaths={expandedPaths}
+          loadingPaths={loadingPaths}
           dragOverPath={dragOverPath}
           isDragValid={isDragValid}
         />

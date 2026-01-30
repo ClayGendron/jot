@@ -21,6 +21,14 @@ export async function readDirectory(path: string): Promise<FileEntry[]> {
 }
 
 /**
+ * Read a single folder's children (one level, no recursion)
+ * Used for lazy loading folders beyond initial depth limit
+ */
+export async function readFolderChildren(path: string): Promise<FileEntry[]> {
+  return invoke<FileEntry[]>("jot_read_folder_children", { path });
+}
+
+/**
  * Read file contents
  */
 export async function readFile(path: string): Promise<string> {

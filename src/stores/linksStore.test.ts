@@ -221,6 +221,7 @@ describe("linksStore", () => {
 
     it("handles Windows-style backslashes in paths", () => {
       // Test that sourceName extraction works with backslashes
+      // All paths should be normalized to forward slashes for consistency
       useLinksStore.getState().updateFileInIndex(
         "C:\\workspace\\folder\\source.md",
         "Link to [[target]]",
@@ -228,7 +229,8 @@ describe("linksStore", () => {
       );
 
       const index = useLinksStore.getState().backlinksIndex;
-      const entries = index["C:\\workspace/target.md"];
+      // Paths are normalized to forward slashes
+      const entries = index["C:/workspace/folder/target.md"];
       expect(entries).toHaveLength(1);
       expect(entries[0].sourceName).toBe("source");
     });
