@@ -385,7 +385,7 @@ workspace/
 
 ### 8.1 Layout & Panels
 
-**Priority**: P0 | **Status**: 🟡 In Progress
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -771,6 +771,16 @@ workspace/
 
 -   E2.3.5: Workspace settings stored in `.jot/config.json` ✅
 
+-   E8.1.1: Three-panel layout (sidebar, editor, right panels) ✅
+
+-   E8.1.2: Collapse/expand sidebar with Cmd+B ✅
+
+-   E8.1.3: Resizable sidebar via drag handle ✅
+
+-   E8.1.4: Zen mode (distraction-free) with Escape to exit ✅
+
+-   E8.1.5: Layout state (width, visibility) persists across sessions ✅
+
 
 ### Remaining P0 Work
 
@@ -783,6 +793,8 @@ workspace/
 -   Epic 7.1-7.3: Themes/typography/preferences
 
 -   Epic 8.2: Tabs
+
+-   Epic 8.3: Formatting Toolbar (E8.3.4 remaining)
 
 -   Epic 10.1: iOS app
 
