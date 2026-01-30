@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useEditorStore } from "@/stores/editorStore";
-import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useTabsStore } from "@/stores/tabsStore";
-import { writeFile } from "@/lib/tauri/files";
-import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
-import { saveVersion } from "@/lib/tauri/versionHistory";
+import { saveDocumentPipeline } from "@/services/saveService";
 
 const AUTOSAVE_DELAY_MS = 1000;
 const SAVED_INDICATOR_DURATION_MS = 2000;
@@ -37,43 +34,17 @@ function isValidCrashRecoveryData(data: unknown): data is CrashRecoveryData {
  * - Shows "Saving..." / "Saved" indicators
  * - Stores content in localStorage for crash recovery
  * - Recovers content on next launch if crash detected
- * - Uses refs to always save latest content (avoids stale closures)
+ * - Uses unified save pipeline for consistent behavior
+ *
+ * IMPORTANT: Tab ID is captured at debounce schedule time (not save time)
+ * to prevent race condition where user switches tabs during save.
  */
 export function useAutosave(content: string) {
-  const { filePath, isDirty, markSaved, setSaveStatus, setContent } =
-    useEditorStore();
-  const workspacePath = useWorkspaceStore((state) => state.workspacePath);
+  const { filePath, isDirty, setSaveStatus, setContent } = useEditorStore();
   const activeTabId = useTabsStore((state) => state.activeTabId);
-  const markTabSaved = useTabsStore((state) => state.markTabSaved);
 
-  // Use refs to avoid stale closure issues in debounced saves
-  const contentRef = useRef(content);
-  const filePathRef = useRef(filePath);
-  const workspacePathRef = useRef(workspacePath);
-  const isDirtyRef = useRef(isDirty);
+  // Track if a save is currently in progress
   const isSavingRef = useRef(false);
-  const activeTabIdRef = useRef(activeTabId);
-
-  // Keep refs in sync
-  useEffect(() => {
-    contentRef.current = content;
-  }, [content]);
-
-  useEffect(() => {
-    filePathRef.current = filePath;
-  }, [filePath]);
-
-  useEffect(() => {
-    workspacePathRef.current = workspacePath;
-  }, [workspacePath]);
-
-  useEffect(() => {
-    isDirtyRef.current = isDirty;
-  }, [isDirty]);
-
-  useEffect(() => {
-    activeTabIdRef.current = activeTabId;
-  }, [activeTabId]);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedIndicatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -98,61 +69,49 @@ export function useAutosave(content: string) {
     }
   }, []);
 
-  // Perform the actual save - uses refs to get latest values
-  const performSave = useCallback(async () => {
-    const currentFilePath = filePathRef.current;
-    const currentContent = contentRef.current;
-    const currentIsDirty = isDirtyRef.current;
-    const currentWorkspacePath = workspacePathRef.current;
+  /**
+   * Perform the actual save using the unified pipeline.
+   * Takes tabId as parameter to avoid race condition - the ID is captured
+   * when the debounce is scheduled, not when the save executes.
+   */
+  const performSave = useCallback(
+    async (tabIdToSave: string) => {
+      if (isSavingRef.current) return;
 
-    if (!currentFilePath || !currentIsDirty || isSavingRef.current) return;
+      isSavingRef.current = true;
 
-    isSavingRef.current = true;
-    setSaveStatus("saving");
+      try {
+        // Use unified save pipeline - it handles:
+        // - HTML to Markdown conversion
+        // - Writing to disk
+        // - Version history
+        // - Hash computation
+        // - Backlinks index update
+        // - Store state updates
+        const saved = await saveDocumentPipeline(tabIdToSave, true);
 
-    try {
-      // Convert HTML to Markdown before saving (canonical format on disk is Markdown)
-      const markdownContent = htmlToMarkdown(currentContent);
-      await writeFile(currentFilePath, markdownContent);
+        if (saved) {
+          clearCrashRecovery();
 
-      // Save version snapshot (only if workspace is open)
-      if (currentWorkspacePath) {
-        try {
-          await saveVersion(currentWorkspacePath, currentFilePath, markdownContent);
-        } catch (versionError) {
-          // Version history is non-critical - log but don't fail the save
-          console.warn("Failed to save version:", versionError);
+          // Clear any pending indicator timeout
+          if (savedIndicatorTimeoutRef.current) {
+            clearTimeout(savedIndicatorTimeoutRef.current);
+          }
+
+          // Reset to idle after showing "Saved" for a bit
+          savedIndicatorTimeoutRef.current = setTimeout(() => {
+            setSaveStatus("idle");
+          }, SAVED_INDICATOR_DURATION_MS);
         }
+      } catch (error) {
+        // Pipeline already sets error status, but log for debugging
+        console.error("Autosave failed:", error);
+      } finally {
+        isSavingRef.current = false;
       }
-
-      markSaved();
-      setSaveStatus("saved");
-      clearCrashRecovery();
-
-      // Also mark the active tab as saved
-      const currentTabId = activeTabIdRef.current;
-      if (currentTabId) {
-        markTabSaved(currentTabId);
-      }
-
-      // Clear any pending indicator timeout
-      if (savedIndicatorTimeoutRef.current) {
-        clearTimeout(savedIndicatorTimeoutRef.current);
-      }
-
-      // Reset to idle after showing "Saved" for a bit
-      savedIndicatorTimeoutRef.current = setTimeout(() => {
-        setSaveStatus("idle");
-      }, SAVED_INDICATOR_DURATION_MS);
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Failed to save file";
-      setSaveStatus("error", errorMessage);
-      console.error("Autosave failed:", error);
-    } finally {
-      isSavingRef.current = false;
-    }
-  }, [markSaved, setSaveStatus, clearCrashRecovery, markTabSaved]);
+    },
+    [setSaveStatus, clearCrashRecovery]
+  );
 
   // Debounced autosave effect
   useEffect(() => {
@@ -162,7 +121,7 @@ export function useAutosave(content: string) {
     }
 
     // Only autosave if there's a file path and content has changed
-    if (!filePath || !isDirty) return;
+    if (!filePath || !isDirty || !activeTabId) return;
 
     // Store for crash recovery immediately
     storeCrashRecovery({
@@ -171,15 +130,21 @@ export function useAutosave(content: string) {
       timestamp: Date.now(),
     });
 
+    // CRITICAL: Capture tab ID NOW at schedule time, not at save time
+    // This prevents the race condition where user switches tabs during save
+    const tabIdToSave = activeTabId;
+
     // Schedule save after delay
-    saveTimeoutRef.current = setTimeout(performSave, AUTOSAVE_DELAY_MS);
+    saveTimeoutRef.current = setTimeout(() => {
+      performSave(tabIdToSave);
+    }, AUTOSAVE_DELAY_MS);
 
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [filePath, isDirty, content, performSave, storeCrashRecovery]);
+  }, [filePath, isDirty, content, activeTabId, performSave, storeCrashRecovery]);
 
   // Manual save function (for Cmd+S)
   const saveNow = useCallback(() => {
@@ -189,7 +154,12 @@ export function useAutosave(content: string) {
     if (savedIndicatorTimeoutRef.current) {
       clearTimeout(savedIndicatorTimeoutRef.current);
     }
-    performSave();
+
+    // Use current active tab for manual save
+    const currentTabId = useTabsStore.getState().activeTabId;
+    if (currentTabId) {
+      performSave(currentTabId);
+    }
   }, [performSave]);
 
   // Check for crash recovery data on mount

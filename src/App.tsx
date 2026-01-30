@@ -48,6 +48,7 @@ import { moveFileWithLinkUpdates, calculateNewPath } from "@/lib/links/moveFile"
 import { clampFontSize, FONT_SIZE_STEP, FONT_SIZE_DEFAULT } from "@/lib/settings/typography";
 import { getEffectiveAccent, resolveSystemTheme } from "@/lib/settings/themes";
 import type { ThemeName } from "@/lib/settings/themes";
+import { saveDocumentPipeline, saveAllDirtyTabs } from "@/services/saveService";
 import "./index.css";
 
 type SidebarTab = "files" | "outline" | "backlinks";
@@ -112,8 +113,12 @@ function App() {
   }, [fileTree, workspacePath]);
 
   // Backlinks store - use shallow comparison for the index
-  const { buildIndex, backlinksIndex } = useLinksStore(
-    useShallow((state) => ({ buildIndex: state.buildIndex, backlinksIndex: state.backlinksIndex }))
+  const { buildIndex, backlinksIndex, clearIndex } = useLinksStore(
+    useShallow((state) => ({
+      buildIndex: state.buildIndex,
+      backlinksIndex: state.backlinksIndex,
+      clearIndex: state.clearIndex,
+    }))
   );
   const backlinks = useMemo(
     () => (filePath ? getBacklinksForFile(backlinksIndex, filePath) : []),
@@ -395,44 +400,92 @@ function App() {
     }
   }, [settingsLoaded, defaultWorkspacePath, workspacePath, loadWorkspace]);
 
+  // Clear workspace state (tabs, editor, links index)
+  const clearWorkspaceState = useCallback(() => {
+    // Close all tabs (keeps pinned, but we want to clear everything)
+    closeAllTabs();
+
+    // Clear editor state
+    setEditorContent("");
+    setFilePath(null);
+    setContent("");
+    markSaved();
+
+    // Clear backlinks index
+    clearIndex();
+
+    // Reset tab restoration flag for new workspace
+    tabsRestoredRef.current = false;
+  }, [closeAllTabs, setFilePath, setContent, markSaved, clearIndex]);
+
+  // Handle dirty tabs before workspace switch
+  // Returns true if we should proceed, false if cancelled
+  const handleDirtyTabsBeforeSwitch = useCallback(async (): Promise<boolean> => {
+    const dirtyTabs = tabs.filter((t) => t.isDirty);
+
+    if (dirtyTabs.length === 0) {
+      return true; // No dirty tabs, proceed
+    }
+
+    const message =
+      dirtyTabs.length === 1
+        ? `"${dirtyTabs[0].displayName}" has unsaved changes. Save before switching workspaces?\n\nClick OK to save, or Cancel to abort.`
+        : `You have ${dirtyTabs.length} unsaved files. Save all before switching workspaces?\n\nClick OK to save all, or Cancel to abort.`;
+
+    const shouldSave = window.confirm(message);
+
+    if (shouldSave) {
+      // Save all dirty tabs using unified pipeline
+      const failedTabs = await saveAllDirtyTabs(activeTabId);
+      if (failedTabs.length > 0) {
+        console.error(`Failed to save ${failedTabs.length} tabs`);
+        // Ask if user wants to continue anyway
+        const continueAnyway = window.confirm(
+          `Failed to save ${failedTabs.length} file(s). Switch workspace anyway and lose changes?`
+        );
+        return continueAnyway;
+      }
+      return true;
+    } else {
+      // User clicked Cancel
+      return false;
+    }
+  }, [tabs, activeTabId]);
+
   // Open folder dialog
   const handleOpenFolder = useCallback(async () => {
-    // Prompt to save if there are unsaved changes
-    if (isDirty && filePath) {
-      const shouldSave = window.confirm(
-        "You have unsaved changes. Would you like to save before switching workspaces?"
-      );
-      if (shouldSave) {
-        saveNow();
-      }
+    // Handle dirty tabs before switching
+    const shouldProceed = await handleDirtyTabsBeforeSwitch();
+    if (!shouldProceed) {
+      return;
     }
 
     try {
       const path = await openFolderDialog();
       if (path) {
+        // Clear current workspace state before loading new one
+        clearWorkspaceState();
         await loadWorkspace(path);
       }
     } catch (err) {
       console.error("Failed to open folder:", err);
     }
-  }, [loadWorkspace, isDirty, filePath, saveNow]);
+  }, [loadWorkspace, handleDirtyTabsBeforeSwitch, clearWorkspaceState]);
 
   // Open workspace from recent list
   const handleOpenWorkspace = useCallback(
     async (path: string) => {
-      // Prompt to save if there are unsaved changes
-      if (isDirty && filePath) {
-        const shouldSave = window.confirm(
-          "You have unsaved changes. Would you like to save before switching workspaces?"
-        );
-        if (shouldSave) {
-          saveNow();
-        }
+      // Handle dirty tabs before switching
+      const shouldProceed = await handleDirtyTabsBeforeSwitch();
+      if (!shouldProceed) {
+        return;
       }
 
+      // Clear current workspace state before loading new one
+      clearWorkspaceState();
       await loadWorkspace(path);
     },
-    [loadWorkspace, isDirty, filePath, saveNow]
+    [loadWorkspace, handleDirtyTabsBeforeSwitch, clearWorkspaceState]
   );
 
   // Build backlinks index when workspace files change
@@ -559,22 +612,27 @@ function App() {
 
   // Handle tab close
   const handleTabClose = useCallback(
-    (tabId: string) => {
+    async (tabId: string) => {
       const tab = tabs.find((t) => t.id === tabId);
       if (!tab) return;
 
       // Prompt if dirty
       if (tab.isDirty) {
         const shouldSave = window.confirm(
-          `"${tab.displayName}" has unsaved changes. Save before closing?`
+          `"${tab.displayName}" has unsaved changes. Save before closing?\n\nClick OK to save, or Cancel to keep the tab open.`
         );
         if (shouldSave) {
-          // If this is the active tab, save it
-          if (tabId === activeTabId) {
-            saveNow();
+          // Use unified save pipeline - works for any tab, not just active
+          try {
+            await saveDocumentPipeline(tabId, tabId === activeTabId);
+          } catch (error) {
+            console.error("Failed to save tab before closing:", error);
+            // Don't close if save failed
+            return;
           }
-          // If not active, we'd need to save that specific tab
-          // For now, just close without saving if not active
+        } else {
+          // User clicked Cancel - abort the close operation
+          return;
         }
       }
 
@@ -601,7 +659,7 @@ function App() {
         }
       }
     },
-    [tabs, activeTabId, closeTab, saveNow, setFilePath, setContent, markSaved]
+    [tabs, activeTabId, closeTab, setFilePath, setContent, markSaved]
   );
 
   // Handle tab reorder
@@ -652,15 +710,24 @@ function App() {
   }, [tabContextMenu, closeOtherTabs, setFilePath, setContent, markSaved]);
 
   // Handle close all from context menu
-  const handleCloseAllTabs = useCallback(() => {
-    // Save all dirty tabs before closing
+  const handleCloseAllTabs = useCallback(async () => {
+    // Check for dirty tabs (excluding pinned, which won't be closed)
     const dirtyTabs = tabs.filter((t) => t.isDirty && !t.isPinned);
     if (dirtyTabs.length > 0) {
       const shouldSave = window.confirm(
-        `You have ${dirtyTabs.length} unsaved file(s). Save before closing all?`
+        `You have ${dirtyTabs.length} unsaved file(s). Save all before closing?\n\nClick OK to save all, or Cancel to abort.`
       );
-      if (shouldSave && activeTabId) {
-        saveNow();
+      if (shouldSave) {
+        // Save all dirty tabs using unified pipeline
+        const failedTabs = await saveAllDirtyTabs(activeTabId);
+        if (failedTabs.length > 0) {
+          console.error(`Failed to save ${failedTabs.length} tabs`);
+          // Don't proceed if some saves failed
+          return;
+        }
+      } else {
+        // User clicked Cancel - abort the operation
+        return;
       }
     }
 
@@ -683,7 +750,7 @@ function App() {
       setContent("");
       markSaved();
     }
-  }, [tabs, activeTabId, saveNow, closeAllTabs, setFilePath, setContent, markSaved]);
+  }, [tabs, activeTabId, closeAllTabs, setFilePath, setContent, markSaved]);
 
   // Dismiss tab context menu
   const handleDismissTabContextMenu = useCallback(() => {

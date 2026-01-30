@@ -2,15 +2,23 @@ import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useAutosave } from "./useAutosave";
 import { useEditorStore } from "@/stores/editorStore";
+import { useTabsStore } from "@/stores/tabsStore";
 
 // Mock the tauri files module
 vi.mock("@/lib/tauri/files", () => ({
   writeFile: vi.fn(),
 }));
 
+// Mock the save service
+vi.mock("@/services/saveService", () => ({
+  saveDocumentPipeline: vi.fn().mockResolvedValue(true),
+}));
+
 import { writeFile } from "@/lib/tauri/files";
+import { saveDocumentPipeline } from "@/services/saveService";
 
 const mockWriteFile = writeFile as Mock;
+const mockSaveDocumentPipeline = saveDocumentPipeline as Mock;
 
 describe("useAutosave", () => {
   beforeEach(() => {
@@ -27,14 +35,36 @@ describe("useAutosave", () => {
       theme: "system",
       sourceMode: false,
     });
+    // Reset tabs store
+    useTabsStore.setState({
+      tabs: [],
+      activeTabId: null,
+      saveStatus: "idle",
+      saveError: null,
+    });
     // Clear localStorage
     localStorage.clear();
     mockWriteFile.mockClear();
+    mockSaveDocumentPipeline.mockClear();
   });
 
   describe("crash recovery", () => {
     it("stores content in localStorage for crash recovery when dirty", () => {
       const content = "test content for recovery";
+
+      // Set up a tab with the content
+      useTabsStore.setState({
+        tabs: [{
+          id: "tab-1",
+          filePath: "/test/file.md",
+          displayName: "file",
+          content: content,
+          isDirty: true,
+          isPinned: false,
+          scrollTop: 0,
+        }],
+        activeTabId: "tab-1",
+      });
 
       renderHook(() => useAutosave(content));
 
