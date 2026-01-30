@@ -10,10 +10,12 @@ import {
 import { FindReplaceBar, GlobalSearchPanel } from "@/components/search";
 import { SaveIndicator } from "@/components/ui/SaveIndicator";
 import { VersionHistoryPanel, DiffViewer } from "@/components/history";
+import { WelcomeScreen, RecentWorkspacesMenu } from "@/components/workspace";
 import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useLinksStore } from "@/stores/linksStore";
 import { useSearchStore } from "@/stores/searchStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 import { getBacklinksForFile } from "@/lib/links/backlinks";
 import { useAutosave } from "@/hooks/useAutosave";
 import { useDocumentOutline } from "@/hooks/useDocumentOutline";
@@ -101,6 +103,15 @@ function App() {
   const openGlobalSearch = useSearchStore((s) => s.openGlobalSearch);
   const closeGlobalSearch = useSearchStore((s) => s.closeGlobalSearch);
 
+  // Settings store - for workspace management
+  const recentWorkspaces = useSettingsStore((s) => s.recentWorkspaces);
+  const defaultWorkspacePath = useSettingsStore((s) => s.defaultWorkspacePath);
+  const settingsLoaded = useSettingsStore((s) => s.isLoaded);
+  const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const addRecentWorkspace = useSettingsStore((s) => s.addRecentWorkspace);
+  const removeRecentWorkspace = useSettingsStore((s) => s.removeRecentWorkspace);
+  const setDefaultWorkspace = useSettingsStore((s) => s.setDefaultWorkspace);
+
   // Version history state
   const [showHistory, setShowHistory] = useState(false);
   const [showDiffViewer, setShowDiffViewer] = useState(false);
@@ -115,6 +126,11 @@ function App() {
   // Autosave hook
   const { saveNow, checkCrashRecovery, recoverFromCrash } =
     useAutosave(editorContent);
+
+  // Load settings on mount
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
 
   // Check for crash recovery on mount
   useEffect(() => {
@@ -142,6 +158,10 @@ function App() {
       try {
         const entries = await readDirectory(path);
         storeLoadWorkspace(path, entries);
+
+        // Add to recent workspaces
+        const name = getFileName(path);
+        addRecentWorkspace(path, name);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load workspace");
         console.error("Failed to load workspace:", err);
@@ -149,11 +169,28 @@ function App() {
         setLoading(false);
       }
     },
-    [storeLoadWorkspace, setLoading, setError]
+    [storeLoadWorkspace, setLoading, setError, addRecentWorkspace]
   );
+
+  // Auto-open default workspace after settings load
+  useEffect(() => {
+    if (settingsLoaded && defaultWorkspacePath && !workspacePath) {
+      loadWorkspace(defaultWorkspacePath);
+    }
+  }, [settingsLoaded, defaultWorkspacePath, workspacePath, loadWorkspace]);
 
   // Open folder dialog
   const handleOpenFolder = useCallback(async () => {
+    // Prompt to save if there are unsaved changes
+    if (isDirty && filePath) {
+      const shouldSave = window.confirm(
+        "You have unsaved changes. Would you like to save before switching workspaces?"
+      );
+      if (shouldSave) {
+        saveNow();
+      }
+    }
+
     try {
       const path = await openFolderDialog();
       if (path) {
@@ -162,7 +199,25 @@ function App() {
     } catch (err) {
       console.error("Failed to open folder:", err);
     }
-  }, [loadWorkspace]);
+  }, [loadWorkspace, isDirty, filePath, saveNow]);
+
+  // Open workspace from recent list
+  const handleOpenWorkspace = useCallback(
+    async (path: string) => {
+      // Prompt to save if there are unsaved changes
+      if (isDirty && filePath) {
+        const shouldSave = window.confirm(
+          "You have unsaved changes. Would you like to save before switching workspaces?"
+        );
+        if (shouldSave) {
+          saveNow();
+        }
+      }
+
+      await loadWorkspace(path);
+    },
+    [loadWorkspace, isDirty, filePath, saveNow]
+  );
 
   // Build backlinks index when workspace files change
   useEffect(() => {
@@ -249,10 +304,13 @@ function App() {
       }
 
       // Cmd/Ctrl + O: Open folder
-      if (isMod && e.key === "o") {
+      if (isMod && e.key === "o" && !e.shiftKey) {
         e.preventDefault();
         handleOpenFolder();
       }
+
+      // Cmd/Ctrl + Shift + O: Open recent workspace (focus the dropdown)
+      // Note: The dropdown handles its own state internally
 
       // Cmd/Ctrl + B: Toggle sidebar
       if (isMod && e.key === "b") {
@@ -580,9 +638,21 @@ function App() {
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? "" : "collapsed"}`}>
         <div className="sidebar-header">
-          <h2 className="sidebar-title">
-            {workspacePath ? getFileName(workspacePath) : "Jot"}
-          </h2>
+          <div className="sidebar-title-row">
+            <h2 className="sidebar-title">
+              {workspacePath ? getFileName(workspacePath) : "Jot"}
+            </h2>
+            {workspacePath && recentWorkspaces.length > 0 && (
+              <RecentWorkspacesMenu
+                recentWorkspaces={recentWorkspaces}
+                currentWorkspacePath={workspacePath}
+                defaultWorkspacePath={defaultWorkspacePath}
+                onOpenWorkspace={handleOpenWorkspace}
+                onOpenFolder={handleOpenFolder}
+                onSetDefault={setDefaultWorkspace}
+              />
+            )}
+          </div>
           <div className="sidebar-actions">
             <button
               className="sidebar-action-btn"
@@ -730,18 +800,14 @@ function App() {
             />
           </div>
         ) : (
-          <div className="empty-state">
-            <div className="empty-state-content">
-              <h2>Welcome to Jot</h2>
-              <p>Open a folder or create a new file to get started.</p>
-              <div className="empty-state-actions">
-                <button onClick={handleOpenFolder}>
-                  <FolderOpenIcon />
-                  Open Folder
-                </button>
-              </div>
-            </div>
-          </div>
+          <WelcomeScreen
+            recentWorkspaces={recentWorkspaces}
+            defaultWorkspacePath={defaultWorkspacePath}
+            onOpenFolder={handleOpenFolder}
+            onOpenWorkspace={handleOpenWorkspace}
+            onSetDefault={setDefaultWorkspace}
+            onRemoveRecent={removeRecentWorkspace}
+          />
         )}
       </main>
 

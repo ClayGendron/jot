@@ -2,6 +2,7 @@ use regex::RegexBuilder;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use tauri::Manager;
 
 mod version_history;
 use version_history::{Version, VersionDiff, VersionMeta};
@@ -591,6 +592,159 @@ fn jot_update_version_file_path(
         .map_err(|e| e.to_string())
 }
 
+// ==========================================
+// Global & Workspace Settings Commands
+// ==========================================
+
+/// A recent workspace entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentWorkspace {
+    pub path: String,
+    pub name: String,
+    pub last_opened: i64, // Unix timestamp in milliseconds
+}
+
+/// Global application settings (stored in app data directory)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GlobalAppSettings {
+    pub recent_workspaces: Vec<RecentWorkspace>,
+    pub default_workspace_path: Option<String>,
+    pub version: i32,
+}
+
+impl Default for GlobalAppSettings {
+    fn default() -> Self {
+        Self {
+            recent_workspaces: Vec::new(),
+            default_workspace_path: None,
+            version: 1,
+        }
+    }
+}
+
+/// Per-workspace settings (stored in .jot/config.json)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceSettings {
+    pub version: i32,
+}
+
+impl Default for WorkspaceSettings {
+    fn default() -> Self {
+        Self {
+            version: 1,
+        }
+    }
+}
+
+/// Get the app data directory path
+#[tauri::command]
+fn jot_get_app_data_dir(app: tauri::AppHandle) -> Result<String, String> {
+    let path = app.path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Read global application settings
+#[tauri::command]
+fn jot_read_global_settings(app: tauri::AppHandle) -> Result<Option<GlobalAppSettings>, String> {
+    let app_data_dir = app.path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    let settings_path = app_data_dir.join("settings.json");
+
+    if !settings_path.exists() {
+        return Ok(None);
+    }
+
+    let content = fs::read_to_string(&settings_path)
+        .map_err(|e| format!("Failed to read settings: {}", e))?;
+
+    let settings: GlobalAppSettings = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse settings: {}", e))?;
+
+    Ok(Some(settings))
+}
+
+/// Write global application settings
+#[tauri::command]
+fn jot_write_global_settings(app: tauri::AppHandle, settings: GlobalAppSettings) -> Result<(), String> {
+    let app_data_dir = app.path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    // Create directory if it doesn't exist
+    fs::create_dir_all(&app_data_dir)
+        .map_err(|e| format!("Failed to create app data dir: {}", e))?;
+
+    let settings_path = app_data_dir.join("settings.json");
+
+    // Write to temp file first, then rename for atomicity
+    let temp_path = app_data_dir.join("settings.json.tmp");
+
+    let content = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+
+    fs::write(&temp_path, &content)
+        .map_err(|e| format!("Failed to write settings: {}", e))?;
+
+    fs::rename(&temp_path, &settings_path)
+        .map_err(|e| format!("Failed to save settings: {}", e))?;
+
+    Ok(())
+}
+
+/// Read per-workspace settings from .jot/config.json
+#[tauri::command]
+fn jot_read_workspace_settings(workspace_path: &str) -> Result<Option<WorkspaceSettings>, String> {
+    let jot_dir = Path::new(workspace_path).join(".jot");
+    let config_path = jot_dir.join("config.json");
+
+    if !config_path.exists() {
+        return Ok(None);
+    }
+
+    let content = fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read workspace settings: {}", e))?;
+
+    let settings: WorkspaceSettings = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse workspace settings: {}", e))?;
+
+    Ok(Some(settings))
+}
+
+/// Write per-workspace settings to .jot/config.json
+#[tauri::command]
+fn jot_write_workspace_settings(workspace_path: &str, settings: WorkspaceSettings) -> Result<(), String> {
+    let jot_dir = Path::new(workspace_path).join(".jot");
+
+    // Create .jot directory if it doesn't exist
+    fs::create_dir_all(&jot_dir)
+        .map_err(|e| format!("Failed to create .jot directory: {}", e))?;
+
+    let config_path = jot_dir.join("config.json");
+    let temp_path = jot_dir.join("config.json.tmp");
+
+    let content = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialize workspace settings: {}", e))?;
+
+    fs::write(&temp_path, &content)
+        .map_err(|e| format!("Failed to write workspace settings: {}", e))?;
+
+    fs::rename(&temp_path, &config_path)
+        .map_err(|e| format!("Failed to save workspace settings: {}", e))?;
+
+    Ok(())
+}
+
+/// Check if a directory exists and is valid
+#[tauri::command]
+fn jot_directory_exists(path: &str) -> bool {
+    let p = Path::new(path);
+    p.exists() && p.is_dir()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -625,6 +779,13 @@ pub fn run() {
             jot_get_retention_days,
             jot_set_retention_days,
             jot_update_version_file_path,
+            // Global & workspace settings commands
+            jot_get_app_data_dir,
+            jot_read_global_settings,
+            jot_write_global_settings,
+            jot_read_workspace_settings,
+            jot_write_workspace_settings,
+            jot_directory_exists,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

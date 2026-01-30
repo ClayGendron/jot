@@ -178,7 +178,7 @@ workspace/
 
 ### 2.3 Workspace Management
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -761,10 +761,18 @@ workspace/
 
 -   E4.1.6: Regex mode toggle in both local and global search ✅
 
+-   E2.3.1: Open folder as workspace via Cmd+O ✅
+
+-   E2.3.2: Default workspace auto-opens on startup ✅
+
+-   E2.3.3: Recent workspaces menu with Cmd+Shift+O hint ✅
+
+-   E2.3.4: Switch workspaces without restart (with unsaved prompt) ✅
+
+-   E2.3.5: Workspace settings stored in `.jot/config.json` ✅
+
 
 ### Remaining P0 Work
-
--   Epic 2.3: Workspace management
 
 -   Epic 4.2: Semantic search (vector)
 
