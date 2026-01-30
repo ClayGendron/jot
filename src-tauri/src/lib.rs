@@ -604,11 +604,29 @@ pub struct RecentWorkspace {
     pub last_opened: i64, // Unix timestamp in milliseconds
 }
 
+/// Layout preferences for panels
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayoutPreferences {
+    pub sidebar_width: i32,
+    pub sidebar_open: bool,
+}
+
+impl Default for LayoutPreferences {
+    fn default() -> Self {
+        Self {
+            sidebar_width: 260,
+            sidebar_open: true,
+        }
+    }
+}
+
 /// Global application settings (stored in app data directory)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GlobalAppSettings {
     pub recent_workspaces: Vec<RecentWorkspace>,
     pub default_workspace_path: Option<String>,
+    #[serde(default)]
+    pub layout: Option<LayoutPreferences>,
     pub version: i32,
 }
 
@@ -617,6 +635,7 @@ impl Default for GlobalAppSettings {
         Self {
             recent_workspaces: Vec::new(),
             default_workspace_path: None,
+            layout: Some(LayoutPreferences::default()),
             version: 1,
         }
     }

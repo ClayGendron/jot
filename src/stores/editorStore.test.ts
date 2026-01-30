@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useEditorStore } from "./editorStore";
+import {
+  useEditorStore,
+  DEFAULT_SIDEBAR_WIDTH,
+  MIN_SIDEBAR_WIDTH,
+  MAX_SIDEBAR_WIDTH,
+} from "./editorStore";
 
 describe("editorStore", () => {
   beforeEach(() => {
@@ -16,6 +21,8 @@ describe("editorStore", () => {
       theme: "system",
       sourceMode: false,
       showLineNumbers: false,
+      sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+      zenMode: false,
     });
   });
 
@@ -162,6 +169,81 @@ describe("editorStore", () => {
 
       toggleLineNumbers();
       expect(useEditorStore.getState().showLineNumbers).toBe(false);
+    });
+  });
+
+  describe("Layout State", () => {
+    it("initializes with default layout state", () => {
+      const state = useEditorStore.getState();
+
+      expect(state.sidebarWidth).toBe(DEFAULT_SIDEBAR_WIDTH);
+      expect(state.zenMode).toBe(false);
+    });
+
+    it("setSidebarWidth updates sidebar width", () => {
+      const { setSidebarWidth } = useEditorStore.getState();
+
+      setSidebarWidth(300);
+      expect(useEditorStore.getState().sidebarWidth).toBe(300);
+
+      setSidebarWidth(400);
+      expect(useEditorStore.getState().sidebarWidth).toBe(400);
+    });
+
+    it("setSidebarWidth clamps to minimum width", () => {
+      const { setSidebarWidth } = useEditorStore.getState();
+
+      setSidebarWidth(100); // Below MIN_SIDEBAR_WIDTH
+      expect(useEditorStore.getState().sidebarWidth).toBe(MIN_SIDEBAR_WIDTH);
+
+      setSidebarWidth(0);
+      expect(useEditorStore.getState().sidebarWidth).toBe(MIN_SIDEBAR_WIDTH);
+    });
+
+    it("setSidebarWidth clamps to maximum width", () => {
+      const { setSidebarWidth } = useEditorStore.getState();
+
+      setSidebarWidth(600); // Above MAX_SIDEBAR_WIDTH
+      expect(useEditorStore.getState().sidebarWidth).toBe(MAX_SIDEBAR_WIDTH);
+
+      setSidebarWidth(1000);
+      expect(useEditorStore.getState().sidebarWidth).toBe(MAX_SIDEBAR_WIDTH);
+    });
+
+    it("toggleZenMode flips zen mode state", () => {
+      const { toggleZenMode } = useEditorStore.getState();
+
+      expect(useEditorStore.getState().zenMode).toBe(false);
+
+      toggleZenMode();
+      expect(useEditorStore.getState().zenMode).toBe(true);
+
+      toggleZenMode();
+      expect(useEditorStore.getState().zenMode).toBe(false);
+    });
+
+    it("setLayoutState updates multiple layout properties", () => {
+      const { setLayoutState } = useEditorStore.getState();
+
+      setLayoutState({ sidebarWidth: 350, zenMode: true });
+
+      const state = useEditorStore.getState();
+      expect(state.sidebarWidth).toBe(350);
+      expect(state.zenMode).toBe(true);
+    });
+
+    it("setLayoutState allows partial updates", () => {
+      const { setLayoutState, setSidebarWidth } = useEditorStore.getState();
+
+      // Set initial width
+      setSidebarWidth(300);
+
+      // Partial update - only zen mode
+      setLayoutState({ zenMode: true });
+
+      const state = useEditorStore.getState();
+      expect(state.sidebarWidth).toBe(300); // Unchanged
+      expect(state.zenMode).toBe(true);
     });
   });
 });

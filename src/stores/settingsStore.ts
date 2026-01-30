@@ -2,9 +2,11 @@ import { create } from "zustand";
 import type {
   GlobalAppSettings,
   RecentWorkspace,
+  LayoutPreferences,
 } from "@/lib/settings/types";
 import {
   DEFAULT_GLOBAL_SETTINGS,
+  DEFAULT_LAYOUT_PREFERENCES,
   MAX_RECENT_WORKSPACES,
 } from "@/lib/settings/types";
 import {
@@ -25,6 +27,8 @@ export interface SettingsState {
   recentWorkspaces: RecentWorkspace[];
   /** Default workspace to open on startup */
   defaultWorkspacePath: string | null;
+  /** Layout preferences (sidebar width, visibility) */
+  layout: LayoutPreferences;
   /** Whether settings have been loaded from disk */
   isLoaded: boolean;
   /** Loading state during async operations */
@@ -44,6 +48,8 @@ export interface SettingsActions {
   clearRecentWorkspaces: () => Promise<void>;
   /** Set the default workspace path */
   setDefaultWorkspace: (path: string | null) => Promise<void>;
+  /** Update layout preferences */
+  updateLayout: (layout: Partial<LayoutPreferences>) => Promise<void>;
   /** Validate and clean up stale entries */
   cleanupStaleWorkspaces: () => Promise<void>;
 }
@@ -51,6 +57,7 @@ export interface SettingsActions {
 const initialState: SettingsState = {
   recentWorkspaces: [],
   defaultWorkspacePath: null,
+  layout: DEFAULT_LAYOUT_PREFERENCES,
   isLoaded: false,
   isLoading: false,
   error: null,
@@ -68,6 +75,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
           set({
             recentWorkspaces: settings.recentWorkspaces,
             defaultWorkspacePath: settings.defaultWorkspacePath,
+            layout: settings.layout ?? DEFAULT_LAYOUT_PREFERENCES,
             isLoaded: true,
             isLoading: false,
           });
@@ -147,6 +155,15 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       await persistSettings(get());
     },
 
+    updateLayout: async (layoutUpdate: Partial<LayoutPreferences>) => {
+      const { layout } = get();
+      const newLayout = { ...layout, ...layoutUpdate };
+      set({ layout: newLayout });
+
+      // Persist to disk
+      await persistSettings(get());
+    },
+
     cleanupStaleWorkspaces: async () => {
       const { recentWorkspaces, defaultWorkspacePath } = get();
 
@@ -201,6 +218,7 @@ async function persistSettings(state: SettingsState): Promise<void> {
     const settings: GlobalAppSettings = {
       recentWorkspaces: state.recentWorkspaces,
       defaultWorkspacePath: state.defaultWorkspacePath,
+      layout: state.layout,
       version: 1,
     };
     await writeGlobalSettings(settings);

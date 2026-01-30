@@ -551,23 +551,157 @@ body {
   overflow: hidden;
 }
 
+.sidebar-container {
+  display: flex;
+  flex-shrink: 0;
+  position: relative;
+}
+
 .sidebar {
-  width: 260px;
+  width: var(--sidebar-width, 260px);
   flex-shrink: 0;
   background-color: var(--color-paper-warm);
   border-right: 1px solid var(--color-border);
   overflow-y: auto;
-  transition: width var(--transition-smooth), margin var(--transition-smooth);
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.sidebar.collapsed {
-  width: 0;
-  margin-left: -1px;
+.sidebar-container.collapsed .sidebar {
+  width: 0 !important;
+}
+
+.sidebar-container.collapsed .resize-handle {
+  display: none;
 }
 
 .main-content {
   flex: 1;
   overflow-y: auto;
+  min-width: 0;
+}
+
+/* ==========================================
+   Resize Handle
+   ========================================== */
+
+.resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 10;
+  transition: background-color var(--transition-fast);
+}
+
+.resize-handle-right {
+  right: -3px;
+}
+
+.resize-handle-left {
+  left: -3px;
+}
+
+.resize-handle-indicator {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background-color: transparent;
+  transition: background-color var(--transition-fast);
+  border-radius: 1px;
+}
+
+.resize-handle:hover .resize-handle-indicator,
+.resize-handle.dragging .resize-handle-indicator {
+  background-color: var(--color-accent);
+}
+
+.resize-handle.disabled {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Cursor override during drag */
+body.resize-dragging {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+body.resize-dragging * {
+  cursor: col-resize !important;
+}
+
+/* ==========================================
+   Zen Mode (Distraction-Free Writing)
+   ========================================== */
+
+.app-layout.zen-mode {
+  background-color: var(--color-paper);
+}
+
+.app-layout.zen-mode .sidebar-container {
+  display: none;
+}
+
+.app-layout.zen-mode .main-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.app-layout.zen-mode .title-bar {
+  opacity: 0;
+  transition: opacity var(--transition-smooth);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: linear-gradient(
+    to bottom,
+    var(--color-paper) 0%,
+    var(--color-paper) 60%,
+    transparent 100%
+  );
+  padding-bottom: 1rem;
+}
+
+.app-layout.zen-mode:hover .title-bar,
+.app-layout.zen-mode .title-bar:focus-within {
+  opacity: 1;
+}
+
+.app-layout.zen-mode .editor-wrapper {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding-top: 2rem;
+}
+
+.app-layout.zen-mode .tiptap-editor {
+  max-width: 720px;
+  width: 100%;
+  padding: 3rem var(--spacing-page);
+}
+
+.app-layout.zen-mode .toolbar {
+  opacity: 0;
+  transition: opacity var(--transition-smooth);
+}
+
+.app-layout.zen-mode:hover .toolbar,
+.app-layout.zen-mode .toolbar:focus-within {
+  opacity: 1;
+}
+
+/* Zen mode active button state */
+.title-bar-btn.active {
+  color: var(--color-accent);
+  background-color: var(--color-accent-soft);
 }
 
 /* ==========================================
@@ -575,7 +709,7 @@ body {
    ========================================== */
 
 @media (max-width: 768px) {
-  .sidebar {
+  .sidebar-container {
     position: fixed;
     left: 0;
     top: 0;
@@ -585,9 +719,16 @@ body {
     transition: transform var(--transition-smooth);
   }
 
-  .sidebar:not(.collapsed) {
+  .sidebar-container:not(.collapsed) {
     transform: translateX(0);
+  }
+
+  .sidebar-container:not(.collapsed) .sidebar {
     box-shadow: var(--shadow-lg);
+  }
+
+  .sidebar-container .resize-handle {
+    display: none;
   }
 
   .toolbar {

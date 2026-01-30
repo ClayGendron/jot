@@ -24,6 +24,14 @@ export interface DocumentState {
   saveError: string | null;
 }
 
+/** Layout state for panels and zen mode */
+export interface LayoutState {
+  /** Sidebar width in pixels */
+  sidebarWidth: number;
+  /** Whether zen mode (distraction-free) is active */
+  zenMode: boolean;
+}
+
 export interface EditorUIState {
   /** Whether sidebar is visible */
   sidebarOpen: boolean;
@@ -35,6 +43,10 @@ export interface EditorUIState {
   sourceMode: boolean;
   /** Show line numbers in code blocks */
   showLineNumbers: boolean;
+  /** Sidebar width in pixels */
+  sidebarWidth: number;
+  /** Whether zen mode (distraction-free) is active */
+  zenMode: boolean;
 }
 
 export interface EditorState extends DocumentState, EditorUIState {
@@ -52,6 +64,9 @@ export interface EditorState extends DocumentState, EditorUIState {
   toggleSourceMode: () => void;
   toggleLineNumbers: () => void;
   setTheme: (theme: "light" | "dark" | "system") => void;
+  setSidebarWidth: (width: number) => void;
+  toggleZenMode: () => void;
+  setLayoutState: (layout: Partial<LayoutState>) => void;
 }
 
 const initialDocumentState: DocumentState = {
@@ -63,12 +78,23 @@ const initialDocumentState: DocumentState = {
   saveError: null,
 };
 
+/** Default sidebar width in pixels */
+export const DEFAULT_SIDEBAR_WIDTH = 260;
+
+/** Minimum sidebar width in pixels */
+export const MIN_SIDEBAR_WIDTH = 180;
+
+/** Maximum sidebar width in pixels */
+export const MAX_SIDEBAR_WIDTH = 500;
+
 const initialUIState: EditorUIState = {
   sidebarOpen: true,
   focusMode: false,
   theme: "system",
   sourceMode: false,
   showLineNumbers: false,
+  sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
+  zenMode: false,
 };
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -112,6 +138,18 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((state) => ({ showLineNumbers: !state.showLineNumbers })),
 
   setTheme: (theme) => set({ theme }),
+
+  setSidebarWidth: (sidebarWidth) =>
+    set({
+      sidebarWidth: Math.min(
+        MAX_SIDEBAR_WIDTH,
+        Math.max(MIN_SIDEBAR_WIDTH, sidebarWidth)
+      ),
+    }),
+
+  toggleZenMode: () => set((state) => ({ zenMode: !state.zenMode })),
+
+  setLayoutState: (layout) => set(layout),
 }));
 
 /**
@@ -132,4 +170,11 @@ export const selectUIState = (state: EditorState): EditorUIState => ({
   theme: state.theme,
   sourceMode: state.sourceMode,
   showLineNumbers: state.showLineNumbers,
+  sidebarWidth: state.sidebarWidth,
+  zenMode: state.zenMode,
+});
+
+export const selectLayoutState = (state: EditorState): LayoutState => ({
+  sidebarWidth: state.sidebarWidth,
+  zenMode: state.zenMode,
 });

@@ -11,7 +11,12 @@ import { FindReplaceBar, GlobalSearchPanel } from "@/components/search";
 import { SaveIndicator } from "@/components/ui/SaveIndicator";
 import { VersionHistoryPanel, DiffViewer } from "@/components/history";
 import { WelcomeScreen, RecentWorkspacesMenu } from "@/components/workspace";
-import { useEditorStore } from "@/stores/editorStore";
+import { ResizeHandle } from "@/components/layout";
+import {
+  useEditorStore,
+  MIN_SIDEBAR_WIDTH,
+  MAX_SIDEBAR_WIDTH,
+} from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useLinksStore } from "@/stores/linksStore";
 import { useSearchStore } from "@/stores/searchStore";
@@ -48,6 +53,10 @@ function App() {
   // Use individual selectors to avoid React 19 + Zustand issues
   const sidebarOpen = useEditorStore((state) => state.sidebarOpen);
   const toggleSidebar = useEditorStore((state) => state.toggleSidebar);
+  const sidebarWidth = useEditorStore((state) => state.sidebarWidth);
+  const setSidebarWidth = useEditorStore((state) => state.setSidebarWidth);
+  const zenMode = useEditorStore((state) => state.zenMode);
+  const toggleZenMode = useEditorStore((state) => state.toggleZenMode);
   const isDirty = useEditorStore((state) => state.isDirty);
   const filePath = useEditorStore((state) => state.filePath);
   const setFilePath = useEditorStore((state) => state.setFilePath);
@@ -106,11 +115,13 @@ function App() {
   // Settings store - for workspace management
   const recentWorkspaces = useSettingsStore((s) => s.recentWorkspaces);
   const defaultWorkspacePath = useSettingsStore((s) => s.defaultWorkspacePath);
+  const layoutPrefs = useSettingsStore((s) => s.layout);
   const settingsLoaded = useSettingsStore((s) => s.isLoaded);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const addRecentWorkspace = useSettingsStore((s) => s.addRecentWorkspace);
   const removeRecentWorkspace = useSettingsStore((s) => s.removeRecentWorkspace);
   const setDefaultWorkspace = useSettingsStore((s) => s.setDefaultWorkspace);
+  const updateLayout = useSettingsStore((s) => s.updateLayout);
 
   // Version history state
   const [showHistory, setShowHistory] = useState(false);
@@ -131,6 +142,18 @@ function App() {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  // Sync layout preferences from settings to editor store after settings load
+  useEffect(() => {
+    if (settingsLoaded && layoutPrefs) {
+      // Only apply on initial load to avoid overwriting user changes
+      setSidebarWidth(layoutPrefs.sidebarWidth);
+      if (!layoutPrefs.sidebarOpen && sidebarOpen) {
+        toggleSidebar();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsLoaded]);
 
   // Check for crash recovery on mount
   useEffect(() => {
@@ -292,6 +315,13 @@ function App() {
     [setContent]
   );
 
+  // Persist sidebar toggle to settings
+  const handleToggleSidebar = useCallback(() => {
+    const newState = !sidebarOpen;
+    toggleSidebar();
+    updateLayout({ sidebarOpen: newState });
+  }, [sidebarOpen, toggleSidebar, updateLayout]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -313,9 +343,18 @@ function App() {
       // Note: The dropdown handles its own state internally
 
       // Cmd/Ctrl + B: Toggle sidebar
-      if (isMod && e.key === "b") {
+      if (isMod && e.key === "b" && !e.shiftKey) {
         e.preventDefault();
-        toggleSidebar();
+        handleToggleSidebar();
+      }
+
+      // Cmd/Ctrl + Shift + F: Zen mode (when not searching)
+      // Note: Cmd+Shift+F for global search takes precedence when workspace is open
+      // Escape exits zen mode
+      if (e.key === "Escape" && zenMode) {
+        e.preventDefault();
+        toggleZenMode();
+        return;
       }
 
       // Cmd/Ctrl + F: Find in document
@@ -352,7 +391,7 @@ function App() {
   }, [
     handleSave,
     handleOpenFolder,
-    toggleSidebar,
+    handleToggleSidebar,
     filePath,
     workspacePath,
     documentSearchOpen,
@@ -361,6 +400,8 @@ function App() {
     globalSearchOpen,
     openGlobalSearch,
     closeGlobalSearch,
+    zenMode,
+    toggleZenMode,
   ]);
 
   // Create new file
@@ -633,10 +674,24 @@ function App() {
     [workspacePath, loadWorkspace, handleFileSelect]
   );
 
+  // Handle sidebar resize
+  const handleSidebarResize = useCallback((width: number) => {
+    setSidebarWidth(width);
+  }, [setSidebarWidth]);
+
+  // Handle resize end - persist to settings
+  const handleSidebarResizeEnd = useCallback((width: number) => {
+    updateLayout({ sidebarWidth: width });
+  }, [updateLayout]);
+
   return (
-    <div className="app-layout">
-      {/* Sidebar */}
-      <aside className={`sidebar ${sidebarOpen ? "" : "collapsed"}`}>
+    <div className={`app-layout ${zenMode ? "zen-mode" : ""}`}>
+      {/* Sidebar Container with Resize Handle */}
+      <div
+        className={`sidebar-container ${sidebarOpen && !zenMode ? "" : "collapsed"}`}
+        style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
+      >
+        <aside className="sidebar">
         <div className="sidebar-header">
           <div className="sidebar-title-row">
             <h2 className="sidebar-title">
@@ -743,7 +798,18 @@ function App() {
             onBacklinkClick={handleFileSelect}
           />
         )}
-      </aside>
+        </aside>
+
+        {/* Resize Handle */}
+        <ResizeHandle
+          width={sidebarWidth}
+          minWidth={MIN_SIDEBAR_WIDTH}
+          maxWidth={MAX_SIDEBAR_WIDTH}
+          onResize={handleSidebarResize}
+          onResizeEnd={handleSidebarResizeEnd}
+          disabled={!sidebarOpen || zenMode}
+        />
+      </div>
 
       {/* Main Content */}
       <main className="main-content" ref={mainContentRef}>
@@ -752,7 +818,7 @@ function App() {
           <div className="title-bar-left">
             <button
               className="sidebar-toggle-btn"
-              onClick={toggleSidebar}
+              onClick={handleToggleSidebar}
               title={sidebarOpen ? "Hide sidebar (⌘B)" : "Show sidebar (⌘B)"}
             >
               <SidebarIcon />
@@ -764,6 +830,13 @@ function App() {
             <SaveIndicator />
           </div>
           <div className="title-bar-right">
+            <button
+              className={`title-bar-btn ${zenMode ? "active" : ""}`}
+              onClick={toggleZenMode}
+              title={zenMode ? "Exit zen mode (Esc)" : "Zen mode"}
+            >
+              <ZenModeIcon />
+            </button>
             {filePath && workspacePath && (
               <button
                 className="title-bar-btn"
@@ -986,6 +1059,26 @@ function HistoryIcon() {
     >
       <circle cx="12" cy="12" r="10" />
       <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+function ZenModeIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
+      <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
+      <path d="M3 16v3a2 2 0 0 0 2 2h3" />
+      <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
     </svg>
   );
 }

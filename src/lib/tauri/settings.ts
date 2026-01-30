@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   GlobalAppSettings,
   WorkspaceSettings,
+  LayoutPreferences,
 } from "@/lib/settings/types";
 
 /**
@@ -13,14 +14,40 @@ interface RustRecentWorkspace {
   last_opened: number;
 }
 
+interface RustLayoutPreferences {
+  sidebar_width: number;
+  sidebar_open: boolean;
+}
+
 interface RustGlobalAppSettings {
   recent_workspaces: RustRecentWorkspace[];
   default_workspace_path: string | null;
+  layout?: RustLayoutPreferences;
   version: number;
 }
 
 interface RustWorkspaceSettings {
   version: number;
+}
+
+/**
+ * Convert Rust layout (snake_case) to TypeScript (camelCase)
+ */
+function fromRustLayout(rust: RustLayoutPreferences): LayoutPreferences {
+  return {
+    sidebarWidth: rust.sidebar_width,
+    sidebarOpen: rust.sidebar_open,
+  };
+}
+
+/**
+ * Convert TypeScript layout (camelCase) to Rust (snake_case)
+ */
+function toRustLayout(ts: LayoutPreferences): RustLayoutPreferences {
+  return {
+    sidebar_width: ts.sidebarWidth,
+    sidebar_open: ts.sidebarOpen,
+  };
 }
 
 /**
@@ -34,6 +61,7 @@ function fromRustGlobalSettings(rust: RustGlobalAppSettings): GlobalAppSettings 
       lastOpened: rw.last_opened,
     })),
     defaultWorkspacePath: rust.default_workspace_path,
+    layout: rust.layout ? fromRustLayout(rust.layout) : undefined,
     version: rust.version,
   };
 }
@@ -49,6 +77,7 @@ function toRustGlobalSettings(ts: GlobalAppSettings): RustGlobalAppSettings {
       last_opened: rw.lastOpened,
     })),
     default_workspace_path: ts.defaultWorkspacePath,
+    layout: ts.layout ? toRustLayout(ts.layout) : undefined,
     version: ts.version,
   };
 }

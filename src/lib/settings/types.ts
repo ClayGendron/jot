@@ -17,6 +17,16 @@ export interface RecentWorkspace {
 }
 
 /**
+ * Layout preferences for panels
+ */
+export interface LayoutPreferences {
+  /** Sidebar width in pixels */
+  sidebarWidth: number;
+  /** Whether sidebar is visible */
+  sidebarOpen: boolean;
+}
+
+/**
  * Global application settings
  *
  * Stored in the app data directory (platform-specific).
@@ -27,6 +37,8 @@ export interface GlobalAppSettings {
   recentWorkspaces: RecentWorkspace[];
   /** Default workspace to open on startup (null = show welcome) */
   defaultWorkspacePath: string | null;
+  /** Layout preferences (panel sizes, visibility) */
+  layout?: LayoutPreferences;
   /** Schema version for migrations */
   version: number;
 }
@@ -44,11 +56,20 @@ export interface WorkspaceSettings {
 }
 
 /**
+ * Default layout preferences
+ */
+export const DEFAULT_LAYOUT_PREFERENCES: LayoutPreferences = {
+  sidebarWidth: 260,
+  sidebarOpen: true,
+};
+
+/**
  * Default global settings
  */
 export const DEFAULT_GLOBAL_SETTINGS: GlobalAppSettings = {
   recentWorkspaces: [],
   defaultWorkspacePath: null,
+  layout: DEFAULT_LAYOUT_PREFERENCES,
   version: 1,
 };
 
