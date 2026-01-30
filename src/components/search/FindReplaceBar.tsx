@@ -31,12 +31,14 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
   const searchTerm = useSearchStore((s) => s.documentSearchTerm);
   const replaceTerm = useSearchStore((s) => s.documentReplaceTerm);
   const caseSensitive = useSearchStore((s) => s.documentCaseSensitive);
+  const useRegex = useSearchStore((s) => s.documentUseRegex);
   const currentMatch = useSearchStore((s) => s.documentCurrentMatch);
   const totalMatches = useSearchStore((s) => s.documentTotalMatches);
 
   const setSearchTerm = useSearchStore((s) => s.setDocumentSearchTerm);
   const setReplaceTerm = useSearchStore((s) => s.setDocumentReplaceTerm);
   const toggleCaseSensitive = useSearchStore((s) => s.toggleDocumentCaseSensitive);
+  const toggleUseRegex = useSearchStore((s) => s.toggleDocumentUseRegex);
   const setMatchInfo = useSearchStore((s) => s.setDocumentMatchInfo);
 
   // Focus search input on mount
@@ -45,13 +47,18 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
     searchInputRef.current?.select();
   }, []);
 
-  // Update search when term or case sensitivity changes
+  // Update search when term, case sensitivity, or regex mode changes
   useEffect(() => {
-    if (!editor || !searchTerm) {
+    if (!editor) return;
+
+    if (!searchTerm) {
+      editor.commands.clearSearch();
       setMatchInfo(0, 0);
       return;
     }
 
+    // Sync useRegex state with editor first
+    editor.commands.setUseRegex(useRegex);
     editor.commands.setSearchTerm(searchTerm, caseSensitive);
 
     // Update match counts from storage
@@ -61,7 +68,7 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
       const current = total > 0 ? storage.resultIndex + 1 : 0;
       setMatchInfo(current, total);
     }
-  }, [editor, searchTerm, caseSensitive, setMatchInfo]);
+  }, [editor, searchTerm, caseSensitive, useRegex, setMatchInfo]);
 
   // Navigation handlers (defined before handleKeyDown which uses them)
   const handleNext = useCallback(() => {
@@ -142,6 +149,20 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
     }
   }, [editor, searchTerm, caseSensitive, toggleCaseSensitive, setMatchInfo]);
 
+  const handleToggleUseRegex = useCallback(() => {
+    toggleUseRegex();
+    if (editor && searchTerm) {
+      // Re-run search with new regex mode
+      editor.commands.setUseRegex(!useRegex);
+      const storage = getSearchStorage(editor);
+      if (storage) {
+        const total = storage.results.length;
+        const current = total > 0 ? storage.resultIndex + 1 : 0;
+        setMatchInfo(current, total);
+      }
+    }
+  }, [editor, searchTerm, useRegex, toggleUseRegex, setMatchInfo]);
+
   const handleClose = useCallback(() => {
     if (editor) {
       editor.commands.clearSearch();
@@ -210,6 +231,16 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
           aria-pressed={caseSensitive}
         >
           Aa
+        </button>
+        <button
+          type="button"
+          className={`find-replace-btn find-replace-toggle ${useRegex ? "active" : ""}`}
+          onClick={handleToggleUseRegex}
+          title="Use regular expression"
+          aria-label="Toggle regex mode"
+          aria-pressed={useRegex}
+        >
+          .*
         </button>
 
         {/* Close */}

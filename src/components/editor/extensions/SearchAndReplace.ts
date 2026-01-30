@@ -24,6 +24,7 @@ export interface SearchAndReplaceStorage {
   results: { from: number; to: number }[];
   resultIndex: number;
   caseSensitive: boolean;
+  useRegex: boolean;
 }
 
 declare module "@tiptap/core" {
@@ -46,6 +47,11 @@ declare module "@tiptap/core" {
        * Toggle case sensitivity
        */
       setCaseSensitive: (caseSensitive: boolean) => ReturnType;
+
+      /**
+       * Toggle regex mode
+       */
+      setUseRegex: (useRegex: boolean) => ReturnType;
 
       /**
        * Navigate to the next search result
@@ -78,14 +84,34 @@ declare module "@tiptap/core" {
 export const SearchAndReplacePluginKey = new PluginKey("searchAndReplace");
 
 /**
+ * Escape special regex characters for literal string search
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
  * Find all text matches in the document
  */
 function findMatches(
   doc: ProseMirrorNode,
   searchTerm: string,
-  caseSensitive: boolean
+  caseSensitive: boolean,
+  useRegex: boolean = false
 ): { from: number; to: number }[] {
   if (!searchTerm) return [];
+
+  // Build regex pattern
+  let pattern: RegExp;
+  try {
+    const flags = caseSensitive ? "g" : "gi";
+    pattern = useRegex
+      ? new RegExp(searchTerm, flags)
+      : new RegExp(escapeRegex(searchTerm), flags);
+  } catch {
+    // Invalid regex, return empty results
+    return [];
+  }
 
   const results: { from: number; to: number }[] = [];
 
@@ -93,16 +119,21 @@ function findMatches(
   doc.descendants((node, pos) => {
     if (node.isText && node.text) {
       const text = node.text;
-      const searchText = caseSensitive ? text : text.toLowerCase();
-      const term = caseSensitive ? searchTerm : searchTerm.toLowerCase();
 
-      let index = 0;
-      while ((index = searchText.indexOf(term, index)) !== -1) {
+      // Reset lastIndex for each text node
+      pattern.lastIndex = 0;
+
+      let match: RegExpExecArray | null;
+      while ((match = pattern.exec(text)) !== null) {
         results.push({
-          from: pos + index,
-          to: pos + index + searchTerm.length,
+          from: pos + match.index,
+          to: pos + match.index + match[0].length,
         });
-        index += 1; // Allow overlapping matches
+
+        // Prevent infinite loop for zero-width matches
+        if (match[0].length === 0) {
+          pattern.lastIndex++;
+        }
       }
     }
   });
@@ -152,6 +183,7 @@ export const SearchAndReplace = Extension.create<
       results: [],
       resultIndex: 0,
       caseSensitive: false,
+      useRegex: false,
     };
   },
 
@@ -171,7 +203,8 @@ export const SearchAndReplace = Extension.create<
           storage.results = findMatches(
             tr.doc,
             searchTerm,
-            storage.caseSensitive
+            storage.caseSensitive,
+            storage.useRegex
           );
           storage.resultIndex = storage.results.length > 0 ? 0 : -1;
 
@@ -207,7 +240,30 @@ export const SearchAndReplace = Extension.create<
           storage.results = findMatches(
             tr.doc,
             storage.searchTerm,
-            caseSensitive
+            caseSensitive,
+            storage.useRegex
+          );
+          storage.resultIndex =
+            storage.results.length > 0
+              ? Math.min(storage.resultIndex, storage.results.length - 1)
+              : -1;
+
+          editor.view.dispatch(tr);
+          return true;
+        },
+
+      setUseRegex:
+        (useRegex: boolean) =>
+        ({ editor, tr }) => {
+          const storage = this.storage;
+          storage.useRegex = useRegex;
+
+          // Re-run search with new regex mode
+          storage.results = findMatches(
+            tr.doc,
+            storage.searchTerm,
+            storage.caseSensitive,
+            useRegex
           );
           storage.resultIndex =
             storage.results.length > 0
@@ -279,7 +335,8 @@ export const SearchAndReplace = Extension.create<
           storage.results = findMatches(
             newTr.doc,
             storage.searchTerm,
-            storage.caseSensitive
+            storage.caseSensitive,
+            storage.useRegex
           );
 
           // Adjust index if needed
@@ -353,7 +410,25 @@ export const SearchAndReplace = Extension.create<
           },
 
           apply(tr, _oldDecorations) {
-            // Recreate decorations based on current storage state
+            // If no search is active, return empty decorations
+            if (storage.results.length === 0 && !storage.searchTerm) {
+              return DecorationSet.empty;
+            }
+
+            // Re-search when document changes to keep decorations accurate
+            if (tr.docChanged && storage.searchTerm) {
+              storage.results = findMatches(
+                tr.doc,
+                storage.searchTerm,
+                storage.caseSensitive,
+                storage.useRegex
+              );
+              // Clamp resultIndex to valid range
+              if (storage.resultIndex >= storage.results.length) {
+                storage.resultIndex = Math.max(0, storage.results.length - 1);
+              }
+            }
+
             if (storage.results.length === 0) {
               return DecorationSet.empty;
             }

@@ -49,6 +49,9 @@ export function GlobalSearchPanel({
   // Debounce timer ref
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Request ID for race condition prevention
+  const activeRequestRef = useRef<string | null>(null);
+
   // Focus input on mount
   useEffect(() => {
     searchInputRef.current?.focus();
@@ -70,6 +73,10 @@ export function GlobalSearchPanel({
     setSearchError(null);
 
     debounceRef.current = setTimeout(async () => {
+      // Generate unique request ID for this search
+      const requestId = crypto.randomUUID();
+      activeRequestRef.current = requestId;
+
       try {
         const searchResults = await searchWorkspace(workspacePath, {
           searchTerm,
@@ -77,6 +84,11 @@ export function GlobalSearchPanel({
           useRegex,
           pathFilter: pathFilter || undefined,
         });
+
+        // Ignore stale results from superseded requests
+        if (activeRequestRef.current !== requestId) {
+          return;
+        }
 
         // Convert to store format
         const storeResults = searchResults.map((r) => ({
@@ -103,6 +115,10 @@ export function GlobalSearchPanel({
         }
         setExpandedFiles(toExpand);
       } catch (err) {
+        // Ignore errors from stale requests
+        if (activeRequestRef.current !== requestId) {
+          return;
+        }
         setSearchError(err instanceof Error ? err.message : "Search failed");
         setResults([]);
       }

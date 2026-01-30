@@ -370,4 +370,92 @@ describe("searchStore", () => {
       expect(state.globalResults).toEqual([]);
     });
   });
+
+  describe("request lifecycle", () => {
+    it("starts with null request IDs", () => {
+      const state = useSearchStore.getState();
+      expect(state.activeDocumentRequestId).toBeNull();
+      expect(state.activeGlobalRequestId).toBeNull();
+    });
+
+    it("setActiveDocumentRequest updates document request ID", () => {
+      const { setActiveDocumentRequest } = useSearchStore.getState();
+      const requestId = "doc-123";
+
+      setActiveDocumentRequest(requestId);
+
+      expect(useSearchStore.getState().activeDocumentRequestId).toBe(requestId);
+    });
+
+    it("setActiveGlobalRequest updates global request ID", () => {
+      const { setActiveGlobalRequest } = useSearchStore.getState();
+      const requestId = "global-456";
+
+      setActiveGlobalRequest(requestId);
+
+      expect(useSearchStore.getState().activeGlobalRequestId).toBe(requestId);
+    });
+
+    it("isCurrentRequest returns true for matching document request", () => {
+      const { setActiveDocumentRequest, isCurrentRequest } = useSearchStore.getState();
+      const requestId = "doc-789";
+
+      setActiveDocumentRequest(requestId);
+
+      expect(isCurrentRequest("document", requestId)).toBe(true);
+    });
+
+    it("isCurrentRequest returns false for non-matching document request", () => {
+      const { setActiveDocumentRequest, isCurrentRequest } = useSearchStore.getState();
+
+      setActiveDocumentRequest("doc-111");
+
+      expect(isCurrentRequest("document", "doc-222")).toBe(false);
+    });
+
+    it("isCurrentRequest returns true for matching global request", () => {
+      const { setActiveGlobalRequest, isCurrentRequest } = useSearchStore.getState();
+      const requestId = "global-999";
+
+      setActiveGlobalRequest(requestId);
+
+      expect(isCurrentRequest("global", requestId)).toBe(true);
+    });
+
+    it("isCurrentRequest returns false for non-matching global request", () => {
+      const { setActiveGlobalRequest, isCurrentRequest } = useSearchStore.getState();
+
+      setActiveGlobalRequest("global-aaa");
+
+      expect(isCurrentRequest("global", "global-bbb")).toBe(false);
+    });
+
+    it("clearing request ID sets it to null", () => {
+      const { setActiveDocumentRequest, setActiveGlobalRequest } = useSearchStore.getState();
+
+      setActiveDocumentRequest("doc-123");
+      setActiveGlobalRequest("global-456");
+
+      setActiveDocumentRequest(null);
+      setActiveGlobalRequest(null);
+
+      const state = useSearchStore.getState();
+      expect(state.activeDocumentRequestId).toBeNull();
+      expect(state.activeGlobalRequestId).toBeNull();
+    });
+
+    it("reset clears request IDs", () => {
+      const { setActiveDocumentRequest, setActiveGlobalRequest, reset } =
+        useSearchStore.getState();
+
+      setActiveDocumentRequest("doc-123");
+      setActiveGlobalRequest("global-456");
+
+      reset();
+
+      const state = useSearchStore.getState();
+      expect(state.activeDocumentRequestId).toBeNull();
+      expect(state.activeGlobalRequestId).toBeNull();
+    });
+  });
 });

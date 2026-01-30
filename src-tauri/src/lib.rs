@@ -322,15 +322,23 @@ fn jot_search_workspace(
         .build()
         .map_err(|e| format!("Invalid search pattern: {}", e))?;
 
-    // Collect all markdown files
+    // Collect all markdown files with security protections
     let mut markdown_files = Vec::new();
-    collect_markdown_files(workspace, &mut markdown_files)?;
+    let workspace_canonical = workspace.canonicalize()
+        .map_err(|e| format!("Failed to resolve workspace path: {}", e))?;
+    let mut visited = std::collections::HashSet::new();
+    collect_markdown_files(workspace, &mut markdown_files, &workspace_canonical, 0, &mut visited)?;
 
     // Apply path filter if provided
     let files_to_search: Vec<PathBuf> = if let Some(filter) = path_filter {
         if filter.is_empty() {
             markdown_files
         } else {
+            // Security: Validate path filter doesn't escape workspace
+            if filter.contains("..") || Path::new(filter).is_absolute() {
+                return Err("Path filter cannot contain '..' or absolute paths".into());
+            }
+
             // Build glob pattern relative to workspace
             let glob_pattern = workspace.join(filter).to_string_lossy().to_string();
             let glob_matches: std::collections::HashSet<PathBuf> =
@@ -374,11 +382,46 @@ fn jot_search_workspace(
 }
 
 /// Recursively collect all markdown files in a directory
-fn collect_markdown_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
-    let read_dir = fs::read_dir(dir).map_err(|e| e.to_string())?;
+/// Includes depth limit and symlink cycle protection for security
+fn collect_markdown_files(
+    dir: &Path,
+    files: &mut Vec<PathBuf>,
+    workspace_root: &Path,
+    depth: usize,
+    visited: &mut std::collections::HashSet<PathBuf>,
+) -> Result<(), String> {
+    // Security: Limit recursion depth to prevent DoS
+    const MAX_DEPTH: usize = 20;
+    if depth > MAX_DEPTH {
+        return Ok(());
+    }
+
+    // Security: Resolve symlinks and check if we're still within workspace
+    let canonical = match dir.canonicalize() {
+        Ok(c) => c,
+        Err(_) => return Ok(()), // Skip unreadable directories
+    };
+
+    // Ensure we haven't escaped the workspace via symlinks
+    if !canonical.starts_with(workspace_root) {
+        return Ok(());
+    }
+
+    // Prevent symlink cycles
+    if !visited.insert(canonical.clone()) {
+        return Ok(());
+    }
+
+    let read_dir = match fs::read_dir(dir) {
+        Ok(rd) => rd,
+        Err(_) => return Ok(()), // Skip unreadable directories
+    };
 
     for entry in read_dir {
-        let entry = entry.map_err(|e| e.to_string())?;
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue, // Skip unreadable entries
+        };
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
 
@@ -388,13 +431,20 @@ fn collect_markdown_files(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), St
         }
 
         if path.is_dir() {
-            collect_markdown_files(&path, files)?;
+            collect_markdown_files(&path, files, workspace_root, depth + 1, visited)?;
         } else if name.ends_with(".md") {
             files.push(path);
         }
     }
 
     Ok(())
+}
+
+/// Convert a byte offset to a UTF-16 code unit offset
+/// This is needed because JavaScript strings use UTF-16, while Rust regex returns byte offsets.
+/// Characters outside the Basic Multilingual Plane (emoji, etc.) use 2 UTF-16 code units.
+fn byte_offset_to_utf16_offset(text: &str, byte_offset: usize) -> usize {
+    text[..byte_offset].encode_utf16().count()
 }
 
 /// Search a single file for matches
@@ -418,11 +468,15 @@ fn search_file(file_path: &Path, regex: &regex::Regex) -> Result<Vec<SearchMatch
                 None
             };
 
+            // Convert byte offsets to UTF-16 code unit offsets for JavaScript compatibility
+            let match_start = byte_offset_to_utf16_offset(line, mat.start());
+            let match_end = byte_offset_to_utf16_offset(line, mat.end());
+
             matches.push(SearchMatch {
                 line_number: line_idx + 1, // 1-indexed
                 line_content: line.to_string(),
-                match_start: mat.start(),
-                match_end: mat.end(),
+                match_start,
+                match_end,
                 context_before,
                 context_after,
             });
