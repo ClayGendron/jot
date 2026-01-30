@@ -337,7 +337,7 @@ workspace/
 
 ### 7.1 Themes & Appearance
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟡 Partial (E7.1.1 done via Epic 8.3)
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -348,7 +348,7 @@ workspace/
 
 ### 7.2 Typography
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -360,7 +360,7 @@ workspace/
 
 ### 7.3 Editor Preferences
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -793,6 +793,24 @@ workspace/
 
 -   E8.3.4: Theme/style access in toolbar (light/dark/system theme, font family) ✅
 
+-   E7.2.1: Font family selector (serif/sans/mono) ✅
+
+-   E7.2.2: Font size slider with Cmd+/-/0 shortcuts ✅
+
+-   E7.2.3: Line height adjustment slider ✅
+
+-   E7.2.4: Maximum line width control ✅
+
+-   E7.2.5: Bundled fonts (Crimson Pro, Inter, JetBrains Mono) ✅
+
+-   E7.3.1: Focus mode toggle (dims non-active paragraphs) ✅
+
+-   E7.3.2: Typewriter mode toggle (centers current line) ✅
+
+-   E7.3.3: Line numbers toggle (in toolbar) ✅
+
+-   E7.3.4: Settings panel with organized sections ✅
+
 
 ### Remaining P0 Work
 
@@ -802,7 +820,9 @@ workspace/
 
 -   Epic 6.1-6.4: Export
 
--   Epic 7.1-7.3: Themes/typography/preferences
+-   Epic 7.1: Themes (built-in themes, accent colors)
+
+-   ~~Epic 7.2-7.3: Typography/preferences~~ ✅
 
 -   ~~Epic 8.2: Tabs~~ ✅
 
