@@ -337,7 +337,7 @@ workspace/
 
 ### 7.1 Themes & Appearance
 
-**Priority**: P0 | **Status**: 🟡 Partial (E7.1.1 done via Epic 8.3)
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -811,6 +811,14 @@ workspace/
 
 -   E7.3.4: Settings panel with organized sections ✅
 
+-   E7.1.1: Light/dark mode toggle with system preference ✅
+
+-   E7.1.2: 5 built-in themes (Paper, Midnight, Sepia, High Contrast, Olive) ✅
+
+-   E7.1.3: Curated accent colors per theme (5 options each) ✅
+
+-   E7.1.4: Theme applies consistently to editor and UI ✅
+
 
 ### Remaining P0 Work
 
@@ -820,7 +828,7 @@ workspace/
 
 -   Epic 6.1-6.4: Export
 
--   Epic 7.1: Themes (built-in themes, accent colors)
+-   ~~Epic 7.1: Themes (built-in themes, accent colors)~~ ✅
 
 -   ~~Epic 7.2-7.3: Typography/preferences~~ ✅
 
