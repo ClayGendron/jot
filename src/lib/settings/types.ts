@@ -34,6 +34,14 @@ export interface AppearancePreferences {
   theme: "light" | "dark" | "system";
   /** Editor font family */
   fontFamily: "serif" | "sans" | "mono";
+  /** Font size in pixels */
+  fontSize: number;
+  /** Line height multiplier (e.g., 1.5, 1.75) */
+  lineHeight: number;
+  /** Maximum line width in characters */
+  maxLineWidth: number;
+  /** Typewriter mode (keeps current line centered) */
+  typewriterMode: boolean;
 }
 
 /**
@@ -103,6 +111,10 @@ export const DEFAULT_LAYOUT_PREFERENCES: LayoutPreferences = {
 export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
   theme: "system",
   fontFamily: "serif",
+  fontSize: 18,
+  lineHeight: 1.8,
+  maxLineWidth: 72,
+  typewriterMode: false,
 };
 
 /**
@@ -112,6 +124,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalAppSettings = {
   recentWorkspaces: [],
   defaultWorkspacePath: null,
   layout: DEFAULT_LAYOUT_PREFERENCES,
+  appearance: DEFAULT_APPEARANCE_PREFERENCES,
   version: 1,
 };
 

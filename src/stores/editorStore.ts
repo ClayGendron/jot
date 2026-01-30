@@ -43,6 +43,14 @@ export interface EditorUIState {
   theme: "light" | "dark" | "system";
   /** Editor font family */
   fontFamily: FontFamily;
+  /** Font size in pixels */
+  fontSize: number;
+  /** Line height multiplier */
+  lineHeight: number;
+  /** Maximum line width in characters */
+  maxLineWidth: number;
+  /** Typewriter mode (keeps current line centered) */
+  typewriterMode: boolean;
   /** Show raw markdown vs WYSIWYG */
   sourceMode: boolean;
   /** Show line numbers in code blocks */
@@ -67,8 +75,12 @@ export interface EditorState extends DocumentState, EditorUIState {
   toggleFocusMode: () => void;
   toggleSourceMode: () => void;
   toggleLineNumbers: () => void;
+  toggleTypewriterMode: () => void;
   setTheme: (theme: "light" | "dark" | "system") => void;
   setFontFamily: (fontFamily: FontFamily) => void;
+  setFontSize: (size: number) => void;
+  setLineHeight: (height: number) => void;
+  setMaxLineWidth: (width: number) => void;
   setSidebarWidth: (width: number) => void;
   toggleZenMode: () => void;
   setLayoutState: (layout: Partial<LayoutState>) => void;
@@ -97,6 +109,10 @@ const initialUIState: EditorUIState = {
   focusMode: false,
   theme: "system",
   fontFamily: "serif",
+  fontSize: 18,
+  lineHeight: 1.8,
+  maxLineWidth: 72,
+  typewriterMode: false,
   sourceMode: false,
   showLineNumbers: false,
   sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
@@ -143,9 +159,18 @@ export const useEditorStore = create<EditorState>((set) => ({
   toggleLineNumbers: () =>
     set((state) => ({ showLineNumbers: !state.showLineNumbers })),
 
+  toggleTypewriterMode: () =>
+    set((state) => ({ typewriterMode: !state.typewriterMode })),
+
   setTheme: (theme) => set({ theme }),
 
   setFontFamily: (fontFamily) => set({ fontFamily }),
+
+  setFontSize: (fontSize) => set({ fontSize }),
+
+  setLineHeight: (lineHeight) => set({ lineHeight }),
+
+  setMaxLineWidth: (maxLineWidth) => set({ maxLineWidth }),
 
   setSidebarWidth: (sidebarWidth) =>
     set({
@@ -177,6 +202,10 @@ export const selectUIState = (state: EditorState): EditorUIState => ({
   focusMode: state.focusMode,
   theme: state.theme,
   fontFamily: state.fontFamily,
+  fontSize: state.fontSize,
+  lineHeight: state.lineHeight,
+  maxLineWidth: state.maxLineWidth,
+  typewriterMode: state.typewriterMode,
   sourceMode: state.sourceMode,
   showLineNumbers: state.showLineNumbers,
   sidebarWidth: state.sidebarWidth,

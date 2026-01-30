@@ -20,6 +20,10 @@ describe("editorStore", () => {
       focusMode: false,
       theme: "system",
       fontFamily: "serif",
+      fontSize: 18,
+      lineHeight: 1.8,
+      maxLineWidth: 72,
+      typewriterMode: false,
       sourceMode: false,
       showLineNumbers: false,
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
@@ -185,6 +189,54 @@ describe("editorStore", () => {
 
       setFontFamily("serif");
       expect(useEditorStore.getState().fontFamily).toBe("serif");
+    });
+
+    it("setFontSize updates font size", () => {
+      const { setFontSize } = useEditorStore.getState();
+
+      expect(useEditorStore.getState().fontSize).toBe(18);
+
+      setFontSize(16);
+      expect(useEditorStore.getState().fontSize).toBe(16);
+
+      setFontSize(24);
+      expect(useEditorStore.getState().fontSize).toBe(24);
+    });
+
+    it("setLineHeight updates line height", () => {
+      const { setLineHeight } = useEditorStore.getState();
+
+      expect(useEditorStore.getState().lineHeight).toBe(1.8);
+
+      setLineHeight(1.5);
+      expect(useEditorStore.getState().lineHeight).toBe(1.5);
+
+      setLineHeight(2.0);
+      expect(useEditorStore.getState().lineHeight).toBe(2.0);
+    });
+
+    it("setMaxLineWidth updates max line width", () => {
+      const { setMaxLineWidth } = useEditorStore.getState();
+
+      expect(useEditorStore.getState().maxLineWidth).toBe(72);
+
+      setMaxLineWidth(60);
+      expect(useEditorStore.getState().maxLineWidth).toBe(60);
+
+      setMaxLineWidth(100);
+      expect(useEditorStore.getState().maxLineWidth).toBe(100);
+    });
+
+    it("toggleTypewriterMode flips typewriter mode state", () => {
+      const { toggleTypewriterMode } = useEditorStore.getState();
+
+      expect(useEditorStore.getState().typewriterMode).toBe(false);
+
+      toggleTypewriterMode();
+      expect(useEditorStore.getState().typewriterMode).toBe(true);
+
+      toggleTypewriterMode();
+      expect(useEditorStore.getState().typewriterMode).toBe(false);
     });
   });
 

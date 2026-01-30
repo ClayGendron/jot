@@ -13,6 +13,7 @@ import { VersionHistoryPanel, DiffViewer } from "@/components/history";
 import { WelcomeScreen, RecentWorkspacesMenu } from "@/components/workspace";
 import { ResizeHandle } from "@/components/layout";
 import { TabBar, TabContextMenu } from "@/components/tabs";
+import { SettingsPanel } from "@/components/settings";
 import {
   useEditorStore,
   MIN_SIDEBAR_WIDTH,
@@ -44,6 +45,7 @@ import { isWithinWorkspace } from "@/lib/links/linkService";
 import { createFileSafe } from "@/lib/tauri/links";
 import { renameFileWithLinkUpdates } from "@/lib/links/linkUpdater";
 import { moveFileWithLinkUpdates, calculateNewPath } from "@/lib/links/moveFile";
+import { clampFontSize, FONT_SIZE_STEP, FONT_SIZE_DEFAULT } from "@/lib/settings/typography";
 import "./index.css";
 
 type SidebarTab = "files" | "outline" | "backlinks";
@@ -67,6 +69,14 @@ function App() {
   const theme = useEditorStore((state) => state.theme);
   const setTheme = useEditorStore((state) => state.setTheme);
   const setFontFamily = useEditorStore((state) => state.setFontFamily);
+  const fontSize = useEditorStore((state) => state.fontSize);
+  const setFontSize = useEditorStore((state) => state.setFontSize);
+  const lineHeight = useEditorStore((state) => state.lineHeight);
+  const setLineHeight = useEditorStore((state) => state.setLineHeight);
+  const maxLineWidth = useEditorStore((state) => state.maxLineWidth);
+  const setMaxLineWidth = useEditorStore((state) => state.setMaxLineWidth);
+  const typewriterMode = useEditorStore((state) => state.typewriterMode);
+  const setTypewriterMode = useEditorStore((state) => state.toggleTypewriterMode);
 
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const storeLoadWorkspace = useWorkspaceStore((state) => state.loadWorkspace);
@@ -129,6 +139,7 @@ function App() {
   const removeRecentWorkspace = useSettingsStore((s) => s.removeRecentWorkspace);
   const setDefaultWorkspace = useSettingsStore((s) => s.setDefaultWorkspace);
   const updateLayout = useSettingsStore((s) => s.updateLayout);
+  const updateAppearance = useSettingsStore((s) => s.updateAppearance);
   const saveOpenTabs = useSettingsStore((s) => s.saveOpenTabs);
 
   // Tabs store - for multi-file editing
@@ -155,6 +166,9 @@ function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showDiffViewer, setShowDiffViewer] = useState(false);
   const [diffVersions, setDiffVersions] = useState<{ old: number; new: number } | null>(null);
+
+  // Settings panel state
+  const [showSettings, setShowSettings] = useState(false);
 
   // Document outline hook
   const { headings, activeHeadingId, scrollToHeading } = useDocumentOutline({
@@ -188,6 +202,13 @@ function App() {
     if (settingsLoaded && appearancePrefs) {
       setTheme(appearancePrefs.theme);
       setFontFamily(appearancePrefs.fontFamily);
+      if (appearancePrefs.fontSize) setFontSize(appearancePrefs.fontSize);
+      if (appearancePrefs.lineHeight) setLineHeight(appearancePrefs.lineHeight);
+      if (appearancePrefs.maxLineWidth) setMaxLineWidth(appearancePrefs.maxLineWidth);
+      // typewriterMode is synced via store default, toggle if different
+      if (appearancePrefs.typewriterMode !== undefined && appearancePrefs.typewriterMode !== typewriterMode) {
+        setTypewriterMode();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsLoaded]);
@@ -202,6 +223,14 @@ function App() {
       root.setAttribute("data-theme", theme);
     }
   }, [theme]);
+
+  // Apply typography settings to CSS custom properties
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--editor-font-size", `${fontSize}px`);
+    root.style.setProperty("--editor-line-height", `${lineHeight}`);
+    root.style.setProperty("--editor-max-width", `${maxLineWidth}ch`);
+  }, [fontSize, lineHeight, maxLineWidth]);
 
   // Track if tabs have been restored to avoid double restore
   const tabsRestoredRef = useRef(false);
@@ -699,6 +728,29 @@ function App() {
           closeGlobalSearch();
         }
       }
+
+      // Cmd/Ctrl + Plus: Increase font size
+      if (isMod && (e.key === "=" || e.key === "+")) {
+        e.preventDefault();
+        const newSize = clampFontSize(fontSize + FONT_SIZE_STEP);
+        setFontSize(newSize);
+        updateAppearance({ fontSize: newSize });
+      }
+
+      // Cmd/Ctrl + Minus: Decrease font size
+      if (isMod && e.key === "-") {
+        e.preventDefault();
+        const newSize = clampFontSize(fontSize - FONT_SIZE_STEP);
+        setFontSize(newSize);
+        updateAppearance({ fontSize: newSize });
+      }
+
+      // Cmd/Ctrl + 0: Reset font size to default
+      if (isMod && e.key === "0") {
+        e.preventDefault();
+        setFontSize(FONT_SIZE_DEFAULT);
+        updateAppearance({ fontSize: FONT_SIZE_DEFAULT });
+      }
     };
 
     document.addEventListener("keydown", handleKeyDown);
@@ -717,6 +769,9 @@ function App() {
     closeGlobalSearch,
     zenMode,
     toggleZenMode,
+    fontSize,
+    setFontSize,
+    updateAppearance,
   ]);
 
   // Create new file
@@ -1148,6 +1203,13 @@ function App() {
           </div>
           <div className="title-bar-right">
             <button
+              className="title-bar-btn"
+              onClick={() => setShowSettings(true)}
+              title="Settings"
+            >
+              <SettingsIcon />
+            </button>
+            <button
               className={`title-bar-btn ${zenMode ? "active" : ""}`}
               onClick={toggleZenMode}
               title={zenMode ? "Exit zen mode (Esc)" : "Zen mode"}
@@ -1267,6 +1329,11 @@ function App() {
           onCloseAll={handleCloseAllTabs}
           onDismiss={handleDismissTabContextMenu}
         />
+      )}
+
+      {/* Settings Panel */}
+      {showSettings && (
+        <SettingsPanel onClose={() => setShowSettings(false)} />
       )}
     </div>
   );
@@ -1421,6 +1488,24 @@ function ZenModeIcon() {
       <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
       <path d="M3 16v3a2 2 0 0 0 2 2h3" />
       <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
+    </svg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
