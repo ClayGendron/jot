@@ -33,7 +33,7 @@ export function WelcomeScreen({
         {/* Header */}
         <header className="welcome-header">
           <h1 className="welcome-title">Jot</h1>
-          <p className="welcome-tagline">A place for your thoughts</p>
+          <p className="welcome-tagline">A place to think</p>
         </header>
 
         {/* Actions */}
