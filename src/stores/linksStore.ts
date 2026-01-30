@@ -99,15 +99,29 @@ export const useLinksStore = create<LinksState>((set, get) => ({
 
     // 2. Extract new links from the updated content
     const links = extractInternalLinks(markdownContent);
-    const fileName = filePath.split("/").pop() || filePath;
+    // Windows path fix: split on both / and \ separators
+    const fileName = filePath.split(/[/\\]/).pop() || filePath;
     const sourceName = fileName.replace(/\.md$/, "");
 
     // 3. Add new backlinks
     for (const link of links) {
+      // Normalize separators and remove leading ./
+      // NOTE: We do NOT resolve ../ - that requires source file directory context
+      // TODO: Implement full relative path resolution using source file directory
+      let normalizedTarget = link.target
+        .replace(/\\/g, "/")           // Windows separators → /
+        .replace(/^\.\//, "")          // Remove leading ./
+        .replace(/\/\.\//g, "/");      // Remove embedded /./
+
+      // Skip links with ../ - we can't resolve them correctly without source directory
+      if (normalizedTarget.includes("../")) {
+        continue;  // Don't index these - better to skip than mis-key
+      }
+
       // Resolve the target path (same logic as buildBacklinksIndex)
-      const withExt = link.target.endsWith(".md")
-        ? link.target
-        : `${link.target}.md`;
+      const withExt = normalizedTarget.endsWith(".md")
+        ? normalizedTarget
+        : `${normalizedTarget}.md`;
       const targetPath = withExt.startsWith("/")
         ? withExt
         : `${workspacePath}/${withExt}`;

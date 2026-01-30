@@ -166,6 +166,8 @@ function App() {
   const togglePinTab = useTabsStore((s) => s.togglePinTab);
   const closeOtherTabs = useTabsStore((s) => s.closeOtherTabs);
   const closeAllTabs = useTabsStore((s) => s.closeAllTabs);
+  const clearAllTabs = useTabsStore((s) => s.clearAllTabs);
+  const setSaveStatus = useEditorStore((s) => s.setSaveStatus);
 
   // Tab context menu state
   const [tabContextMenu, setTabContextMenu] = useState<{
@@ -402,8 +404,8 @@ function App() {
 
   // Clear workspace state (tabs, editor, links index)
   const clearWorkspaceState = useCallback(() => {
-    // Close all tabs (keeps pinned, but we want to clear everything)
-    closeAllTabs();
+    // Clear ALL tabs including pinned (workspace switch)
+    clearAllTabs();
 
     // Clear editor state
     setEditorContent("");
@@ -414,9 +416,12 @@ function App() {
     // Clear backlinks index
     clearIndex();
 
+    // Reset save indicator on workspace switch
+    setSaveStatus("idle");
+
     // Reset tab restoration flag for new workspace
     tabsRestoredRef.current = false;
-  }, [closeAllTabs, setFilePath, setContent, markSaved, clearIndex]);
+  }, [clearAllTabs, setFilePath, setContent, markSaved, clearIndex, setSaveStatus]);
 
   // Handle dirty tabs before workspace switch
   // Returns true if we should proceed, false if cancelled
@@ -686,28 +691,69 @@ function App() {
   }, [tabContextMenu, togglePinTab]);
 
   // Handle close others from context menu
-  const handleCloseOtherTabs = useCallback(() => {
-    if (tabContextMenu) {
-      closeOtherTabs(tabContextMenu.tabId);
+  const handleCloseOtherTabs = useCallback(async () => {
+    if (!tabContextMenu) return;
 
-      // Read fresh state after mutation
-      const freshTabs = useTabsStore.getState().tabs;
-      const freshActiveTabId = useTabsStore.getState().activeTabId;
+    // Get tabs that would be closed (not the kept tab, not pinned)
+    const tabsToClose = tabs.filter(
+      (t) => t.id !== tabContextMenu.tabId && !t.isPinned
+    );
+    const dirtyTabs = tabsToClose.filter((t) => t.isDirty);
 
-      // Update editor state if needed
-      const remainingTab = freshTabs.find(
-        (t) => t.id === tabContextMenu.tabId || t.isPinned
-      );
-      if (remainingTab && remainingTab.id !== freshActiveTabId) {
-        setEditorContent(remainingTab.content);
-        setFilePath(remainingTab.filePath);
-        setContent(remainingTab.content);
-        if (!remainingTab.isDirty) {
-          markSaved();
+    if (dirtyTabs.length > 0) {
+      // Batch prompt: Save All or Cancel (no Discard All in Phase 1)
+      const message = `${dirtyTabs.length} file(s) have unsaved changes.\n\n` +
+        `Click "OK" to save all and close\n` +
+        `Click "Cancel" to abort`;
+
+      const shouldSave = window.confirm(message);
+
+      if (shouldSave) {
+        // Try to save all dirty tabs
+        const failedSaves: string[] = [];
+        for (const tab of dirtyTabs) {
+          try {
+            await saveDocumentPipeline(tab.id, tab.id === activeTabId);
+          } catch {
+            failedSaves.push(tab.displayName);
+          }
         }
+
+        // If any saves failed, abort and keep context menu open
+        if (failedSaves.length > 0) {
+          window.alert(
+            `Failed to save: ${failedSaves.join(", ")}\n\nOperation aborted. No tabs were closed.`
+          );
+          return;  // Keep context menu open so user can retry or investigate
+        }
+      } else {
+        // User chose Cancel - abort entirely
+        setTabContextMenu(null);
+        return;
       }
     }
-  }, [tabContextMenu, closeOtherTabs, setFilePath, setContent, markSaved]);
+
+    closeOtherTabs(tabContextMenu.tabId);
+
+    // Read fresh state after mutation
+    const freshTabs = useTabsStore.getState().tabs;
+    const freshActiveTabId = useTabsStore.getState().activeTabId;
+
+    // Update editor state if needed
+    const remainingTab = freshTabs.find(
+      (t) => t.id === tabContextMenu.tabId || t.isPinned
+    );
+    if (remainingTab && remainingTab.id !== freshActiveTabId) {
+      setEditorContent(remainingTab.content);
+      setFilePath(remainingTab.filePath);
+      setContent(remainingTab.content);
+      if (!remainingTab.isDirty) {
+        markSaved();
+      }
+    }
+
+    setTabContextMenu(null);  // Dismiss on success
+  }, [tabContextMenu, tabs, activeTabId, closeOtherTabs, setFilePath, setContent, markSaved]);
 
   // Handle close all from context menu
   const handleCloseAllTabs = useCallback(async () => {

@@ -420,6 +420,51 @@ describe("tabsStore", () => {
     });
   });
 
+  describe("clearAllTabs", () => {
+    it("removes ALL tabs including pinned (for workspace switch)", () => {
+      const { openTab, togglePinTab, clearAllTabs } = useTabsStore.getState();
+
+      const tab1Id = openTab("/path/to/doc1.md", "content1");
+      openTab("/path/to/doc2.md", "content2");
+
+      // Pin tab1
+      togglePinTab(tab1Id);
+
+      // Verify we have tabs with one pinned
+      expect(useTabsStore.getState().tabs).toHaveLength(2);
+      expect(useTabsStore.getState().tabs[0].isPinned).toBe(true);
+
+      // Clear all tabs
+      clearAllTabs();
+
+      // All tabs should be gone, including pinned
+      const state = useTabsStore.getState();
+      expect(state.tabs).toHaveLength(0);
+      expect(state.activeTabId).toBeNull();
+    });
+
+    it("differs from closeAllTabs which keeps pinned", () => {
+      const { openTab, togglePinTab, closeAllTabs, clearAllTabs } = useTabsStore.getState();
+
+      // First test closeAllTabs behavior
+      const tab1Id = openTab("/path/to/doc1.md", "content1");
+      openTab("/path/to/doc2.md", "content2");
+      togglePinTab(tab1Id);
+
+      closeAllTabs();
+
+      // closeAllTabs keeps pinned tabs
+      expect(useTabsStore.getState().tabs).toHaveLength(1);
+      expect(useTabsStore.getState().tabs[0].isPinned).toBe(true);
+
+      // Now test clearAllTabs
+      clearAllTabs();
+
+      // clearAllTabs removes everything
+      expect(useTabsStore.getState().tabs).toHaveLength(0);
+    });
+  });
+
   describe("Selectors", () => {
     it("selectActiveTab returns active tab", () => {
       const { openTab } = useTabsStore.getState();

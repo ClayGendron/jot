@@ -318,6 +318,76 @@ describe("saveDocumentPipeline", () => {
 
     await expect(saveDocumentPipeline("tab-1", true)).rejects.toThrow("Write failed");
   });
+
+  it("keeps isDirty true if content changed during save", async () => {
+    const originalContent = "<p>original</p>";
+
+    useTabsStore.setState({
+      tabs: [
+        {
+          id: "tab-1",
+          filePath: "/workspace/test.md",
+          displayName: "test",
+          content: originalContent,
+          isDirty: true,
+          isPinned: false,
+          scrollTop: 0,
+        },
+      ],
+      activeTabId: "tab-1",
+    });
+
+    // Simulate content change during save by modifying tab content
+    // after the pipeline starts but before it completes
+    mockWriteFile.mockImplementationOnce(async () => {
+      // Simulate user editing during save
+      useTabsStore.setState({
+        tabs: [
+          {
+            id: "tab-1",
+            filePath: "/workspace/test.md",
+            displayName: "test",
+            content: "<p>edited during save</p>",  // Content changed!
+            isDirty: true,
+            isPinned: false,
+            scrollTop: 0,
+          },
+        ],
+        activeTabId: "tab-1",
+      });
+    });
+
+    await saveDocumentPipeline("tab-1", true);
+
+    // Tab should remain dirty because content changed during save
+    const tab = useTabsStore.getState().tabs.find((t) => t.id === "tab-1");
+    expect(tab?.isDirty).toBe(true);
+  });
+
+  it("marks as saved only when HTML content is exactly the same", async () => {
+    const content = "<p>unchanged</p>";
+
+    useTabsStore.setState({
+      tabs: [
+        {
+          id: "tab-1",
+          filePath: "/workspace/test.md",
+          displayName: "test",
+          content,
+          isDirty: true,
+          isPinned: false,
+          scrollTop: 0,
+        },
+      ],
+      activeTabId: "tab-1",
+    });
+
+    await saveDocumentPipeline("tab-1", true);
+
+    // Content unchanged, should be marked as saved
+    const tab = useTabsStore.getState().tabs.find((t) => t.id === "tab-1");
+    expect(tab?.isDirty).toBe(false);
+  });
 });
 
 describe("saveAllDirtyTabs", () => {

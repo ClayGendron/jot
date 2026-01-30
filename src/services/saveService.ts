@@ -66,6 +66,10 @@ export async function saveDocumentPipeline(
     return false; // Nothing to save
   }
 
+  // Capture HTML content snapshot at START of save
+  // Used to detect if content changed during async save
+  const htmlAtSaveStart = tab.content;
+
   const workspacePath = useWorkspaceStore.getState().workspacePath;
 
   // 1. Update SaveIndicator for active doc only
@@ -96,14 +100,20 @@ export async function saveDocumentPipeline(
     // 6. Compute hash
     const hash = computeSimpleHash(normalizedMarkdown);
 
-    // 7. Update store state
-    useTabsStore.getState().markTabSaved(tabId);
+    // 7. Update hash in links store
     useLinksStore.getState().setFileHash(tab.filePath, hash);
 
-    // 8. Also mark editor store as saved (for active doc sync)
-    if (isActiveDoc) {
-      useEditorStore.getState().markSaved();
+    // 8. GUARD: Check if content changed during save using EXACT HTML comparison
+    // If user edited while save was in progress, don't mark as saved
+    const currentTab = useTabsStore.getState().tabs.find((t) => t.id === tabId);
+    if (currentTab && currentTab.content === htmlAtSaveStart) {
+      // Content unchanged during save - safe to mark as saved
+      useTabsStore.getState().markTabSaved(tabId);
+      if (isActiveDoc) {
+        useEditorStore.getState().markSaved();
+      }
     }
+    // If content changed during save, leave isDirty=true (next autosave will handle it)
 
     // 9. Update backlinks index for this file
     if (workspacePath) {

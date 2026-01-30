@@ -44,8 +44,10 @@ export interface TabsActions {
   closeTab: (tabId: string) => string | null;
   /** Close all tabs except the specified one */
   closeOtherTabs: (tabId: string) => void;
-  /** Close all tabs */
+  /** Close all tabs (keeps pinned) */
   closeAllTabs: () => void;
+  /** Clear ALL tabs including pinned (for workspace switch) */
+  clearAllTabs: () => void;
   /** Set the active tab */
   setActiveTab: (tabId: string) => void;
   /** Update tab content (marks as dirty) */
@@ -179,6 +181,14 @@ export const useTabsStore = create<TabsState & TabsActions>((set, get) => ({
     set({
       tabs: pinnedTabs,
       activeTabId: pinnedTabs.length > 0 ? pinnedTabs[0].id : null,
+    });
+  },
+
+  /** Clear ALL tabs including pinned (for workspace switch) */
+  clearAllTabs: () => {
+    set({
+      tabs: [],
+      activeTabId: null,
     });
   },
 

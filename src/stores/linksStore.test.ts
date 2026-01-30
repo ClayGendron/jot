@@ -182,6 +182,68 @@ describe("linksStore", () => {
       expect(after).not.toEqual(before);
       expect(after).toBeInstanceOf(Date);
     });
+
+    it("normalizes ./target relative links", () => {
+      useLinksStore.getState().updateFileInIndex(
+        "/workspace/source.md",
+        "Link to [[./notes/a]]",
+        workspacePath
+      );
+
+      const index = useLinksStore.getState().backlinksIndex;
+      // Should normalize ./notes/a to notes/a
+      expect(index["/workspace/notes/a.md"]).toHaveLength(1);
+      expect(index["/workspace/./notes/a.md"]).toBeUndefined();
+    });
+
+    it("normalizes embedded /./ in paths", () => {
+      useLinksStore.getState().updateFileInIndex(
+        "/workspace/source.md",
+        "Link to [[docs/./readme]]",
+        workspacePath
+      );
+
+      const index = useLinksStore.getState().backlinksIndex;
+      expect(index["/workspace/docs/readme.md"]).toHaveLength(1);
+    });
+
+    it("skips ../ relative links (cannot resolve correctly)", () => {
+      useLinksStore.getState().updateFileInIndex(
+        "/workspace/source.md",
+        "Link to [[../other]]",
+        workspacePath
+      );
+
+      const index = useLinksStore.getState().backlinksIndex;
+      // Should not create a backlink for ../ paths
+      expect(Object.keys(index)).toHaveLength(0);
+    });
+
+    it("handles Windows-style backslashes in paths", () => {
+      // Test that sourceName extraction works with backslashes
+      useLinksStore.getState().updateFileInIndex(
+        "C:\\workspace\\folder\\source.md",
+        "Link to [[target]]",
+        "C:\\workspace"
+      );
+
+      const index = useLinksStore.getState().backlinksIndex;
+      const entries = index["C:\\workspace/target.md"];
+      expect(entries).toHaveLength(1);
+      expect(entries[0].sourceName).toBe("source");
+    });
+
+    it("normalizes Windows backslashes in link targets", () => {
+      useLinksStore.getState().updateFileInIndex(
+        "/workspace/source.md",
+        "Link to [[docs\\readme]]",
+        workspacePath
+      );
+
+      const index = useLinksStore.getState().backlinksIndex;
+      // Backslashes should be converted to forward slashes
+      expect(index["/workspace/docs/readme.md"]).toHaveLength(1);
+    });
   });
 
   describe("removeFileFromIndex", () => {
