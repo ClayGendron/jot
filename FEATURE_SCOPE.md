@@ -397,7 +397,7 @@ workspace/
 
 ### 8.2 Tabs & Multi-file
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -781,6 +781,16 @@ workspace/
 
 -   E8.1.5: Layout state (width, visibility) persists across sessions ✅
 
+-   E8.2.1: Open multiple files in tabs (click file opens in tab) ✅
+
+-   E8.2.2: Reorder tabs by drag-and-drop ✅
+
+-   E8.2.3: Close tabs with middle-click or X button ✅
+
+-   E8.2.4: Unsaved indicator (dot) on dirty tabs ✅
+
+-   E8.2.5: Pin tabs via right-click context menu (pinned stay left) ✅
+
 
 ### Remaining P0 Work
 
@@ -792,7 +802,7 @@ workspace/
 
 -   Epic 7.1-7.3: Themes/typography/preferences
 
--   Epic 8.2: Tabs
+-   ~~Epic 8.2: Tabs~~ ✅
 
 -   Epic 8.3: Formatting Toolbar (E8.3.4 remaining)
 

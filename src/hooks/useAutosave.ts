@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { useTabsStore } from "@/stores/tabsStore";
 import { writeFile } from "@/lib/tauri/files";
 import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
 import { saveVersion } from "@/lib/tauri/versionHistory";
@@ -42,6 +43,8 @@ export function useAutosave(content: string) {
   const { filePath, isDirty, markSaved, setSaveStatus, setContent } =
     useEditorStore();
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
+  const activeTabId = useTabsStore((state) => state.activeTabId);
+  const markTabSaved = useTabsStore((state) => state.markTabSaved);
 
   // Use refs to avoid stale closure issues in debounced saves
   const contentRef = useRef(content);
@@ -49,6 +52,7 @@ export function useAutosave(content: string) {
   const workspacePathRef = useRef(workspacePath);
   const isDirtyRef = useRef(isDirty);
   const isSavingRef = useRef(false);
+  const activeTabIdRef = useRef(activeTabId);
 
   // Keep refs in sync
   useEffect(() => {
@@ -66,6 +70,10 @@ export function useAutosave(content: string) {
   useEffect(() => {
     isDirtyRef.current = isDirty;
   }, [isDirty]);
+
+  useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
 
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedIndicatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -121,6 +129,12 @@ export function useAutosave(content: string) {
       setSaveStatus("saved");
       clearCrashRecovery();
 
+      // Also mark the active tab as saved
+      const currentTabId = activeTabIdRef.current;
+      if (currentTabId) {
+        markTabSaved(currentTabId);
+      }
+
       // Clear any pending indicator timeout
       if (savedIndicatorTimeoutRef.current) {
         clearTimeout(savedIndicatorTimeoutRef.current);
@@ -138,7 +152,7 @@ export function useAutosave(content: string) {
     } finally {
       isSavingRef.current = false;
     }
-  }, [markSaved, setSaveStatus, clearCrashRecovery]);
+  }, [markSaved, setSaveStatus, clearCrashRecovery, markTabSaved]);
 
   // Debounced autosave effect
   useEffect(() => {

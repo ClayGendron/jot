@@ -27,6 +27,26 @@ export interface LayoutPreferences {
 }
 
 /**
+ * Persisted tab state for session restore
+ */
+export interface PersistedTab {
+  /** Full file path */
+  filePath: string;
+  /** Whether tab is pinned */
+  isPinned: boolean;
+}
+
+/**
+ * State for restoring open tabs
+ */
+export interface PersistedTabState {
+  /** Ordered list of tabs */
+  tabs: PersistedTab[];
+  /** Active tab's file path (null if no active tab) */
+  activeTabPath: string | null;
+}
+
+/**
  * Global application settings
  *
  * Stored in the app data directory (platform-specific).
@@ -39,6 +59,8 @@ export interface GlobalAppSettings {
   defaultWorkspacePath: string | null;
   /** Layout preferences (panel sizes, visibility) */
   layout?: LayoutPreferences;
+  /** Open tabs state for session restore */
+  openTabs?: PersistedTabState;
   /** Schema version for migrations */
   version: number;
 }

@@ -3,6 +3,7 @@ import type {
   GlobalAppSettings,
   RecentWorkspace,
   LayoutPreferences,
+  PersistedTabState,
 } from "@/lib/settings/types";
 import {
   DEFAULT_GLOBAL_SETTINGS,
@@ -29,6 +30,8 @@ export interface SettingsState {
   defaultWorkspacePath: string | null;
   /** Layout preferences (sidebar width, visibility) */
   layout: LayoutPreferences;
+  /** Open tabs for session restore */
+  openTabs: PersistedTabState | null;
   /** Whether settings have been loaded from disk */
   isLoaded: boolean;
   /** Loading state during async operations */
@@ -52,12 +55,17 @@ export interface SettingsActions {
   updateLayout: (layout: Partial<LayoutPreferences>) => Promise<void>;
   /** Validate and clean up stale entries */
   cleanupStaleWorkspaces: () => Promise<void>;
+  /** Save open tabs state */
+  saveOpenTabs: (tabs: PersistedTabState) => Promise<void>;
+  /** Get persisted tabs state */
+  getOpenTabs: () => PersistedTabState | null;
 }
 
 const initialState: SettingsState = {
   recentWorkspaces: [],
   defaultWorkspacePath: null,
   layout: DEFAULT_LAYOUT_PREFERENCES,
+  openTabs: null,
   isLoaded: false,
   isLoading: false,
   error: null,
@@ -76,6 +84,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
             recentWorkspaces: settings.recentWorkspaces,
             defaultWorkspacePath: settings.defaultWorkspacePath,
             layout: settings.layout ?? DEFAULT_LAYOUT_PREFERENCES,
+            openTabs: settings.openTabs ?? null,
             isLoaded: true,
             isLoading: false,
           });
@@ -86,6 +95,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
           // No settings file yet, use defaults
           set({
             ...DEFAULT_GLOBAL_SETTINGS,
+            openTabs: null,
             isLoaded: true,
             isLoading: false,
           });
@@ -207,6 +217,15 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
         await persistSettings(get());
       }
     },
+
+    saveOpenTabs: async (tabs: PersistedTabState) => {
+      set({ openTabs: tabs });
+      await persistSettings(get());
+    },
+
+    getOpenTabs: () => {
+      return get().openTabs;
+    },
   })
 );
 
@@ -219,6 +238,7 @@ async function persistSettings(state: SettingsState): Promise<void> {
       recentWorkspaces: state.recentWorkspaces,
       defaultWorkspacePath: state.defaultWorkspacePath,
       layout: state.layout,
+      openTabs: state.openTabs ?? undefined,
       version: 1,
     };
     await writeGlobalSettings(settings);

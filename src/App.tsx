@@ -12,6 +12,7 @@ import { SaveIndicator } from "@/components/ui/SaveIndicator";
 import { VersionHistoryPanel, DiffViewer } from "@/components/history";
 import { WelcomeScreen, RecentWorkspacesMenu } from "@/components/workspace";
 import { ResizeHandle } from "@/components/layout";
+import { TabBar, TabContextMenu } from "@/components/tabs";
 import {
   useEditorStore,
   MIN_SIDEBAR_WIDTH,
@@ -21,6 +22,7 @@ import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useLinksStore } from "@/stores/linksStore";
 import { useSearchStore } from "@/stores/searchStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { useTabsStore } from "@/stores/tabsStore";
 import { getBacklinksForFile } from "@/lib/links/backlinks";
 import { useAutosave } from "@/hooks/useAutosave";
 import { useDocumentOutline } from "@/hooks/useDocumentOutline";
@@ -100,7 +102,7 @@ function App() {
   );
 
   const [editorContent, setEditorContent] = useState("");
-  const [activeTab, setActiveTab] = useState<SidebarTab>("files");
+  const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("files");
   const mainContentRef = useRef<HTMLElement | null>(null);
   const editorRef = useRef<EditorRef | null>(null);
 
@@ -116,12 +118,34 @@ function App() {
   const recentWorkspaces = useSettingsStore((s) => s.recentWorkspaces);
   const defaultWorkspacePath = useSettingsStore((s) => s.defaultWorkspacePath);
   const layoutPrefs = useSettingsStore((s) => s.layout);
+  const openTabsFromSettings = useSettingsStore((s) => s.openTabs);
   const settingsLoaded = useSettingsStore((s) => s.isLoaded);
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const addRecentWorkspace = useSettingsStore((s) => s.addRecentWorkspace);
   const removeRecentWorkspace = useSettingsStore((s) => s.removeRecentWorkspace);
   const setDefaultWorkspace = useSettingsStore((s) => s.setDefaultWorkspace);
   const updateLayout = useSettingsStore((s) => s.updateLayout);
+  const saveOpenTabs = useSettingsStore((s) => s.saveOpenTabs);
+
+  // Tabs store - for multi-file editing
+  const tabs = useTabsStore((s) => s.tabs);
+  const activeTabId = useTabsStore((s) => s.activeTabId);
+  const openTab = useTabsStore((s) => s.openTab);
+  const closeTab = useTabsStore((s) => s.closeTab);
+  const setActiveTab = useTabsStore((s) => s.setActiveTab);
+  const updateTabContent = useTabsStore((s) => s.updateTabContent);
+  const reorderTab = useTabsStore((s) => s.reorderTab);
+  const findTabByPath = useTabsStore((s) => s.findTabByPath);
+  const renameTab = useTabsStore((s) => s.renameTab);
+  const togglePinTab = useTabsStore((s) => s.togglePinTab);
+  const closeOtherTabs = useTabsStore((s) => s.closeOtherTabs);
+  const closeAllTabs = useTabsStore((s) => s.closeAllTabs);
+
+  // Tab context menu state
+  const [tabContextMenu, setTabContextMenu] = useState<{
+    tabId: string;
+    position: { x: number; y: number };
+  } | null>(null);
 
   // Version history state
   const [showHistory, setShowHistory] = useState(false);
@@ -154,6 +178,91 @@ function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsLoaded]);
+
+  // Track if tabs have been restored to avoid double restore
+  const tabsRestoredRef = useRef(false);
+
+  // Restore tabs from settings after workspace loads
+  useEffect(() => {
+    const restoreTabs = async () => {
+      if (!settingsLoaded || !workspacePath || tabsRestoredRef.current) return;
+      if (!openTabsFromSettings || openTabsFromSettings.tabs.length === 0) return;
+
+      tabsRestoredRef.current = true;
+
+      // Restore each tab
+      for (const persistedTab of openTabsFromSettings.tabs) {
+        try {
+          // Check if file still exists by trying to read it
+          const markdownContent = await readFile(persistedTab.filePath);
+          const htmlContent = markdownToHtml(markdownContent);
+          const tabId = openTab(persistedTab.filePath, htmlContent);
+
+          // Restore pinned state
+          if (persistedTab.isPinned) {
+            togglePinTab(tabId);
+          }
+        } catch {
+          // File no longer exists, skip it silently
+        }
+      }
+
+      // Set active tab
+      if (openTabsFromSettings.activeTabPath) {
+        const activeTab = findTabByPath(openTabsFromSettings.activeTabPath);
+        if (activeTab) {
+          setActiveTab(activeTab.id);
+          setEditorContent(activeTab.content);
+          setFilePath(activeTab.filePath);
+          setContent(activeTab.content);
+          markSaved();
+        }
+      }
+    };
+
+    restoreTabs();
+  }, [
+    settingsLoaded,
+    workspacePath,
+    openTabsFromSettings,
+    openTab,
+    togglePinTab,
+    findTabByPath,
+    setActiveTab,
+    setFilePath,
+    setContent,
+    markSaved,
+  ]);
+
+  // Save tabs to settings when they change (debounced)
+  const saveTabsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Don't save during initial restoration
+    if (!tabsRestoredRef.current && tabs.length === 0) return;
+
+    // Debounce tab saves
+    if (saveTabsTimeoutRef.current) {
+      clearTimeout(saveTabsTimeoutRef.current);
+    }
+
+    saveTabsTimeoutRef.current = setTimeout(() => {
+      const activeTab = tabs.find((t) => t.id === activeTabId);
+      saveOpenTabs({
+        tabs: tabs.map((t) => ({
+          filePath: t.filePath,
+          isPinned: t.isPinned,
+        })),
+        activeTabPath: activeTab?.filePath ?? null,
+      });
+    }, 1000);
+
+    return () => {
+      if (saveTabsTimeoutRef.current) {
+        clearTimeout(saveTabsTimeoutRef.current);
+      }
+    };
+  }, [tabs, activeTabId, saveOpenTabs]);
 
   // Check for crash recovery on mount
   useEffect(() => {
@@ -276,9 +385,24 @@ function App() {
     buildBacklinksIndex();
   }, [workspacePath, allFiles, buildIndex]);
 
-  // Open file - saves current file first if dirty
+  // Open file in a tab - saves current file first if dirty
   const handleFileSelect = useCallback(
     async (path: string) => {
+      // Check if file is already open in a tab
+      const existingTab = findTabByPath(path);
+      if (existingTab) {
+        // Switch to the existing tab
+        setActiveTab(existingTab.id);
+        setEditorContent(existingTab.content);
+        setFilePath(path);
+        setContent(existingTab.content);
+        // Only mark as saved if the tab doesn't have pending changes
+        if (!existingTab.isDirty) {
+          markSaved();
+        }
+        return;
+      }
+
       // Save current file if it has unsaved changes
       if (isDirty && filePath) {
         saveNow();
@@ -289,6 +413,11 @@ function App() {
         const markdownContent = await readFile(path);
         // Convert Markdown to HTML for TipTap editor
         const htmlContent = markdownToHtml(markdownContent);
+
+        // Open in a new tab
+        openTab(path, htmlContent);
+
+        // Sync with editor state
         setEditorContent(htmlContent);
         setFilePath(path);
         setContent(htmlContent);
@@ -297,7 +426,7 @@ function App() {
         console.error("Failed to open file:", err);
       }
     },
-    [isDirty, filePath, saveNow, setFilePath, setContent, markSaved]
+    [isDirty, filePath, saveNow, setFilePath, setContent, markSaved, findTabByPath, setActiveTab, openTab]
   );
 
   // Save file (immediate save via Cmd+S)
@@ -311,9 +440,171 @@ function App() {
     (content: string) => {
       setEditorContent(content);
       setContent(content); // Sync to store and mark dirty
+
+      // Also update the active tab's content
+      if (activeTabId) {
+        updateTabContent(activeTabId, content);
+      }
     },
-    [setContent]
+    [setContent, activeTabId, updateTabContent]
   );
+
+  // Handle tab selection
+  const handleTabSelect = useCallback(
+    (tabId: string) => {
+      // Save current file if dirty before switching
+      if (isDirty && filePath) {
+        saveNow();
+      }
+
+      const tab = tabs.find((t) => t.id === tabId);
+      if (!tab) return;
+
+      setActiveTab(tabId);
+      setEditorContent(tab.content);
+      setFilePath(tab.filePath);
+      setContent(tab.content);
+
+      // Only mark as saved if the tab doesn't have pending changes
+      if (!tab.isDirty) {
+        markSaved();
+      }
+    },
+    [tabs, isDirty, filePath, saveNow, setActiveTab, setFilePath, setContent, markSaved]
+  );
+
+  // Handle tab close
+  const handleTabClose = useCallback(
+    (tabId: string) => {
+      const tab = tabs.find((t) => t.id === tabId);
+      if (!tab) return;
+
+      // Prompt if dirty
+      if (tab.isDirty) {
+        const shouldSave = window.confirm(
+          `"${tab.displayName}" has unsaved changes. Save before closing?`
+        );
+        if (shouldSave) {
+          // If this is the active tab, save it
+          if (tabId === activeTabId) {
+            saveNow();
+          }
+          // If not active, we'd need to save that specific tab
+          // For now, just close without saving if not active
+        }
+      }
+
+      const nextTabId = closeTab(tabId);
+
+      // If we closed the active tab, switch to the next one
+      if (tabId === activeTabId) {
+        if (nextTabId) {
+          const nextTab = tabs.find((t) => t.id === nextTabId);
+          if (nextTab) {
+            setEditorContent(nextTab.content);
+            setFilePath(nextTab.filePath);
+            setContent(nextTab.content);
+            if (!nextTab.isDirty) {
+              markSaved();
+            }
+          }
+        } else {
+          // No more tabs
+          setEditorContent("");
+          setFilePath(null);
+          setContent("");
+          markSaved();
+        }
+      }
+    },
+    [tabs, activeTabId, closeTab, saveNow, setFilePath, setContent, markSaved]
+  );
+
+  // Handle tab reorder
+  const handleTabReorder = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      reorderTab(fromIndex, toIndex);
+    },
+    [reorderTab]
+  );
+
+  // Handle tab context menu
+  const handleTabContextMenu = useCallback(
+    (tabId: string, position: { x: number; y: number }) => {
+      setTabContextMenu({ tabId, position });
+    },
+    []
+  );
+
+  // Handle tab pin toggle
+  const handleTabPin = useCallback(() => {
+    if (tabContextMenu) {
+      togglePinTab(tabContextMenu.tabId);
+    }
+  }, [tabContextMenu, togglePinTab]);
+
+  // Handle close others from context menu
+  const handleCloseOtherTabs = useCallback(() => {
+    if (tabContextMenu) {
+      closeOtherTabs(tabContextMenu.tabId);
+
+      // Read fresh state after mutation
+      const freshTabs = useTabsStore.getState().tabs;
+      const freshActiveTabId = useTabsStore.getState().activeTabId;
+
+      // Update editor state if needed
+      const remainingTab = freshTabs.find(
+        (t) => t.id === tabContextMenu.tabId || t.isPinned
+      );
+      if (remainingTab && remainingTab.id !== freshActiveTabId) {
+        setEditorContent(remainingTab.content);
+        setFilePath(remainingTab.filePath);
+        setContent(remainingTab.content);
+        if (!remainingTab.isDirty) {
+          markSaved();
+        }
+      }
+    }
+  }, [tabContextMenu, closeOtherTabs, setFilePath, setContent, markSaved]);
+
+  // Handle close all from context menu
+  const handleCloseAllTabs = useCallback(() => {
+    // Save all dirty tabs before closing
+    const dirtyTabs = tabs.filter((t) => t.isDirty && !t.isPinned);
+    if (dirtyTabs.length > 0) {
+      const shouldSave = window.confirm(
+        `You have ${dirtyTabs.length} unsaved file(s). Save before closing all?`
+      );
+      if (shouldSave && activeTabId) {
+        saveNow();
+      }
+    }
+
+    closeAllTabs();
+
+    // Read fresh state after mutation
+    const freshTabs = useTabsStore.getState().tabs;
+
+    // Check if any pinned tabs remain (freshTabs now reflects post-closeAllTabs state)
+    if (freshTabs.length > 0) {
+      setEditorContent(freshTabs[0].content);
+      setFilePath(freshTabs[0].filePath);
+      setContent(freshTabs[0].content);
+      if (!freshTabs[0].isDirty) {
+        markSaved();
+      }
+    } else {
+      setEditorContent("");
+      setFilePath(null);
+      setContent("");
+      markSaved();
+    }
+  }, [tabs, activeTabId, saveNow, closeAllTabs, setFilePath, setContent, markSaved]);
+
+  // Dismiss tab context menu
+  const handleDismissTabContextMenu = useCallback(() => {
+    setTabContextMenu(null);
+  }, []);
 
   // Persist sidebar toggle to settings
   const handleToggleSidebar = useCallback(() => {
@@ -491,12 +782,14 @@ function App() {
         if (filePath === path) {
           setFilePath(newPath);
         }
+        // Update tab if this file is open in a tab
+        renameTab(path, newPath);
       } catch (err) {
         console.error("Failed to rename:", err);
         alert(err instanceof Error ? err.message : "Failed to rename");
       }
     },
-    [workspacePath, loadWorkspace, filePath, setFilePath]
+    [workspacePath, loadWorkspace, filePath, setFilePath, renameTab]
   );
 
   // Delete file/folder
@@ -730,15 +1023,15 @@ function App() {
         {/* Sidebar Tabs */}
         <div className="sidebar-tabs">
           <button
-            className={`sidebar-tab ${activeTab === "files" ? "active" : ""}`}
-            onClick={() => setActiveTab("files")}
+            className={`sidebar-tab ${activeSidebarTab === "files" ? "active" : ""}`}
+            onClick={() => setActiveSidebarTab("files")}
           >
             <FilesTabIcon />
             <span>Files</span>
           </button>
           <button
-            className={`sidebar-tab ${activeTab === "outline" ? "active" : ""}`}
-            onClick={() => setActiveTab("outline")}
+            className={`sidebar-tab ${activeSidebarTab === "outline" ? "active" : ""}`}
+            onClick={() => setActiveSidebarTab("outline")}
             disabled={!filePath}
             title={!filePath ? "Open a file to see outline" : undefined}
           >
@@ -746,8 +1039,8 @@ function App() {
             <span>Outline</span>
           </button>
           <button
-            className={`sidebar-tab ${activeTab === "backlinks" ? "active" : ""}`}
-            onClick={() => setActiveTab("backlinks")}
+            className={`sidebar-tab ${activeSidebarTab === "backlinks" ? "active" : ""}`}
+            onClick={() => setActiveSidebarTab("backlinks")}
             disabled={!filePath}
             title={!filePath ? "Open a file to see backlinks" : undefined}
           >
@@ -757,7 +1050,7 @@ function App() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === "files" && (
+        {activeSidebarTab === "files" && (
           <>
             {!workspacePath ? (
               <button className="open-folder-btn" onClick={handleOpenFolder}>
@@ -785,14 +1078,14 @@ function App() {
             )}
           </>
         )}
-        {activeTab === "outline" && (
+        {activeSidebarTab === "outline" && (
           <DocumentOutline
             headings={headings}
             activeHeadingId={activeHeadingId}
             onHeadingClick={scrollToHeading}
           />
         )}
-        {activeTab === "backlinks" && (
+        {activeSidebarTab === "backlinks" && (
           <BacklinksPanel
             backlinks={backlinks}
             onBacklinkClick={handleFileSelect}
@@ -848,6 +1141,18 @@ function App() {
             )}
           </div>
         </div>
+
+        {/* Tab Bar */}
+        {tabs.length > 0 && (
+          <TabBar
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onTabSelect={handleTabSelect}
+            onTabClose={handleTabClose}
+            onTabReorder={handleTabReorder}
+            onTabContextMenu={handleTabContextMenu}
+          />
+        )}
 
         {/* Editor */}
         {filePath ? (
@@ -924,6 +1229,19 @@ function App() {
             setShowDiffViewer(false);
             setDiffVersions(null);
           }}
+        />
+      )}
+
+      {/* Tab Context Menu */}
+      {tabContextMenu && (
+        <TabContextMenu
+          position={tabContextMenu.position}
+          isPinned={tabs.find((t) => t.id === tabContextMenu.tabId)?.isPinned ?? false}
+          onPin={handleTabPin}
+          onClose={() => handleTabClose(tabContextMenu.tabId)}
+          onCloseOthers={handleCloseOtherTabs}
+          onCloseAll={handleCloseAllTabs}
+          onDismiss={handleDismissTabContextMenu}
         />
       )}
     </div>
