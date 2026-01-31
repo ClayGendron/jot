@@ -143,12 +143,92 @@ export function normalizeForComparisonSync(path: string): string {
 }
 
 /**
+ * Normalize a path for comparison with explicit case sensitivity control.
+ * Use for path matching where case sensitivity depends on the OS.
+ *
+ * @param path - Path to normalize
+ * @param caseSensitive - If true, preserve case; if false, lowercase
+ * @returns Normalized path (forward slashes, optionally lowercased)
+ */
+export function normalizeForComparison(
+  path: string,
+  caseSensitive: boolean
+): string {
+  const normalized = normalizePath(path);
+  return caseSensitive ? normalized : normalized.toLowerCase();
+}
+
+/**
+ * Get relative path from workspace to target with explicit case sensitivity.
+ * Handles case-insensitive matching for Windows/macOS while preserving
+ * the original case in the returned path for display.
+ *
+ * @param workspacePath - The workspace root path
+ * @param targetPath - The path to make relative
+ * @param caseSensitive - If true, require exact case match; if false, match case-insensitively
+ * @returns Relative path if target is within workspace, otherwise full path
+ */
+export function getRelativePathStrict(
+  workspacePath: string,
+  targetPath: string,
+  caseSensitive: boolean
+): string {
+  // Normalize for display first (forward slashes)
+  const normalizedWorkspace = normalizeForDisplay(workspacePath);
+  const normalizedTarget = normalizeForDisplay(targetPath);
+
+  // Use normalizeForComparison for consistent case handling
+  const compareWorkspace = normalizeForComparison(normalizedWorkspace, caseSensitive);
+  const compareTarget = normalizeForComparison(normalizedTarget, caseSensitive);
+
+  const prefix = compareWorkspace.endsWith("/")
+    ? compareWorkspace
+    : compareWorkspace + "/";
+
+  if (compareTarget.startsWith(prefix)) {
+    // Return display-normalized path (preserves original case)
+    return normalizedTarget.slice(prefix.length);
+  }
+  if (compareTarget === compareWorkspace) return "";
+  return normalizedTarget;
+}
+
+/**
+ * Get the parent directory path synchronously.
+ * Works on normalized paths (forward slashes).
+ *
+ * @param path - Path to get parent of
+ * @returns Parent directory path
+ */
+export function getParentPathSync(path: string): string {
+  const normalized = normalizeForDisplay(path);
+  if (/^[A-Za-z]:$/.test(normalized)) {
+    return `${normalized}/`;
+  }
+  const parts = normalized.split("/");
+  parts.pop();
+  const parent = parts.join("/") || "/";
+  if (/^[A-Za-z]:$/.test(parent)) {
+    return `${parent}/`;
+  }
+  return parent;
+}
+
+/**
  * Check if a path is within another path (used for security validation).
  * Normalizes both paths for consistent comparison.
+ *
+ * @param path - Path to check
+ * @param parentPath - Parent path to check against
+ * @param caseSensitive - Whether to compare case-sensitively (Linux: true, Windows/macOS: false)
  */
-export function isPathWithin(path: string, parentPath: string): boolean {
-  const normalizedPath = normalizeForDisplay(path);
-  const normalizedParent = normalizeForDisplay(parentPath);
+export function isPathWithin(
+  path: string,
+  parentPath: string,
+  caseSensitive: boolean
+): boolean {
+  const normalizedPath = normalizeForComparison(path, caseSensitive);
+  const normalizedParent = normalizeForComparison(parentPath, caseSensitive);
 
   // Must start with parent path + separator
   return (

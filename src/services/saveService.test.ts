@@ -105,10 +105,15 @@ describe("saveDocumentPipeline", () => {
   });
 
   it("returns saved:false if tab not found", async () => {
+    // Suppress expected console.warn for missing tab
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
     const result = await saveDocumentPipeline("nonexistent-id", true);
     expect(result.saved).toBe(false);
     expect(result.isClean).toBe(false);
     expect(mockWriteFile).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it("returns saved:false, isClean:true if tab is not dirty", async () => {
@@ -278,6 +283,9 @@ describe("saveDocumentPipeline", () => {
   });
 
   it("handles version history errors gracefully", async () => {
+    // Suppress expected console.warn for version save failure
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
     mockSaveVersion.mockRejectedValueOnce(new Error("Version save failed"));
 
     useTabsStore.setState({
@@ -300,9 +308,14 @@ describe("saveDocumentPipeline", () => {
     expect(result.saved).toBe(true);
     expect(result.isClean).toBe(true);
     expect(mockWriteFile).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it("throws on file write error", async () => {
+    // Suppress expected console.error for write failure
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     mockWriteFile.mockRejectedValueOnce(new Error("Write failed"));
 
     useTabsStore.setState({
@@ -321,6 +334,8 @@ describe("saveDocumentPipeline", () => {
     });
 
     await expect(saveDocumentPipeline("tab-1", true)).rejects.toThrow("Write failed");
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 
   it("keeps isDirty true and returns isClean:false if content changed during save", async () => {
@@ -532,6 +547,9 @@ describe("saveAllDirtyTabs", () => {
   });
 
   it("returns IDs of tabs that failed to save", async () => {
+    // Suppress expected console.error for save failure
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
     mockWriteFile
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error("Failed"));
@@ -563,5 +581,7 @@ describe("saveAllDirtyTabs", () => {
     const failed = await saveAllDirtyTabs("tab-1");
 
     expect(failed).toEqual(["tab-2"]);
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });

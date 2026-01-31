@@ -80,6 +80,9 @@ describe("settingsStore", () => {
     });
 
     it("handles errors gracefully", async () => {
+      // Suppress expected console.error for load failure
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
       (readGlobalSettings as Mock).mockRejectedValue(new Error("Read failed"));
 
       await useSettingsStore.getState().loadSettings();
@@ -88,6 +91,8 @@ describe("settingsStore", () => {
       expect(state.error).toBe("Read failed");
       expect(state.isLoaded).toBe(true);
       expect(state.isLoading).toBe(false);
+      expect(errorSpy).toHaveBeenCalled();
+      errorSpy.mockRestore();
     });
   });
 

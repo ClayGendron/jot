@@ -111,7 +111,7 @@ export function useInternalLinkNavigation({
           : await joinFsPaths(workspacePath, pathWithoutAnchor);
 
         // Security check: validate path is within workspace (prevent path traversal)
-        if (!isWithinWorkspace(intendedPath, workspacePath)) {
+        if (!isWithinWorkspace(intendedPath, workspacePath, isCaseSensitiveFs)) {
           console.warn(`Blocked path traversal attempt: ${href}`);
           return;
         }

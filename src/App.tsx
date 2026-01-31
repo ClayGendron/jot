@@ -1112,7 +1112,7 @@ function App() {
       if (!workspacePath) return;
 
       const fileName = getFileName(sourcePath);
-      const newPath = calculateNewPath(sourcePath, targetFolderPath);
+      const newPath = await calculateNewPath(sourcePath, targetFolderPath);
 
       try {
         // Get files that link to this file (only for .md files)
@@ -1145,7 +1145,7 @@ function App() {
         alert(err instanceof Error ? err.message : `Failed to move "${fileName}"`);
       }
     },
-    [workspacePath, loadWorkspace, filePath, setFilePath]
+    [workspacePath, loadWorkspace, filePath, setFilePath, caseSensitiveFs]
   );
 
   // Handle internal link click - navigate to file and optionally scroll to heading
@@ -1226,7 +1226,7 @@ function App() {
   const handleBrokenLinkClick = useCallback(
     async (intendedPath: string) => {
       // Security check: validate path is within workspace (defense in depth)
-      if (workspacePath && !isWithinWorkspace(intendedPath, workspacePath)) {
+      if (workspacePath && !isWithinWorkspace(intendedPath, workspacePath, caseSensitiveFs)) {
         console.warn(`Blocked path traversal attempt: ${intendedPath}`);
         alert("Cannot create file outside workspace.");
         return;

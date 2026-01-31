@@ -8,7 +8,7 @@
 import { readFile, writeFile, renamePath, getFileName } from "@/lib/tauri/files";
 import { buildDisplayPath } from "./linkService";
 import { updateLinksInContent } from "./linkUpdater";
-import { getParentPathSync, normalizeForComparison } from "@/lib/path/pathUtils";
+import { getParentPathSync, joinFsPaths, normalizeForComparison } from "@/lib/path/pathUtils";
 import normalizePathLib from "normalize-path";
 import isPathInside from "is-path-inside";
 
@@ -99,16 +99,16 @@ export function validateMove(
 }
 
 /**
- * Calculate the new path for a file/folder being moved
+ * Calculate the new path for a file/folder being moved.
+ * Normalizes paths to forward-slash format for internal consistency.
+ * Tauri commands handle platform-specific path conversions when accessing the filesystem.
  */
-export function calculateNewPath(
+export async function calculateNewPath(
   sourcePath: string,
   targetFolderPath: string
-): string {
+): Promise<string> {
   const fileName = getFileName(sourcePath);
-  // Normalize for cross-platform consistency (Windows backslashes → forward slashes)
-  const normalizedTarget = normalizePathLib(targetFolderPath).replace(/\/+$/, "");
-  return `${normalizedTarget}/${fileName}`;
+  return joinFsPaths(targetFolderPath, fileName);
 }
 
 /**
@@ -157,7 +157,7 @@ export async function moveFileWithLinkUpdates(
   const errors: string[] = [];
 
   // Calculate paths
-  const newPath = calculateNewPath(sourcePath, targetFolderPath);
+  const newPath = await calculateNewPath(sourcePath, targetFolderPath);
   const oldRelative = buildDisplayPath(sourcePath, workspacePath);
   const newRelative = buildDisplayPath(newPath, workspacePath);
 

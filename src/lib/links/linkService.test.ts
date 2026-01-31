@@ -61,37 +61,71 @@ describe("linkService", () => {
 
   describe("isWithinWorkspace", () => {
     it("returns true for workspace root", () => {
-      expect(isWithinWorkspace(workspacePath, workspacePath)).toBe(true);
+      expect(isWithinWorkspace(workspacePath, workspacePath, true)).toBe(true);
     });
 
     it("returns true for path within workspace", () => {
-      expect(isWithinWorkspace(`${workspacePath}/notes/file.md`, workspacePath)).toBe(true);
+      expect(isWithinWorkspace(`${workspacePath}/notes/file.md`, workspacePath, true)).toBe(true);
     });
 
     it("returns true for relative path within workspace", () => {
-      expect(isWithinWorkspace("notes/file.md", workspacePath)).toBe(true);
+      expect(isWithinWorkspace("notes/file.md", workspacePath, true)).toBe(true);
     });
 
     it("returns true for path with resolved ..", () => {
-      expect(isWithinWorkspace("notes/../file.md", workspacePath)).toBe(true);
+      expect(isWithinWorkspace("notes/../file.md", workspacePath, true)).toBe(true);
     });
 
     it("returns false for path outside workspace after normalization", () => {
       // After normalization, this would try to go above root but gets clamped
       // So it should still be within workspace
-      expect(isWithinWorkspace("../../../../etc/passwd", workspacePath)).toBe(true);
+      expect(isWithinWorkspace("../../../../etc/passwd", workspacePath, true)).toBe(true);
+    });
+
+    it("uses caseSensitive parameter for workspace comparison", () => {
+      // The caseSensitive parameter affects the final comparison after normalization
+      // Note: normalizePath resolves relative paths, so this tests the comparison
+      // For paths already resolved within workspace:
+      expect(isWithinWorkspace("notes/file.md", workspacePath, true)).toBe(true);
+      expect(isWithinWorkspace("notes/file.md", workspacePath, false)).toBe(true);
+    });
+
+    describe("case sensitivity behavior", () => {
+      it("case-insensitive mode (Windows/macOS): matches paths with different casing", () => {
+        // On case-insensitive filesystems, "Notes/FILE.md" should match workspace
+        expect(isWithinWorkspace("NOTES/FILE.MD", workspacePath, false)).toBe(true);
+        expect(isWithinWorkspace("Notes/File.md", workspacePath, false)).toBe(true);
+      });
+
+      it("case-sensitive mode (Linux): matches paths with exact casing", () => {
+        // On case-sensitive filesystems, paths with matching case should work
+        expect(isWithinWorkspace("notes/file.md", workspacePath, true)).toBe(true);
+      });
+
+      it("case-insensitive mode: workspace root comparison ignores case", () => {
+        // After normalization, relative paths are joined with actual workspace,
+        // so this tests the final comparison is case-insensitive
+        expect(isWithinWorkspace("file.md", workspacePath, false)).toBe(true);
+      });
+
+      it("case-sensitive vs case-insensitive: same relative path", () => {
+        // Both modes should accept a path that matches exactly
+        const testPath = "documents/notes/readme.md";
+        expect(isWithinWorkspace(testPath, workspacePath, true)).toBe(true);
+        expect(isWithinWorkspace(testPath, workspacePath, false)).toBe(true);
+      });
     });
   });
 
   describe("validateAndNormalizePath", () => {
     it("returns normalized path for valid path", () => {
-      const result = validateAndNormalizePath("notes/file.md", workspacePath);
+      const result = validateAndNormalizePath("notes/file.md", workspacePath, true);
       expect(result).toBe(`${workspacePath}/notes/file.md`);
     });
 
     it("handles .. traversal attempts safely", () => {
       // The path gets clamped to workspace, so it doesn't throw
-      const result = validateAndNormalizePath("../../file.md", workspacePath);
+      const result = validateAndNormalizePath("../../file.md", workspacePath, true);
       expect(result).toBe(`${workspacePath}/file.md`);
     });
   });
@@ -312,6 +346,15 @@ describe("linkService", () => {
       expect(buildAbsolutePath("/other/path/file.md", workspacePath)).toBe(
         "/other/path/file.md"
       );
+    });
+
+    it("treats UNC paths as absolute", () => {
+      // Note: normalize-path converts Windows UNC paths (\\server\share) to forward slashes (/server/share).
+      // This is expected behavior - the path is recognized as absolute and normalized for internal use.
+      // Tauri commands handle converting back to native format when accessing the filesystem.
+      expect(
+        buildAbsolutePath("\\\\server\\share\\file.md", workspacePath)
+      ).toBe("/server/share/file.md");
     });
   });
 

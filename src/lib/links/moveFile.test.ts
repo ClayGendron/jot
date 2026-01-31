@@ -5,12 +5,16 @@
  * and that internal links are correctly updated when files move.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   validateMove,
   calculateNewPath,
   updateLinksForMove,
 } from "./moveFile";
+
+vi.mock("@tauri-apps/api/path", () => ({
+  join: vi.fn((...segments: string[]) => Promise.resolve(segments.join("/"))),
+}));
 
 describe("validateMove", () => {
   const workspacePath = "/workspace";
@@ -151,40 +155,40 @@ describe("validateMove", () => {
 });
 
 describe("calculateNewPath", () => {
-  it("calculates new path for file moved to folder", () => {
-    const result = calculateNewPath(
+  it("calculates new path for file moved to folder", async () => {
+    const result = await calculateNewPath(
       "/workspace/file.md",
       "/workspace/folder"
     );
     expect(result).toBe("/workspace/folder/file.md");
   });
 
-  it("calculates new path for file moved to root", () => {
-    const result = calculateNewPath(
+  it("calculates new path for file moved to root", async () => {
+    const result = await calculateNewPath(
       "/workspace/folder/file.md",
       "/workspace"
     );
     expect(result).toBe("/workspace/file.md");
   });
 
-  it("calculates new path for nested file", () => {
-    const result = calculateNewPath(
+  it("calculates new path for nested file", async () => {
+    const result = await calculateNewPath(
       "/workspace/a/b/file.md",
       "/workspace/x/y"
     );
     expect(result).toBe("/workspace/x/y/file.md");
   });
 
-  it("preserves filename with spaces", () => {
-    const result = calculateNewPath(
+  it("preserves filename with spaces", async () => {
+    const result = await calculateNewPath(
       "/workspace/my file.md",
       "/workspace/folder"
     );
     expect(result).toBe("/workspace/folder/my file.md");
   });
 
-  it("preserves filename with special characters", () => {
-    const result = calculateNewPath(
+  it("preserves filename with special characters", async () => {
+    const result = await calculateNewPath(
       "/workspace/file (1).md",
       "/workspace/folder"
     );

@@ -6,9 +6,9 @@
  */
 
 import { generateHeadingId, type Heading } from "@/lib/markdown/parser";
+import { isAbsolutePath } from "@/lib/path/pathUtils";
 import he from "he";
 import normalizePathLib from "normalize-path";
-import isPathInside from "is-path-inside";
 
 /**
  * Represents an internal link extracted from content
@@ -69,20 +69,31 @@ export function normalizePath(path: string, workspacePath: string): string {
 /**
  * Check if a path is within the workspace (security check for path traversal)
  * Handles both relative and absolute paths
+ *
+ * @param path - Path to check
+ * @param workspacePath - Workspace root path
+ * @param caseSensitive - Whether to compare case-sensitively (Linux: true, Windows/macOS: false)
  */
 export function isWithinWorkspace(
   path: string,
-  workspacePath: string
+  workspacePath: string,
+  caseSensitive: boolean
 ): boolean {
-  const normalizedWorkspace = normalizePathLib(workspacePath);
-
   // First normalize the path relative to workspace (handles .., etc)
   const resolvedPath = normalizePath(path, workspacePath);
 
+  // Use case-aware comparison
+  const compareResolved = caseSensitive
+    ? normalizePathLib(resolvedPath)
+    : normalizePathLib(resolvedPath).toLowerCase();
+  const compareWorkspace = caseSensitive
+    ? normalizePathLib(workspacePath)
+    : normalizePathLib(workspacePath).toLowerCase();
+
   // Now check if it's within the workspace
   return (
-    resolvedPath === normalizedWorkspace ||
-    isPathInside(resolvedPath, normalizedWorkspace)
+    compareResolved === compareWorkspace ||
+    compareResolved.startsWith(compareWorkspace + "/")
   );
 }
 
@@ -92,10 +103,11 @@ export function isWithinWorkspace(
  */
 export function validateAndNormalizePath(
   path: string,
-  workspacePath: string
+  workspacePath: string,
+  caseSensitive: boolean
 ): string {
   const normalized = normalizePath(path, workspacePath);
-  if (!isWithinWorkspace(normalized, workspacePath)) {
+  if (!isWithinWorkspace(normalized, workspacePath, caseSensitive)) {
     throw new Error(`Path "${path}" is outside workspace`);
   }
   return normalized;
@@ -227,8 +239,8 @@ export function buildAbsolutePath(
 ): string {
   const normalizedRelative = normalizePathLib(relativePath);
   const normalizedWorkspace = normalizePathLib(workspacePath);
-  // Check for absolute paths (Unix or Windows drive letter)
-  if (normalizedRelative.startsWith("/") || /^[A-Za-z]:/.test(normalizedRelative)) {
+  // Check for absolute paths (Unix, Windows drive, or UNC)
+  if (isAbsolutePath(relativePath) || isAbsolutePath(normalizedRelative)) {
     return normalizedRelative;
   }
   return `${normalizedWorkspace}/${normalizedRelative}`;

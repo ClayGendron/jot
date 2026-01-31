@@ -131,6 +131,9 @@ describe("useInternalLinkNavigation", () => {
   });
 
   it("does not navigate for non-existent files", async () => {
+    // Suppress expected console.warn for missing file
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
     const { result } = renderHook(() =>
       useInternalLinkNavigation({
         onNavigate,
@@ -142,6 +145,8 @@ describe("useInternalLinkNavigation", () => {
     await result.current.handleLinkClick("missing.md");
 
     expect(onNavigate).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith("Internal link target not found: missing.md");
+    warnSpy.mockRestore();
   });
 
   it("calls onBrokenLinkClick for non-existent files when provided", async () => {
