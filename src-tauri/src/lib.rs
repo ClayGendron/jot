@@ -96,9 +96,12 @@ fn atomic_write(path: &str, content: &str) -> Result<(), String> {
     let result = temp.persist(target)
         .map_err(|e| format!("Failed to persist file: {}", e));
 
-    // Clean up backup on success
     if result.is_ok() && had_backup {
+        // Clean up backup on success
         let _ = fs::remove_file(&backup);
+    } else if result.is_err() && had_backup {
+        // Restore backup on failure to prevent data loss
+        let _ = fs::rename(&backup, target);
     }
 
     result.map(|_| ())

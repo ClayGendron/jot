@@ -6,6 +6,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useInternalLinkNavigation } from "./useInternalLinkNavigation";
 
+// Mock path utilities (joinFsPaths uses Tauri API)
+vi.mock("@/lib/path/pathUtils", () => ({
+  joinFsPaths: vi.fn((...segments: string[]) =>
+    Promise.resolve(segments.join("/"))
+  ),
+}));
+
 // Mock the workspace store
 vi.mock("@/stores/workspaceStore", () => {
   // FileTree structure that the hook now uses directly
@@ -118,7 +125,7 @@ describe("useInternalLinkNavigation", () => {
     expect(onNavigate).not.toHaveBeenCalled();
   });
 
-  it("does not navigate for non-existent files", () => {
+  it("does not navigate for non-existent files", async () => {
     const { result } = renderHook(() =>
       useInternalLinkNavigation({
         onNavigate,
@@ -127,12 +134,12 @@ describe("useInternalLinkNavigation", () => {
       })
     );
 
-    result.current.handleLinkClick("missing.md");
+    await result.current.handleLinkClick("missing.md");
 
     expect(onNavigate).not.toHaveBeenCalled();
   });
 
-  it("calls onBrokenLinkClick for non-existent files when provided", () => {
+  it("calls onBrokenLinkClick for non-existent files when provided", async () => {
     const onBrokenLinkClick = vi.fn();
 
     const { result } = renderHook(() =>
@@ -144,7 +151,7 @@ describe("useInternalLinkNavigation", () => {
       })
     );
 
-    result.current.handleLinkClick("missing.md");
+    await result.current.handleLinkClick("missing.md");
 
     expect(onNavigate).not.toHaveBeenCalled();
     expect(onBrokenLinkClick).toHaveBeenCalledWith("/workspace/missing.md");

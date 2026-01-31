@@ -9,6 +9,7 @@ import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { resolveInternalLink, isInternalLink, isSameFileHeadingLink } from "@/lib/links/resolver";
 import { isWithinWorkspace, shouldScrollOnly } from "@/lib/links/linkService";
+import { joinFsPaths } from "@/lib/path/pathUtils";
 import type { FileEntry } from "@/lib/tauri/files";
 
 export interface UseInternalLinkNavigationOptions {
@@ -27,8 +28,8 @@ export interface UseInternalLinkNavigationOptions {
 }
 
 export interface UseInternalLinkNavigationResult {
-  /** Handle a link click event */
-  handleLinkClick: (href: string) => void;
+  /** Handle a link click event (async for path resolution on Windows) */
+  handleLinkClick: (href: string) => Promise<void>;
 }
 
 /**
@@ -65,7 +66,7 @@ export function useInternalLinkNavigation({
   }, [fileTree]);
 
   const handleLinkClick = useCallback(
-    (href: string) => {
+    async (href: string) => {
       // Handle same-file heading links (#heading)
       if (isSameFileHeadingLink(href)) {
         const heading = href.slice(1); // Remove the leading #
@@ -103,11 +104,11 @@ export function useInternalLinkNavigation({
         onNavigate(resolved.resolvedPath, resolved.heading);
       } else {
         // File doesn't exist - offer to create it
-        // Build the intended path from href
+        // Build the intended path from href using proper path joining for UNC/Windows support
         const pathWithoutAnchor = href.split("#")[0];
         const intendedPath = pathWithoutAnchor.startsWith("/")
           ? pathWithoutAnchor
-          : `${workspacePath}/${pathWithoutAnchor}`;
+          : await joinFsPaths(workspacePath, pathWithoutAnchor);
 
         // Security check: validate path is within workspace (prevent path traversal)
         if (!isWithinWorkspace(intendedPath, workspacePath)) {

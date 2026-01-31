@@ -964,7 +964,8 @@ function App() {
       const name = window.prompt("File name:", "untitled.md");
       if (!name) return;
 
-      const fileName = name.endsWith(".md") ? name : `${name}.md`;
+      // Case-insensitive check to avoid creating Note.MD.md
+      const fileName = name.toLowerCase().endsWith(".md") ? name : `${name}.md`;
       // Use async joinFsPaths for UNC path support on Windows
       const newPath = await joinFsPaths(parentPath, fileName);
 
