@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { FileEntry } from "@/lib/tauri/files";
 import { sortFileEntries } from "@/lib/files/sortFiles";
+import { getRelativePath } from "@/lib/path/pathUtils";
 
 /**
  * Workspace state management
@@ -316,8 +317,9 @@ export function selectAllFilesForSuggestion(state: WorkspaceState): SuggestionFi
     for (const entry of entries) {
       if (entry.is_markdown) {
         // Get relative path from workspace root
+        // Uses getRelativePath for cross-platform consistency (Windows backslashes → forward slashes)
         const displayPath = workspacePath
-          ? entry.path.replace(workspacePath + "/", "")
+          ? getRelativePath(workspacePath, entry.path) || entry.name
           : entry.name;
 
         files.push({

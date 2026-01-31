@@ -6,6 +6,7 @@
  */
 
 import { readFile, writeFile, renamePath } from "@/lib/tauri/files";
+import normalizePath from "normalize-path";
 
 /**
  * Escape special regex characters in a string
@@ -16,12 +17,15 @@ function escapeRegex(str: string): string {
 
 /**
  * Get relative path from workspace root
+ * Normalizes paths for cross-platform consistency (Windows backslashes → forward slashes)
  */
 function getRelativePath(absolutePath: string, workspacePath: string): string {
-  if (absolutePath.startsWith(workspacePath + "/")) {
-    return absolutePath.slice(workspacePath.length + 1);
+  const normalizedPath = normalizePath(absolutePath);
+  const normalizedWorkspace = normalizePath(workspacePath);
+  if (normalizedPath.startsWith(normalizedWorkspace + "/")) {
+    return normalizedPath.slice(normalizedWorkspace.length + 1);
   }
-  return absolutePath;
+  return normalizedPath;
 }
 
 /**

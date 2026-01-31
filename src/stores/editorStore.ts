@@ -60,6 +60,8 @@ export interface EditorUIState {
   sourceMode: boolean;
   /** Show line numbers in code blocks */
   showLineNumbers: boolean;
+  /** Whether filesystem is case-sensitive (Linux: true, Windows/macOS: false) */
+  isCaseSensitiveFs: boolean;
 }
 
 export interface EditorState extends DocumentState, EditorUIState, LayoutState {
@@ -87,6 +89,7 @@ export interface EditorState extends DocumentState, EditorUIState, LayoutState {
   setSidebarWidth: (width: number) => void;
   toggleZenMode: () => void;
   setLayoutState: (layout: Partial<LayoutState>) => void;
+  setIsCaseSensitiveFs: (value: boolean) => void;
 }
 
 const initialDocumentState: DocumentState = {
@@ -120,6 +123,7 @@ const initialUIState: EditorUIState = {
   typewriterMode: false,
   sourceMode: false,
   showLineNumbers: false,
+  isCaseSensitiveFs: false, // Default to case-insensitive (Windows/macOS), updated at startup
 };
 
 const initialLayoutState: LayoutState = {
@@ -196,6 +200,8 @@ export const useEditorStore = create<EditorState>((set) => ({
   toggleZenMode: () => set((state) => ({ zenMode: !state.zenMode })),
 
   setLayoutState: (layout) => set(layout),
+
+  setIsCaseSensitiveFs: (isCaseSensitiveFs) => set({ isCaseSensitiveFs }),
 }));
 
 /**
@@ -223,6 +229,7 @@ export const selectUIState = (state: EditorState): EditorUIState => ({
   typewriterMode: state.typewriterMode,
   sourceMode: state.sourceMode,
   showLineNumbers: state.showLineNumbers,
+  isCaseSensitiveFs: state.isCaseSensitiveFs,
 });
 
 export const selectLayoutState = (state: EditorState): LayoutState => ({

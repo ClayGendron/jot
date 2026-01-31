@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useMemo } from "react";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { useEditorStore } from "@/stores/editorStore";
 import { resolveInternalLink, isInternalLink, isSameFileHeadingLink } from "@/lib/links/resolver";
 import { isWithinWorkspace, shouldScrollOnly } from "@/lib/links/linkService";
 import type { FileEntry } from "@/lib/tauri/files";
@@ -44,6 +45,7 @@ export function useInternalLinkNavigation({
   // Use individual selectors to avoid React 19 + Zustand snapshot caching issues
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const fileTree = useWorkspaceStore((state) => state.fileTree);
+  const isCaseSensitiveFs = useEditorStore((state) => state.isCaseSensitiveFs);
 
   // Derive file list from fileTree using useMemo for stable references
   const fileInfos = useMemo(() => {
@@ -87,7 +89,7 @@ export function useInternalLinkNavigation({
         return;
       }
 
-      const resolved = resolveInternalLink(href, workspacePath, fileInfos);
+      const resolved = resolveInternalLink(href, workspacePath, fileInfos, isCaseSensitiveFs);
 
       if (resolved.exists && resolved.resolvedPath) {
         // Check if this is same-file navigation (e.g., "currentfile.md#section")
@@ -120,7 +122,7 @@ export function useInternalLinkNavigation({
         }
       }
     },
-    [workspacePath, fileInfos, onNavigate, onScrollToHeading, onBrokenLinkClick, currentFilePath]
+    [workspacePath, fileInfos, isCaseSensitiveFs, onNavigate, onScrollToHeading, onBrokenLinkClick, currentFilePath]
   );
 
   // Click event listener for the container

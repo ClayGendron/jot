@@ -5,6 +5,8 @@
  * Handles filename matching, path resolution, and ambiguity detection.
  */
 
+import { getRelativePath } from "@/lib/path/pathUtils";
+
 export interface ParsedLink {
   fileName: string;
   filePath: string;
@@ -72,11 +74,17 @@ export function parseInternalLink(href: string): ParsedLink {
 
 /**
  * Resolve an internal link to a full file path
+ *
+ * @param href - The link href to resolve
+ * @param workspacePath - The workspace root path
+ * @param files - List of files to search
+ * @param caseSensitive - Whether to use case-sensitive matching (Linux: true, Windows/macOS: false)
  */
 export function resolveInternalLink(
   href: string,
   workspacePath: string,
-  files: FileInfo[]
+  files: FileInfo[],
+  caseSensitive = false
 ): ResolvedLink {
   const parsed = parseInternalLink(href);
   const { filePath, heading } = parsed;
@@ -87,31 +95,21 @@ export function resolveInternalLink(
   // Check if search includes a directory path
   const hasDirectoryPath = normalizedSearch.includes("/");
 
-  // If search has a directory path, try exact path match first
+  // Helper for path comparison based on case sensitivity
+  const pathsMatch = (a: string, b: string) =>
+    caseSensitive ? a === b : a.toLowerCase() === b.toLowerCase();
+
+  // If search has a directory path, try path match first
   if (hasDirectoryPath) {
-    const exactMatch = files.find((f) => {
-      const relativePath = f.path.replace(workspacePath + "/", "");
-      return relativePath === normalizedSearch;
+    const pathMatch = files.find((f) => {
+      const relativePath = getRelativePath(workspacePath, f.path);
+      return pathsMatch(relativePath, normalizedSearch);
     });
 
-    if (exactMatch) {
+    if (pathMatch) {
       return {
         exists: true,
-        resolvedPath: exactMatch.path,
-        heading,
-      };
-    }
-
-    // Try case-insensitive path match
-    const caseInsensitiveMatch = files.find((f) => {
-      const relativePath = f.path.replace(workspacePath + "/", "");
-      return relativePath.toLowerCase() === normalizedSearch.toLowerCase();
-    });
-
-    if (caseInsensitiveMatch) {
-      return {
-        exists: true,
-        resolvedPath: caseInsensitiveMatch.path,
+        resolvedPath: pathMatch.path,
         heading,
       };
     }
@@ -119,8 +117,8 @@ export function resolveInternalLink(
 
   // Search by filename only (or when directory path didn't match)
   const fileNameOnly = normalizedSearch.split("/").pop() || normalizedSearch;
-  const fileNameMatches = files.filter(
-    (f) => f.name.toLowerCase() === fileNameOnly.toLowerCase()
+  const fileNameMatches = files.filter((f) =>
+    pathsMatch(f.name, fileNameOnly)
   );
 
   if (fileNameMatches.length === 0) {
@@ -168,5 +166,5 @@ export function filePathToHref(
   filePath: string,
   workspacePath: string
 ): string {
-  return filePath.replace(workspacePath + "/", "");
+  return getRelativePath(workspacePath, filePath);
 }

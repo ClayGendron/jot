@@ -3,6 +3,7 @@ import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { readFolderChildren, type FileEntry } from "@/lib/tauri/files";
 import { validateMove } from "@/lib/links/moveFile";
 import { sortFileEntries } from "@/lib/files/sortFiles";
+import { normalizeForDisplay } from "@/lib/path/pathUtils";
 
 interface FileTreeItemProps {
   entry: FileEntry;
@@ -344,9 +345,10 @@ export function FileTree({
       if (!draggedPath || !workspacePath) return;
 
       // Determine target folder (if dropping on file, use its parent)
+      // Normalize path for cross-platform consistency (Windows backslashes → forward slashes)
       const targetFolder = entry.is_dir
         ? entry.path
-        : entry.path.split("/").slice(0, -1).join("/");
+        : normalizeForDisplay(entry.path).split("/").slice(0, -1).join("/");
 
       // Validate the move
       const validation = validateMove(draggedPath, targetFolder, workspacePath);
@@ -392,9 +394,10 @@ export function FileTree({
       }
 
       // Determine target folder
+      // Normalize path for cross-platform consistency (Windows backslashes → forward slashes)
       const targetFolder = targetEntry.is_dir
         ? targetEntry.path
-        : targetEntry.path.split("/").slice(0, -1).join("/");
+        : normalizeForDisplay(targetEntry.path).split("/").slice(0, -1).join("/");
 
       // Validate one more time before executing
       const validation = validateMove(draggedPath, targetFolder, workspacePath);

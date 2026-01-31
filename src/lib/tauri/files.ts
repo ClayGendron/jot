@@ -117,9 +117,17 @@ export async function openFileDialog(): Promise<string | null> {
 
 // Re-export path utilities for backward compatibility
 // These are now implemented in @/lib/path/pathUtils
-export { getFileName } from "@/lib/path/pathUtils";
+export { getFileName, getParentPath as getParentPathFs } from "@/lib/path/pathUtils";
 
 import { normalizeForDisplay } from "@/lib/path/pathUtils";
+
+/**
+ * Check if the filesystem is case-sensitive (Linux: true, Windows/macOS: false)
+ * Used for link resolution to match the correct file on each platform.
+ */
+export async function isCaseSensitiveFs(): Promise<boolean> {
+  return invoke<boolean>("jot_is_case_sensitive_fs");
+}
 
 /**
  * Get the parent directory from a path

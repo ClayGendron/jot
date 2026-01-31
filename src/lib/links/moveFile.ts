@@ -62,9 +62,9 @@ export function validateMove(
   }
 
   // Check not moving folder into itself or descendant
-  // Normalize paths for comparison
-  const normalizedSource = sourcePath.replace(/\/+$/, "");
-  const normalizedTarget = targetFolderPath.replace(/\/+$/, "");
+  // Normalize paths for cross-platform comparison (Windows backslashes → forward slashes)
+  const normalizedSource = normalizePathLib(sourcePath).replace(/\/+$/, "");
+  const normalizedTarget = normalizePathLib(targetFolderPath).replace(/\/+$/, "");
 
   if (
     normalizedTarget === normalizedSource ||
@@ -90,15 +90,18 @@ export function calculateNewPath(
   targetFolderPath: string
 ): string {
   const fileName = getFileName(sourcePath);
-  const normalizedTarget = targetFolderPath.replace(/\/+$/, "");
+  // Normalize for cross-platform consistency (Windows backslashes → forward slashes)
+  const normalizedTarget = normalizePathLib(targetFolderPath).replace(/\/+$/, "");
   return `${normalizedTarget}/${fileName}`;
 }
 
 /**
  * Get parent directory path
+ * Normalizes path for cross-platform consistency (Windows backslashes → forward slashes)
  */
 function getParentPath(path: string): string {
-  const parts = path.split("/");
+  const normalized = normalizePathLib(path);
+  const parts = normalized.split("/");
   parts.pop();
   return parts.join("/") || "/";
 }

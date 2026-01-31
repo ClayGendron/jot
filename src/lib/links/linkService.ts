@@ -203,28 +203,35 @@ export function shouldScrollOnly(
 
 /**
  * Build a display path from an absolute path and workspace path
+ * Normalizes paths for cross-platform consistency (Windows backslashes → forward slashes)
  */
 export function buildDisplayPath(
   absolutePath: string,
   workspacePath: string
 ): string {
-  if (absolutePath.startsWith(workspacePath + "/")) {
-    return absolutePath.slice(workspacePath.length + 1);
+  const normalizedPath = normalizePathLib(absolutePath);
+  const normalizedWorkspace = normalizePathLib(workspacePath);
+  if (normalizedPath.startsWith(normalizedWorkspace + "/")) {
+    return normalizedPath.slice(normalizedWorkspace.length + 1);
   }
-  return absolutePath;
+  return normalizedPath;
 }
 
 /**
  * Build an absolute path from a relative path and workspace path
+ * Normalizes paths for cross-platform consistency (Windows backslashes → forward slashes)
  */
 export function buildAbsolutePath(
   relativePath: string,
   workspacePath: string
 ): string {
-  if (relativePath.startsWith("/")) {
-    return relativePath;
+  const normalizedRelative = normalizePathLib(relativePath);
+  const normalizedWorkspace = normalizePathLib(workspacePath);
+  // Check for absolute paths (Unix or Windows drive letter)
+  if (normalizedRelative.startsWith("/") || /^[A-Za-z]:/.test(normalizedRelative)) {
+    return normalizedRelative;
   }
-  return `${workspacePath}/${relativePath}`;
+  return `${normalizedWorkspace}/${normalizedRelative}`;
 }
 
 /**

@@ -157,8 +157,22 @@ describe("resolveInternalLink", () => {
     expect(result.alternatives).toContain("/workspace/archive/note.md");
   });
 
-  it("handles case-insensitive matching", () => {
+  it("handles case-insensitive matching by default", () => {
     const result = resolveInternalLink("TODO.md", "/workspace", mockFiles);
+    expect(result.exists).toBe(true);
+    expect(result.resolvedPath).toBe("/workspace/todo.md");
+  });
+
+  it("respects case-sensitive matching when enabled (Linux)", () => {
+    // When caseSensitive=true, "TODO.md" should NOT match "todo.md"
+    const result = resolveInternalLink("TODO.md", "/workspace", mockFiles, true);
+    expect(result.exists).toBe(false);
+    expect(result.resolvedPath).toBeNull();
+  });
+
+  it("matches exact case when case-sensitive", () => {
+    // When caseSensitive=true, exact case match should still work
+    const result = resolveInternalLink("todo.md", "/workspace", mockFiles, true);
     expect(result.exists).toBe(true);
     expect(result.resolvedPath).toBe("/workspace/todo.md");
   });

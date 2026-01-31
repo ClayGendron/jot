@@ -50,7 +50,7 @@ fn validate_in_workspace(path: &str, workspace: &str, must_exist: bool) -> Resul
 }
 
 /// Atomic write helper - writes to temp file then renames.
-/// Handles Windows overwrite semantics (rename doesn't replace).
+/// Handles Windows overwrite semantics (persist() doesn't overwrite on older tempfile versions).
 fn atomic_write(path: &str, content: &str) -> Result<(), String> {
     let target = Path::new(path);
     let parent = target.parent()
@@ -70,11 +70,47 @@ fn atomic_write(path: &str, content: &str) -> Result<(), String> {
     temp.flush()
         .map_err(|e| format!("Failed to flush content: {}", e))?;
 
-    // persist() handles platform-specific overwrite behavior
+    // Remove existing file first for Windows compatibility
+    // (persist() doesn't overwrite on Windows in older tempfile versions)
+    let _ = fs::remove_file(target); // Ignore error if file doesn't exist
+
     temp.persist(target)
         .map_err(|e| format!("Failed to persist file: {}", e))?;
 
     Ok(())
+}
+
+/// Check if a file is hidden (cross-platform)
+/// On Unix: checks for dot-prefix names
+/// On Windows: also checks FILE_ATTRIBUTE_HIDDEN flag
+fn is_hidden_file(entry: &std::fs::DirEntry) -> bool {
+    let name = entry.file_name().to_string_lossy().to_string();
+
+    // Unix convention: dot-prefix (also applies on Windows for consistency)
+    if name.starts_with('.') {
+        return true;
+    }
+
+    // Windows: check hidden attribute
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_HIDDEN: u32 = 0x02;
+
+        if let Ok(metadata) = entry.metadata() {
+            if metadata.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0 {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Check if a filename has a markdown extension (case-insensitive).
+/// Accepts .md, .MD, .Md, etc.
+fn is_markdown_file(name: &str) -> bool {
+    name.to_lowercase().ends_with(".md")
 }
 
 /// Represents a file or folder in the file tree
@@ -119,17 +155,17 @@ fn read_dir_recursive(dir: &Path, depth: usize, max_depth: usize) -> Result<Vec<
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
 
-        // Skip hidden files/folders and .jot directory
-        if name.starts_with('.') {
+        // Skip hidden files/folders (cross-platform: dot-prefix on Unix, hidden attribute on Windows)
+        if is_hidden_file(&entry) {
             continue;
         }
 
         let metadata = entry.metadata().map_err(|e| e.to_string())?;
         let is_dir = metadata.is_dir();
-        let is_markdown = !is_dir && name.ends_with(".md");
+        let is_md = !is_dir && is_markdown_file(&name);
 
         // Skip non-markdown files
-        if !is_dir && !is_markdown {
+        if !is_dir && !is_md {
             continue;
         }
 
@@ -151,7 +187,7 @@ fn read_dir_recursive(dir: &Path, depth: usize, max_depth: usize) -> Result<Vec<
             name,
             path: path.to_string_lossy().to_string(),
             is_dir,
-            is_markdown,
+            is_markdown: is_md,
             modified,
             children,
         });
@@ -199,17 +235,17 @@ fn read_folder_children_sync(path: &str) -> Result<Vec<FileEntry>, String> {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_string();
 
-        // Skip hidden files/folders and .jot directory
-        if name.starts_with('.') {
+        // Skip hidden files/folders (cross-platform: dot-prefix on Unix, hidden attribute on Windows)
+        if is_hidden_file(&entry) {
             continue;
         }
 
         let metadata = entry.metadata().map_err(|e| e.to_string())?;
         let is_dir = metadata.is_dir();
-        let is_markdown = !is_dir && name.ends_with(".md");
+        let is_md = !is_dir && is_markdown_file(&name);
 
         // Skip non-markdown files
-        if !is_dir && !is_markdown {
+        if !is_dir && !is_md {
             continue;
         }
 
@@ -226,7 +262,7 @@ fn read_folder_children_sync(path: &str) -> Result<Vec<FileEntry>, String> {
             name,
             path: path.to_string_lossy().to_string(),
             is_dir,
-            is_markdown,
+            is_markdown: is_md,
             modified,
             children,
         });
@@ -327,7 +363,7 @@ fn jot_get_file_info(path: &str) -> Result<FileEntry, String> {
         .unwrap_or_default();
 
     let is_dir = metadata.is_dir();
-    let is_markdown = !is_dir && name.ends_with(".md");
+    let is_md = !is_dir && is_markdown_file(&name);
 
     let modified = metadata
         .modified()
@@ -339,7 +375,7 @@ fn jot_get_file_info(path: &str) -> Result<FileEntry, String> {
         name,
         path: path.to_string(),
         is_dir,
-        is_markdown,
+        is_markdown: is_md,
         modified,
         children: None,
     })
@@ -402,6 +438,21 @@ fn jot_is_within_workspace(path: &str, workspace_path: &str) -> bool {
 fn jot_watch_directory(_path: &str) -> Result<(), String> {
     // TODO: Implement file watching with notify crate
     Ok(())
+}
+
+/// Returns true if the filesystem is case-sensitive.
+/// Linux filesystems are typically case-sensitive, while Windows and macOS are case-insensitive.
+/// This is used for link resolution to match the correct file on each platform.
+#[tauri::command]
+fn jot_is_case_sensitive_fs() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        true
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
 }
 
 // ==========================================
@@ -500,7 +551,10 @@ fn search_workspace_sync(
             }
 
             // Build glob pattern relative to workspace
-            let glob_pattern = workspace.join(filter).to_string_lossy().to_string();
+            // Normalize to forward slashes for glob (backslash is escape character in glob)
+            let glob_pattern = workspace.join(filter)
+                .to_string_lossy()
+                .replace('\\', "/");
             let glob_matches: std::collections::HashSet<PathBuf> =
                 glob::glob(&glob_pattern)
                     .map_err(|e| format!("Invalid path filter: {}", e))?
@@ -583,16 +637,17 @@ fn collect_markdown_files(
             Err(_) => continue, // Skip unreadable entries
         };
         let path = entry.path();
-        let name = entry.file_name().to_string_lossy().to_string();
 
-        // Skip hidden files/folders and .jot directory
-        if name.starts_with('.') {
+        // Skip hidden files/folders (cross-platform: dot-prefix on Unix, hidden attribute on Windows)
+        if is_hidden_file(&entry) {
             continue;
         }
 
+        let name = entry.file_name().to_string_lossy().to_string();
+
         if path.is_dir() {
             collect_markdown_files(&path, files, workspace_root, depth + 1, visited)?;
-        } else if name.ends_with(".md") {
+        } else if is_markdown_file(&name) {
             files.push(path);
         }
     }
@@ -907,19 +962,14 @@ fn jot_write_global_settings(app: tauri::AppHandle, settings: GlobalAppSettings)
 
     let settings_path = app_data_dir.join("settings.json");
 
-    // Write to temp file first, then rename for atomicity
-    let temp_path = app_data_dir.join("settings.json.tmp");
-
     let content = serde_json::to_string_pretty(&settings)
         .map_err(|e| format!("Failed to serialize settings: {}", e))?;
 
-    fs::write(&temp_path, &content)
-        .map_err(|e| format!("Failed to write settings: {}", e))?;
-
-    fs::rename(&temp_path, &settings_path)
-        .map_err(|e| format!("Failed to save settings: {}", e))?;
-
-    Ok(())
+    // Use atomic_write helper for Windows compatibility
+    atomic_write(
+        settings_path.to_str().ok_or("Invalid settings path")?,
+        &content
+    )
 }
 
 /// Read per-workspace settings from .jot/config.json
@@ -951,18 +1001,15 @@ fn jot_write_workspace_settings(workspace_path: &str, settings: WorkspaceSetting
         .map_err(|e| format!("Failed to create .jot directory: {}", e))?;
 
     let config_path = jot_dir.join("config.json");
-    let temp_path = jot_dir.join("config.json.tmp");
 
     let content = serde_json::to_string_pretty(&settings)
         .map_err(|e| format!("Failed to serialize workspace settings: {}", e))?;
 
-    fs::write(&temp_path, &content)
-        .map_err(|e| format!("Failed to write workspace settings: {}", e))?;
-
-    fs::rename(&temp_path, &config_path)
-        .map_err(|e| format!("Failed to save workspace settings: {}", e))?;
-
-    Ok(())
+    // Use atomic_write helper for Windows compatibility
+    atomic_write(
+        config_path.to_str().ok_or("Invalid config path")?,
+        &content
+    )
 }
 
 /// Check if a directory exists and is valid
@@ -992,6 +1039,7 @@ pub fn run() {
             jot_watch_directory,
             jot_normalize_path,
             jot_is_within_workspace,
+            jot_is_case_sensitive_fs,
             // Global search commands
             jot_search_workspace,
             // Version history commands

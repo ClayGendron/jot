@@ -139,22 +139,47 @@ fn create_preview(content: &str, max_len: usize) -> String {
 }
 
 /// Save a new version snapshot
+/// Includes retry logic with timestamp increment to handle rapid saves that could
+/// collide on the UNIQUE(file_path, created_at) constraint
 pub fn save_version(
     workspace_path: &str,
     file_path: &str,
     content: &str,
 ) -> SqliteResult<i64> {
     let conn = get_connection(workspace_path)?;
-    let now = Utc::now().timestamp_millis();
     let byte_size = content.len() as i64;
     let word_count = count_words(content);
 
+    // Retry up to 3 times with incrementing timestamp on collision
+    let max_retries = 3;
+    let base_time = Utc::now().timestamp_millis();
+
+    for retry in 0..max_retries {
+        let timestamp = base_time + retry as i64;
+
+        match conn.execute(
+            "INSERT INTO versions (file_path, content, created_at, byte_size, word_count)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![file_path, content, timestamp, byte_size, word_count],
+        ) {
+            Ok(_) => return Ok(conn.last_insert_rowid()),
+            Err(rusqlite::Error::SqliteFailure(err, _))
+                if err.extended_code == 2067 => // SQLITE_CONSTRAINT_UNIQUE
+            {
+                // Unique constraint violation - retry with incremented timestamp
+                continue;
+            }
+            Err(e) => return Err(e),
+        }
+    }
+
+    // Fallback: use timestamp + max_retries (extremely rare edge case)
+    let final_timestamp = base_time + max_retries as i64;
     conn.execute(
         "INSERT INTO versions (file_path, content, created_at, byte_size, word_count)
          VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![file_path, content, now, byte_size, word_count],
+        params![file_path, content, final_timestamp, byte_size, word_count],
     )?;
-
     Ok(conn.last_insert_rowid())
 }
 
@@ -421,11 +446,10 @@ mod tests {
         let workspace = setup_test_workspace();
         let file_path = "/test/document.md";
 
-        // Save multiple versions
+        // Save multiple versions - no artificial delays needed
+        // save_version now handles timestamp collisions with retry logic
         save_version(&workspace, file_path, "Version 1").unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(10));
         save_version(&workspace, file_path, "Version 2").unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(10));
         save_version(&workspace, file_path, "Version 3").unwrap();
 
         let versions = get_versions(&workspace, file_path, 10).unwrap();

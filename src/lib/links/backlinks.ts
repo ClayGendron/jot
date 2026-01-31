@@ -6,6 +6,7 @@
  */
 
 import { extractInternalLinks } from "@/lib/markdown/parser";
+import normalizePath from "normalize-path";
 
 export interface BacklinkEntry {
   /** Path of the file containing the link */
@@ -93,18 +94,18 @@ export function resolveTargetPathFromSource(
   sourceFilePath: string,
   workspacePath: string
 ): string | null {
-  // Normalize path separators (handle Windows)
-  const normalized = target.replace(/\\/g, "/").replace(/^\.\//, "");
+  // Normalize path separators (handle Windows backslashes → forward slashes)
+  const normalized = normalizePath(target).replace(/^\.\//, "");
 
   // Add .md extension if not present
   const withExt = normalized.endsWith(".md") ? normalized : `${normalized}.md`;
 
   // Normalize workspace path for comparison
-  const normalizedWorkspace = workspacePath.replace(/\\/g, "/");
+  const normalizedWorkspace = normalizePath(workspacePath);
 
   // If already absolute (starts with / or Windows drive letter), just validate within workspace
   if (withExt.startsWith("/") || /^[A-Za-z]:/.test(withExt)) {
-    const normalizedTarget = withExt.replace(/\\/g, "/");
+    const normalizedTarget = normalizePath(withExt);
     if (!normalizedTarget.startsWith(normalizedWorkspace)) {
       return null;
     }
@@ -112,7 +113,7 @@ export function resolveTargetPathFromSource(
   }
 
   // Get source file's directory
-  const normalizedSourcePath = sourceFilePath.replace(/\\/g, "/");
+  const normalizedSourcePath = normalizePath(sourceFilePath);
   const sourceDir = normalizedSourcePath.split("/").slice(0, -1).join("/");
 
   // Resolve relative path from source directory

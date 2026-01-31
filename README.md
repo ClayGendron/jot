@@ -11,13 +11,12 @@ A lightweight, fast, cross-platform markdown editor that's free forever.
 - **Spell & Grammar Check** - On-device, no cloud required
 - **Semantic Search** - Find notes by meaning, not just keywords
 - **Export** - PDF, Word, and HTML export built-in
-- **Cross-Platform** - macOS, Windows, Linux, iOS, and Android
+- **Cross-Platform** - macOS, Windows, and Linux
 - **No Cloud Lock-in** - Your files are standard markdown, stored locally
 - **Free Forever** - No subscriptions, no paid tiers
 ## Tech Stack
 
 - **Desktop**: [Tauri](https://tauri.app/) (Rust + TypeScript/React)
-- **Mobile**: React Native
 - **Editor**: [TipTap](https://tiptap.dev/)
 - **Styling**: Tailwind CSS
 ## Development

@@ -36,6 +36,7 @@ import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
 import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { useInternalLinkNavigation } from "@/hooks/useInternalLinkNavigation";
 import { readFile } from "@/lib/tauri/files";
+import { getRelativePath } from "@/lib/path/pathUtils";
 
 // Create lowlight instance with common languages
 const lowlight = createLowlight(common);
@@ -106,8 +107,9 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
     const collectFiles = (entries: FileEntry[]) => {
       for (const entry of entries) {
         if (entry.is_markdown) {
+          // Use getRelativePath for cross-platform consistency (Windows backslashes → forward slashes)
           const displayPath = workspacePath
-            ? entry.path.replace(workspacePath + "/", "")
+            ? getRelativePath(workspacePath, entry.path) || entry.name
             : entry.name;
 
           result.push({

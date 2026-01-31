@@ -38,6 +38,7 @@ import {
   joinPath,
   getFileName,
   getParentDir,
+  isCaseSensitiveFs,
   type FileEntry,
 } from "@/lib/tauri/files";
 import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
@@ -48,6 +49,7 @@ import { moveFileWithLinkUpdates, calculateNewPath } from "@/lib/links/moveFile"
 import { clampFontSize, FONT_SIZE_STEP, FONT_SIZE_DEFAULT } from "@/lib/settings/typography";
 import { getEffectiveAccent, resolveSystemTheme } from "@/lib/settings/themes";
 import type { ThemeName } from "@/lib/settings/themes";
+import { getRelativePath } from "@/lib/path/pathUtils";
 import { saveDocumentPipeline, saveAllDirtyTabs } from "@/services/saveService";
 import "./index.css";
 
@@ -84,6 +86,7 @@ function App() {
   const setMaxLineWidth = useEditorStore((state) => state.setMaxLineWidth);
   const typewriterMode = useEditorStore((state) => state.typewriterMode);
   const setTypewriterMode = useEditorStore((state) => state.toggleTypewriterMode);
+  const setIsCaseSensitiveFs = useEditorStore((state) => state.setIsCaseSensitiveFs);
 
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const storeLoadWorkspace = useWorkspaceStore((state) => state.loadWorkspace);
@@ -98,8 +101,9 @@ function App() {
     const collectFiles = (entries: FileEntry[]) => {
       for (const entry of entries) {
         if (entry.is_markdown) {
+          // Use getRelativePath for cross-platform consistency (Windows backslashes → forward slashes)
           const displayPath = workspacePath
-            ? entry.path.replace(workspacePath + "/", "")
+            ? getRelativePath(workspacePath, entry.path) || entry.name
             : entry.name;
           files.push({ name: entry.name, path: entry.path, displayPath });
         }
@@ -197,6 +201,11 @@ function App() {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  // Initialize filesystem case sensitivity on mount (Linux: true, Windows/macOS: false)
+  useEffect(() => {
+    isCaseSensitiveFs().then(setIsCaseSensitiveFs);
+  }, [setIsCaseSensitiveFs]);
 
   // Sync layout preferences from settings to editor store after settings load
   useEffect(() => {
