@@ -935,6 +935,12 @@ pub struct AppearancePreferences {
     pub line_height: f64,
     pub max_line_width: i32,
     pub typewriter_mode: bool,
+    #[serde(default = "default_copy_format")]
+    pub default_copy_format: String,
+}
+
+fn default_copy_format() -> String {
+    "formatted".to_string()
 }
 
 impl Default for AppearancePreferences {
@@ -948,6 +954,7 @@ impl Default for AppearancePreferences {
             line_height: 1.8,
             max_line_width: 72,
             typewriter_mode: false,
+            default_copy_format: default_copy_format(),
         }
     }
 }

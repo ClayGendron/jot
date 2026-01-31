@@ -32,6 +32,7 @@ import { InternalLink } from "./extensions/InternalLink";
 import { SearchAndReplace } from "./extensions/SearchAndReplace";
 import { createSuggestionRender } from "./extensions/internalLinkSuggestionRender";
 import { SourceEditor } from "./SourceEditor";
+import { EditorContextMenu } from "./EditorContextMenu";
 import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
 import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { useInternalLinkNavigation } from "@/hooks/useInternalLinkNavigation";
@@ -95,6 +96,11 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
 
   // Ref for the editor container (for internal link click handling)
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    position: { x: number; y: number };
+  } | null>(null);
 
   // Get files for internal link suggestions - compute with useMemo for React 19 compatibility
   // Using primitive selectors to avoid Zustand snapshot caching issues
@@ -295,6 +301,25 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
     []
   );
 
+  // Handle context menu (right-click)
+  const handleContextMenu = useCallback(
+    (event: React.MouseEvent) => {
+      // Only show context menu in WYSIWYG mode
+      if (sourceMode) return;
+
+      event.preventDefault();
+      setContextMenu({
+        position: { x: event.clientX, y: event.clientY },
+      });
+    },
+    [sourceMode]
+  );
+
+  // Dismiss context menu
+  const handleDismissContextMenu = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
   // Keyboard shortcuts
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
@@ -329,6 +354,7 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
       ref={containerRef}
       className={`editor-container ${focusMode ? "focus-mode" : ""} ${sourceMode ? "source-mode-active" : ""}`}
       data-testid="editor-container"
+      onContextMenu={handleContextMenu}
     >
       <EditorToolbar editor={editor} />
       {sourceMode ? (
@@ -340,6 +366,13 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
         />
       ) : (
         <EditorContent editor={editor} />
+      )}
+      {contextMenu && (
+        <EditorContextMenu
+          position={contextMenu.position}
+          editor={editor}
+          onDismiss={handleDismissContextMenu}
+        />
       )}
     </div>
   );

@@ -6,6 +6,7 @@ import type {
   AppearancePreferences,
   PersistedTabState,
   ThemeName,
+  CopyFormat,
 } from "@/lib/settings/types";
 import type { FontFamily } from "@/stores/editorStore";
 
@@ -42,6 +43,7 @@ interface RustAppearancePreferences {
   line_height: number;
   max_line_width: number;
   typewriter_mode: boolean;
+  default_copy_format?: string;
 }
 
 interface RustGlobalAppSettings {
@@ -90,6 +92,7 @@ function fromRustAppearance(rust: RustAppearancePreferences): AppearancePreferen
     lineHeight: rust.line_height,
     maxLineWidth: rust.max_line_width,
     typewriterMode: rust.typewriter_mode,
+    defaultCopyFormat: (rust.default_copy_format as CopyFormat) || "formatted",
   };
 }
 
@@ -106,6 +109,7 @@ function toRustAppearance(ts: AppearancePreferences): RustAppearancePreferences 
     line_height: ts.lineHeight,
     max_line_width: ts.maxLineWidth,
     typewriter_mode: ts.typewriterMode,
+    default_copy_format: ts.defaultCopyFormat ?? "formatted",
   };
 }
 

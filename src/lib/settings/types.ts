@@ -6,6 +6,8 @@
 
 import type { ThemeName } from "./themes";
 export type { ThemeName } from "./themes";
+import type { CopyFormat } from "../clipboard/copyFormatted";
+export type { CopyFormat } from "../clipboard/copyFormatted";
 
 /**
  * A recent workspace entry
@@ -49,6 +51,8 @@ export interface AppearancePreferences {
   maxLineWidth: number;
   /** Typewriter mode (keeps current line centered) */
   typewriterMode: boolean;
+  /** Default copy format (formatted = rich text, markdown = plain text) */
+  defaultCopyFormat: CopyFormat;
 }
 
 /**
@@ -124,6 +128,7 @@ export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
   lineHeight: 1.8,
   maxLineWidth: 72,
   typewriterMode: false,
+  defaultCopyFormat: "formatted",
 };
 
 /**
