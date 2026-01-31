@@ -58,6 +58,12 @@ describe("isInternalLink", () => {
     expect(isInternalLink("note.md#heading")).toBe(true);
     expect(isInternalLink("folder/note.md#section-1")).toBe(true);
   });
+
+  it("recognizes .MD files as internal links (case-insensitive)", () => {
+    expect(isInternalLink("NOTE.MD")).toBe(true);
+    expect(isInternalLink("folder/FILE.Md")).toBe(true);
+    expect(isInternalLink("DOCS/README.MD#section")).toBe(true);
+  });
 });
 
 describe("parseInternalLink", () => {
@@ -104,6 +110,19 @@ describe("parseInternalLink", () => {
       filePath: "./notes/todo.md",
       heading: undefined,
     });
+  });
+
+  it("parses .MD filename correctly (case-insensitive)", () => {
+    const result = parseInternalLink("NOTE.MD");
+    expect(result.fileName).toBe("NOTE");
+    expect(result.filePath).toBe("NOTE.MD");
+  });
+
+  it("parses mixed-case .Md extension", () => {
+    const result = parseInternalLink("folder/File.Md#heading");
+    expect(result.fileName).toBe("File");
+    expect(result.filePath).toBe("folder/File.Md");
+    expect(result.heading).toBe("heading");
   });
 });
 

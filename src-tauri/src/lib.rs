@@ -50,7 +50,15 @@ fn validate_in_workspace(path: &str, workspace: &str, must_exist: bool) -> Resul
 }
 
 /// Atomic write helper - writes to temp file then renames.
-/// Handles Windows overwrite semantics (persist() doesn't overwrite on older tempfile versions).
+/// Uses backup-on-delete pattern for crash safety on Windows.
+///
+/// Strategy for Windows compatibility (persist() doesn't overwrite):
+/// 1. Rename existing file to .jot-bak (if it exists)
+/// 2. Persist new temp file to target
+/// 3. Delete backup on success
+///
+/// Recovery: If crash occurs between steps 1 and 2, user can manually
+/// rename .jot-bak back to the original file.
 fn atomic_write(path: &str, content: &str) -> Result<(), String> {
     let target = Path::new(path);
     let parent = target.parent()
@@ -70,14 +78,30 @@ fn atomic_write(path: &str, content: &str) -> Result<(), String> {
     temp.flush()
         .map_err(|e| format!("Failed to flush content: {}", e))?;
 
-    // Remove existing file first for Windows compatibility
-    // (persist() doesn't overwrite on Windows in older tempfile versions)
-    let _ = fs::remove_file(target); // Ignore error if file doesn't exist
+    // Windows compatibility: persist() doesn't overwrite existing files.
+    // Use backup pattern for crash safety:
+    // 1. Rename existing to .jot-bak (if exists)
+    // 2. Persist new file
+    // 3. Delete backup on success
+    let backup = target.with_extension("jot-bak");
+    let had_backup = if target.exists() {
+        // Remove any stale backup first
+        let _ = fs::remove_file(&backup);
+        // Rename current file to backup
+        fs::rename(target, &backup).ok().is_some()
+    } else {
+        false
+    };
 
-    temp.persist(target)
-        .map_err(|e| format!("Failed to persist file: {}", e))?;
+    let result = temp.persist(target)
+        .map_err(|e| format!("Failed to persist file: {}", e));
 
-    Ok(())
+    // Clean up backup on success
+    if result.is_ok() && had_backup {
+        let _ = fs::remove_file(&backup);
+    }
+
+    result.map(|_| ())
 }
 
 /// Check if a file is hidden (cross-platform)

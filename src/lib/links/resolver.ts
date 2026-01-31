@@ -48,9 +48,9 @@ export function isInternalLink(href: string): boolean {
     return false;
   }
 
-  // Check if it's a .md file (with or without anchor)
+  // Check if it's a .md file (with or without anchor) - case-insensitive
   const pathWithoutAnchor = href.split("#")[0];
-  return pathWithoutAnchor.endsWith(".md");
+  return pathWithoutAnchor.toLowerCase().endsWith(".md");
 }
 
 /**
@@ -63,7 +63,7 @@ export function parseInternalLink(href: string): ParsedLink {
   // Extract filename from path
   const pathSegments = pathPart.split("/");
   const fileNameWithExt = pathSegments[pathSegments.length - 1];
-  const fileName = fileNameWithExt.replace(/\.md$/, "");
+  const fileName = fileNameWithExt.replace(/\.md$/i, "");
 
   return {
     fileName,

@@ -35,9 +35,7 @@ import {
   renamePath,
   deletePath,
   openFolderDialog,
-  joinPath,
   getFileName,
-  getParentDir,
   isCaseSensitiveFs,
   type FileEntry,
 } from "@/lib/tauri/files";
@@ -49,7 +47,7 @@ import { moveFileWithLinkUpdates, calculateNewPath } from "@/lib/links/moveFile"
 import { clampFontSize, FONT_SIZE_STEP, FONT_SIZE_DEFAULT } from "@/lib/settings/typography";
 import { getEffectiveAccent, resolveSystemTheme } from "@/lib/settings/themes";
 import type { ThemeName } from "@/lib/settings/themes";
-import { getRelativePath } from "@/lib/path/pathUtils";
+import { getRelativePath, joinFsPaths, getParentPath } from "@/lib/path/pathUtils";
 import { saveDocumentPipeline, saveAllDirtyTabs } from "@/services/saveService";
 import "./index.css";
 
@@ -967,7 +965,8 @@ function App() {
       if (!name) return;
 
       const fileName = name.endsWith(".md") ? name : `${name}.md`;
-      const newPath = joinPath(parentPath, fileName);
+      // Use async joinFsPaths for UNC path support on Windows
+      const newPath = await joinFsPaths(parentPath, fileName);
 
       try {
         if (!workspacePath) {
@@ -993,7 +992,8 @@ function App() {
       const name = window.prompt("Folder name:");
       if (!name) return;
 
-      const newPath = joinPath(parentPath, name);
+      // Use async joinFsPaths for UNC path support on Windows
+      const newPath = await joinFsPaths(parentPath, name);
 
       try {
         if (!workspacePath) {
@@ -1017,12 +1017,13 @@ function App() {
       const newName = window.prompt("New name:", currentName);
       if (!newName || newName === currentName) return;
 
-      const parentPath = getParentDir(path);
-      const newPath = joinPath(parentPath, newName);
+      // Use async path utilities for UNC path support on Windows
+      const parentPath = await getParentPath(path);
+      const newPath = await joinFsPaths(parentPath, newName);
 
       try {
-        // Get files that link to this file (only for .md files)
-        const isMarkdown = path.endsWith(".md");
+        // Get files that link to this file (only for .md files, case-insensitive)
+        const isMarkdown = path.toLowerCase().endsWith(".md");
         const backlinks = isMarkdown
           ? useLinksStore.getState().getBacklinks(path)
           : [];
