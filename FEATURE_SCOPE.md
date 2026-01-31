@@ -844,8 +844,6 @@ workspace/
 
 -   Epic 5.1-5.2: Spell/grammar check
 
--   Epic 6.4: Copy Formatted
-
 -   Epic 10.1: iOS app
 
 -   Epic 11.1-11.2: Performance
@@ -863,6 +861,7 @@ workspace/
 -   ~~Epic 4.1: Keyword Search~~ ✅
 -   ~~Epic 6.1: PDF Export~~ ✅
 -   ~~Epic 6.2: Word/DOCX Export~~ ✅
+-   ~~Epic 6.4: Copy Formatted~~ ✅
 -   ~~Epic 7.1: Themes & Appearance~~ ✅
 -   ~~Epic 7.2: Typography~~ ✅
 -   ~~Epic 7.3: Editor Preferences~~ ✅
