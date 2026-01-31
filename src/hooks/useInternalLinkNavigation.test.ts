@@ -6,12 +6,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useInternalLinkNavigation } from "./useInternalLinkNavigation";
 
-// Mock path utilities (joinFsPaths uses Tauri API)
-vi.mock("@/lib/path/pathUtils", () => ({
-  joinFsPaths: vi.fn((...segments: string[]) =>
-    Promise.resolve(segments.join("/"))
-  ),
-}));
+// Mock path utilities (joinFsPaths uses Tauri API, but keep sync functions)
+vi.mock("@/lib/path/pathUtils", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/path/pathUtils")>();
+  return {
+    ...actual,
+    // Only mock the async Tauri function
+    joinFsPaths: vi.fn((...segments: string[]) =>
+      Promise.resolve(segments.join("/"))
+    ),
+  };
+});
 
 // Mock the workspace store
 vi.mock("@/stores/workspaceStore", () => {

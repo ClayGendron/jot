@@ -64,6 +64,17 @@ describe("isInternalLink", () => {
     expect(isInternalLink("folder/FILE.Md")).toBe(true);
     expect(isInternalLink("DOCS/README.MD#section")).toBe(true);
   });
+
+  it("rejects absolute Windows paths to avoid bogus path creation", () => {
+    // Drive letter paths
+    expect(isInternalLink("C:\\notes\\file.md")).toBe(false);
+    expect(isInternalLink("C:/notes/file.md")).toBe(false);
+    expect(isInternalLink("D:\\docs\\readme.md")).toBe(false);
+    // UNC paths
+    expect(isInternalLink("\\\\server\\share\\file.md")).toBe(false);
+    // Unix absolute paths
+    expect(isInternalLink("/home/user/notes/file.md")).toBe(false);
+  });
 });
 
 describe("parseInternalLink", () => {

@@ -142,7 +142,10 @@ export function useInternalLinkNavigation({
 
       const href = link.getAttribute("href");
       if (href) {
-        handleLinkClick(href);
+        // Catch promise rejections to avoid unhandled rejection errors
+        handleLinkClick(href).catch((err) => {
+          console.error("Failed to handle link click:", err);
+        });
       }
     };
 

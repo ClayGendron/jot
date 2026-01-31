@@ -5,7 +5,7 @@
  * Handles filename matching, path resolution, and ambiguity detection.
  */
 
-import { getRelativePath } from "@/lib/path/pathUtils";
+import { getRelativePath, isAbsolutePath } from "@/lib/path/pathUtils";
 
 export interface ParsedLink {
   fileName: string;
@@ -50,6 +50,13 @@ export function isInternalLink(href: string): boolean {
 
   // Check if it's a .md file (with or without anchor) - case-insensitive
   const pathWithoutAnchor = href.split("#")[0];
+
+  // Reject absolute paths (Windows drive letters like C:\, UNC paths like \\server)
+  // These should not be treated as internal links to avoid creating bogus paths
+  if (isAbsolutePath(pathWithoutAnchor)) {
+    return false;
+  }
+
   return pathWithoutAnchor.toLowerCase().endsWith(".md");
 }
 
