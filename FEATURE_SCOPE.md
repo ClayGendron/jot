@@ -289,7 +289,7 @@ workspace/
 
 ### 6.1 PDF Export
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -302,7 +302,7 @@ workspace/
 
 ### 6.2 Word/DOCX Export
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -819,6 +819,24 @@ workspace/
 
 -   E7.1.4: Theme applies consistently to editor and UI ✅
 
+-   E6.1.1: Export document to PDF via Export panel ✅
+
+-   E6.1.2: PDF preserves formatting via html2canvas rendering ✅
+
+-   E6.1.3: Export dialog with paper size (Letter, A4, Legal) and margins ✅
+
+-   E6.1.5: Bookmarks option for heading-based navigation ✅
+
+-   E6.1.6: jsPDF and html2canvas bundled, works offline ✅
+
+-   E6.2.1: Export to Word (.docx) via Export panel ✅
+
+-   E6.2.2: Word doc preserves headings, lists, tables, code blocks ✅
+
+-   E6.2.3: Opens correctly in MS Word and Google Docs ✅
+
+-   E6.2.4: docx library bundled, works offline ✅
+
 
 ### Remaining P0 Work
 
@@ -826,7 +844,7 @@ workspace/
 
 -   Epic 5.1-5.2: Spell/grammar check
 
--   Epic 6.1-6.2, 6.4: Export (PDF, Word, Copy Formatted)
+-   Epic 6.4: Copy Formatted
 
 -   Epic 10.1: iOS app
 
@@ -843,6 +861,8 @@ workspace/
 -   ~~Epic 3.1: Automatic Saving~~ ✅
 -   ~~Epic 3.2: Version History~~ ✅
 -   ~~Epic 4.1: Keyword Search~~ ✅
+-   ~~Epic 6.1: PDF Export~~ ✅
+-   ~~Epic 6.2: Word/DOCX Export~~ ✅
 -   ~~Epic 7.1: Themes & Appearance~~ ✅
 -   ~~Epic 7.2: Typography~~ ✅
 -   ~~Epic 7.3: Editor Preferences~~ ✅
