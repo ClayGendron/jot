@@ -28,7 +28,7 @@ describe("buildBacklinksIndex", () => {
       },
     ];
 
-    const index = buildBacklinksIndex(files, workspacePath);
+    const index = buildBacklinksIndex(files, workspacePath, true);
 
     expect(index["/workspace/note-b.md"]).toHaveLength(1);
     expect(index["/workspace/note-b.md"][0].sourcePath).toBe("/workspace/note-a.md");
@@ -45,7 +45,7 @@ describe("buildBacklinksIndex", () => {
       },
     ];
 
-    const index = buildBacklinksIndex(files, workspacePath);
+    const index = buildBacklinksIndex(files, workspacePath, true);
 
     expect(index["/workspace/guide.md"]).toHaveLength(1);
     expect(index["/workspace/guide.md"][0].sourceName).toBe("doc");
@@ -66,7 +66,7 @@ describe("buildBacklinksIndex", () => {
       },
     ];
 
-    const index = buildBacklinksIndex(files, workspacePath);
+    const index = buildBacklinksIndex(files, workspacePath, true);
 
     expect(index["/workspace/target.md"]).toHaveLength(3);
   });
@@ -80,7 +80,7 @@ describe("buildBacklinksIndex", () => {
       },
     ];
 
-    const index = buildBacklinksIndex(files, workspacePath);
+    const index = buildBacklinksIndex(files, workspacePath, true);
 
     expect(Object.keys(index)).toHaveLength(0);
   });
@@ -94,10 +94,64 @@ describe("buildBacklinksIndex", () => {
       },
     ];
 
-    const index = buildBacklinksIndex(files, workspacePath);
+    const index = buildBacklinksIndex(files, workspacePath, true);
 
     expect(index["/workspace/reference.md"][0].context).toContain("before the link");
     expect(index["/workspace/reference.md"][0].context).toContain("more info");
+  });
+
+  describe("case sensitivity", () => {
+    it("case-insensitive: indexes with lowercase keys", () => {
+      const files: FileContent[] = [
+        {
+          path: "/workspace/doc.md",
+          name: "doc.md",
+          content: "See [Guide](Guide.md) for details.",
+        },
+      ];
+
+      const index = buildBacklinksIndex(files, workspacePath, false);
+
+      // Key should be lowercase
+      expect(index["/workspace/guide.md"]).toHaveLength(1);
+      expect(index["/workspace/Guide.md"]).toBeUndefined();
+    });
+
+    it("case-insensitive: merges links with different case", () => {
+      const files: FileContent[] = [
+        {
+          path: "/workspace/a.md",
+          name: "a.md",
+          content: "See [[Target]] here.",
+        },
+        {
+          path: "/workspace/b.md",
+          name: "b.md",
+          content: "See [[target]] here.",
+        },
+      ];
+
+      const index = buildBacklinksIndex(files, workspacePath, false);
+
+      // Both links should be merged under the same lowercase key
+      expect(index["/workspace/target.md"]).toHaveLength(2);
+    });
+
+    it("case-sensitive: preserves case in keys", () => {
+      const files: FileContent[] = [
+        {
+          path: "/workspace/doc.md",
+          name: "doc.md",
+          content: "See [Guide](Guide.md) for details.",
+        },
+      ];
+
+      const index = buildBacklinksIndex(files, workspacePath, true);
+
+      // Key should preserve case
+      expect(index["/workspace/Guide.md"]).toHaveLength(1);
+      expect(index["/workspace/guide.md"]).toBeUndefined();
+    });
   });
 });
 
@@ -109,7 +163,7 @@ describe("getBacklinksForFile", () => {
       ],
     };
 
-    const backlinks = getBacklinksForFile(index, "/workspace/target.md");
+    const backlinks = getBacklinksForFile(index, "/workspace/target.md", true);
 
     expect(backlinks).toHaveLength(1);
     expect(backlinks[0].sourceName).toBe("a");
@@ -122,9 +176,35 @@ describe("getBacklinksForFile", () => {
       ],
     };
 
-    const backlinks = getBacklinksForFile(index, "/workspace/other.md");
+    const backlinks = getBacklinksForFile(index, "/workspace/other.md", true);
 
     expect(backlinks).toHaveLength(0);
+  });
+
+  describe("case sensitivity", () => {
+    it("case-insensitive: finds backlinks with different case", () => {
+      const index = {
+        "/workspace/target.md": [
+          { sourcePath: "/workspace/a.md", sourceName: "a", linkText: "target" },
+        ],
+      };
+
+      const backlinks = getBacklinksForFile(index, "/workspace/Target.md", false);
+
+      expect(backlinks).toHaveLength(1);
+    });
+
+    it("case-sensitive: does not find backlinks with different case", () => {
+      const index = {
+        "/workspace/target.md": [
+          { sourcePath: "/workspace/a.md", sourceName: "a", linkText: "target" },
+        ],
+      };
+
+      const backlinks = getBacklinksForFile(index, "/workspace/Target.md", true);
+
+      expect(backlinks).toHaveLength(0);
+    });
   });
 });
 

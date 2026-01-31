@@ -12,7 +12,7 @@ describe("updateLinksInContent", () => {
   describe("basic link updates", () => {
     it("updates simple markdown links", () => {
       const markdown = "See [my note](old-name.md) for details.";
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       expect(result).toBe("See [my note](new-name.md) for details.");
     });
 
@@ -20,20 +20,20 @@ describe("updateLinksInContent", () => {
       const markdown = `[Link 1](old-name.md)
 Some text here.
 [Link 2](old-name.md)`;
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       expect(result).toContain("[Link 1](new-name.md)");
       expect(result).toContain("[Link 2](new-name.md)");
     });
 
     it("does not update non-matching links", () => {
       const markdown = "[Link](other-file.md)";
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       expect(result).toBe("[Link](other-file.md)");
     });
 
     it("does not update partial matches", () => {
       const markdown = "[Link](old-name-extended.md)";
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       expect(result).toBe("[Link](old-name-extended.md)");
     });
   });
@@ -41,19 +41,19 @@ Some text here.
   describe("anchor links", () => {
     it("preserves anchor when updating path", () => {
       const markdown = "[Section](old-name.md#heading)";
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       expect(result).toBe("[Section](new-name.md#heading)");
     });
 
     it("handles complex anchors with hyphens", () => {
       const markdown = "[Section](old-name.md#my-complex-heading-id)";
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       expect(result).toBe("[Section](new-name.md#my-complex-heading-id)");
     });
 
     it("handles anchors with numbers", () => {
       const markdown = "[Section](old-name.md#section-1-overview)";
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       expect(result).toBe("[Section](new-name.md#section-1-overview)");
     });
   });
@@ -64,7 +64,8 @@ Some text here.
       const result = updateLinksInContent(
         markdown,
         "folder/old-name.md",
-        "folder/new-name.md"
+        "folder/new-name.md",
+        true
       );
       expect(result).toBe("[Note](folder/new-name.md)");
     });
@@ -74,14 +75,15 @@ Some text here.
       const result = updateLinksInContent(
         markdown,
         "a/b/c/old-name.md",
-        "a/b/c/new-name.md"
+        "a/b/c/new-name.md",
+        true
       );
       expect(result).toBe("[Note](a/b/c/new-name.md)");
     });
 
     it("handles links with ./ prefix", () => {
       const markdown = "[Note](./old-name.md)";
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       expect(result).toBe("[Note](new-name.md)");
     });
 
@@ -90,7 +92,8 @@ Some text here.
       const result = updateLinksInContent(
         markdown,
         "folder/old-name.md",
-        "folder/new-name.md"
+        "folder/new-name.md",
+        true
       );
       expect(result).toBe("[Note](folder/new-name.md)");
     });
@@ -102,14 +105,15 @@ Some text here.
       const result = updateLinksInContent(
         markdown,
         "my-file (1).md",
-        "my-file (2).md"
+        "my-file (2).md",
+        true
       );
       expect(result).toBe("[Note](my-file (2).md)");
     });
 
     it("handles spaces in filename", () => {
       const markdown = "[Note](my file.md)";
-      const result = updateLinksInContent(markdown, "my file.md", "new file.md");
+      const result = updateLinksInContent(markdown, "my file.md", "new file.md", true);
       expect(result).toBe("[Note](new file.md)");
     });
 
@@ -124,7 +128,7 @@ Some text here.
 Link to [old note](old-name.md) and [other note](other.md).
 
 Also see [old with anchor](old-name.md#section).`;
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       expect(result).toContain("[old note](new-name.md)");
       expect(result).toContain("[other note](other.md)");
       expect(result).toContain("[old with anchor](new-name.md#section)");
@@ -132,7 +136,7 @@ Also see [old with anchor](old-name.md#section).`;
 
     it("preserves markdown formatting around links", () => {
       const markdown = "**Bold [link](old-name.md)** and *italic [link](old-name.md)*";
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       expect(result).toBe(
         "**Bold [link](new-name.md)** and *italic [link](new-name.md)*"
       );
@@ -142,7 +146,7 @@ Also see [old with anchor](old-name.md#section).`;
       const markdown = `- Item with [link](old-name.md)
 - Another item
 - [Another link](old-name.md#anchor)`;
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       expect(result).toContain("[link](new-name.md)");
       expect(result).toContain("[Another link](new-name.md#anchor)");
     });
@@ -151,26 +155,58 @@ Also see [old with anchor](old-name.md#section).`;
   describe("edge cases", () => {
     it("returns unchanged content when no links match", () => {
       const markdown = "No links here, just text.";
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       expect(result).toBe("No links here, just text.");
     });
 
     it("handles empty content", () => {
-      const result = updateLinksInContent("", "old-name.md", "new-name.md");
+      const result = updateLinksInContent("", "old-name.md", "new-name.md", true);
       expect(result).toBe("");
     });
 
     it("does not update external links", () => {
       const markdown = "[External](https://example.com/old-name.md)";
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       expect(result).toBe("[External](https://example.com/old-name.md)");
     });
 
     it("does not update image syntax", () => {
       const markdown = "![Image](old-name.md)";
-      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md");
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
       // Images use ![...] syntax, not [...], so they won't match
       expect(result).toBe("![Image](old-name.md)");
+    });
+  });
+
+  describe("case sensitivity", () => {
+    it("case-insensitive: updates links with different case", () => {
+      const markdown = "[Note](Old-Name.md)";
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", false);
+      expect(result).toBe("[Note](new-name.md)");
+    });
+
+    it("case-insensitive: updates links with all caps", () => {
+      const markdown = "[Note](OLD-NAME.MD)";
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", false);
+      expect(result).toBe("[Note](new-name.md)");
+    });
+
+    it("case-insensitive: updates links with mixed case in folder path", () => {
+      const markdown = "[Note](Folder/Old-Name.md)";
+      const result = updateLinksInContent(markdown, "folder/old-name.md", "folder/new-name.md", false);
+      expect(result).toBe("[Note](folder/new-name.md)");
+    });
+
+    it("case-sensitive: does not update links with different case", () => {
+      const markdown = "[Note](Old-Name.md)";
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
+      expect(result).toBe("[Note](Old-Name.md)"); // Unchanged
+    });
+
+    it("case-sensitive: exact match still works", () => {
+      const markdown = "[Note](old-name.md)";
+      const result = updateLinksInContent(markdown, "old-name.md", "new-name.md", true);
+      expect(result).toBe("[Note](new-name.md)");
     });
   });
 });

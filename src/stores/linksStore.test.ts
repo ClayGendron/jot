@@ -15,6 +15,7 @@ describe("linksStore", () => {
       isIndexing: false,
       lastIndexed: null,
       fileHashes: {},
+      caseSensitiveFs: true, // Use case-sensitive for tests (Linux default)
     });
   });
 
@@ -51,7 +52,8 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "Link to [[target]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       const index = useLinksStore.getState().backlinksIndex;
@@ -64,14 +66,16 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "Link to [[target-a]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       // Second update: now links to target-b instead
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "Link to [[target-b]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       const index = useLinksStore.getState().backlinksIndex;
@@ -87,7 +91,8 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "Links to [[a]], [[b]], and [[c]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       const index = useLinksStore.getState().backlinksIndex;
@@ -100,7 +105,8 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "See [the docs](docs.md) for more",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       const index = useLinksStore.getState().backlinksIndex;
@@ -113,21 +119,24 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/a.md",
         "[[target]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       // File B links to target
       useLinksStore.getState().updateFileInIndex(
         "/workspace/b.md",
         "[[target]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       // Update file A to link to something else
       useLinksStore.getState().updateFileInIndex(
         "/workspace/a.md",
         "[[other]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       const index = useLinksStore.getState().backlinksIndex;
@@ -142,14 +151,16 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "[[target]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       // Then update to have no links
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "No links here",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       const index = useLinksStore.getState().backlinksIndex;
@@ -160,7 +171,8 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "Some text before [[target]] and some text after",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       const index = useLinksStore.getState().backlinksIndex;
@@ -175,7 +187,8 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "[[target]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       const after = useLinksStore.getState().lastIndexed;
@@ -187,7 +200,8 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "Link to [[./notes/a]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       const index = useLinksStore.getState().backlinksIndex;
@@ -200,7 +214,8 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "Link to [[docs/./readme]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       const index = useLinksStore.getState().backlinksIndex;
@@ -211,7 +226,8 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "Link to [[../other]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       const index = useLinksStore.getState().backlinksIndex;
@@ -225,7 +241,8 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "C:\\workspace\\folder\\source.md",
         "Link to [[target]]",
-        "C:\\workspace"
+        "C:\\workspace",
+        true // caseSensitive
       );
 
       const index = useLinksStore.getState().backlinksIndex;
@@ -239,7 +256,8 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "Link to [[docs\\readme]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
       const index = useLinksStore.getState().backlinksIndex;
@@ -256,19 +274,21 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/a.md",
         "Links to [[b]] and [[c]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
       useLinksStore.getState().updateFileInIndex(
         "/workspace/b.md",
         "Links to [[a]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
       useLinksStore.getState().setFileHash("/workspace/a.md", "hash-a");
       useLinksStore.getState().setFileHash("/workspace/b.md", "hash-b");
     });
 
     it("removes backlinks FROM deleted file", () => {
-      useLinksStore.getState().removeFileFromIndex("/workspace/a.md");
+      useLinksStore.getState().removeFileFromIndex("/workspace/a.md", true);
 
       const index = useLinksStore.getState().backlinksIndex;
 
@@ -278,7 +298,7 @@ describe("linksStore", () => {
     });
 
     it("removes backlinks TO deleted file", () => {
-      useLinksStore.getState().removeFileFromIndex("/workspace/a.md");
+      useLinksStore.getState().removeFileFromIndex("/workspace/a.md", true);
 
       const index = useLinksStore.getState().backlinksIndex;
 
@@ -287,7 +307,7 @@ describe("linksStore", () => {
     });
 
     it("removes hash for deleted file", () => {
-      useLinksStore.getState().removeFileFromIndex("/workspace/a.md");
+      useLinksStore.getState().removeFileFromIndex("/workspace/a.md", true);
 
       const hashes = useLinksStore.getState().fileHashes;
       expect(hashes["/workspace/a.md"]).toBeUndefined();
@@ -298,10 +318,11 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/c.md",
         "Links to [[d]]",
-        workspacePath
+        workspacePath,
+        true // caseSensitive
       );
 
-      useLinksStore.getState().removeFileFromIndex("/workspace/a.md");
+      useLinksStore.getState().removeFileFromIndex("/workspace/a.md", true);
 
       const index = useLinksStore.getState().backlinksIndex;
 
@@ -310,7 +331,7 @@ describe("linksStore", () => {
     });
 
     it("preserves unrelated hashes", () => {
-      useLinksStore.getState().removeFileFromIndex("/workspace/a.md");
+      useLinksStore.getState().removeFileFromIndex("/workspace/a.md", true);
 
       const hashes = useLinksStore.getState().fileHashes;
       expect(hashes["/workspace/b.md"]).toBe("hash-b");
@@ -322,7 +343,8 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "[[target]]",
-        "/workspace"
+        "/workspace",
+        true // caseSensitive
       );
 
       useLinksStore.getState().clearIndex();
@@ -344,7 +366,8 @@ describe("linksStore", () => {
       useLinksStore.getState().updateFileInIndex(
         "/workspace/source.md",
         "[[target]]",
-        "/workspace"
+        "/workspace",
+        true // caseSensitive
       );
 
       useLinksStore.getState().clearIndex();

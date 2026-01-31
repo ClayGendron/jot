@@ -84,6 +84,7 @@ function App() {
   const setMaxLineWidth = useEditorStore((state) => state.setMaxLineWidth);
   const typewriterMode = useEditorStore((state) => state.typewriterMode);
   const setTypewriterMode = useEditorStore((state) => state.toggleTypewriterMode);
+  const caseSensitiveFs = useEditorStore((state) => state.isCaseSensitiveFs);
   const setIsCaseSensitiveFs = useEditorStore((state) => state.setIsCaseSensitiveFs);
 
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
@@ -123,8 +124,8 @@ function App() {
     }))
   );
   const backlinks = useMemo(
-    () => (filePath ? getBacklinksForFile(backlinksIndex, filePath) : []),
-    [backlinksIndex, filePath]
+    () => (filePath ? getBacklinksForFile(backlinksIndex, filePath, caseSensitiveFs) : []),
+    [backlinksIndex, filePath, caseSensitiveFs]
   );
 
   const [editorContent, setEditorContent] = useState("");
@@ -200,10 +201,13 @@ function App() {
     loadSettings();
   }, [loadSettings]);
 
-  // Initialize filesystem case sensitivity on mount (Linux: true, Windows/macOS: false)
+  // Initialize filesystem case sensitivity per workspace (varies by volume on macOS)
   useEffect(() => {
-    isCaseSensitiveFs().then(setIsCaseSensitiveFs);
-  }, [setIsCaseSensitiveFs]);
+    if (!workspacePath) return;
+    isCaseSensitiveFs(workspacePath)
+      .then(setIsCaseSensitiveFs)
+      .catch(() => setIsCaseSensitiveFs(false));
+  }, [workspacePath, setIsCaseSensitiveFs]);
 
   // Sync layout preferences from settings to editor store after settings load
   useEffect(() => {
@@ -525,14 +529,14 @@ function App() {
 
         // Filter out failed reads and build index
         const validFiles = fileContents.filter((f): f is NonNullable<typeof f> => f !== null);
-        buildIndex(validFiles, workspacePath);
+        buildIndex(validFiles, workspacePath, caseSensitiveFs);
       } catch (err) {
         console.error("Failed to build backlinks index:", err);
       }
     };
 
     buildBacklinksIndex();
-  }, [workspacePath, allFiles, buildIndex]);
+  }, [workspacePath, allFiles, buildIndex, caseSensitiveFs]);
 
   // Open file in a tab - saves current file first if dirty
   const handleFileSelect = useCallback(
@@ -1035,7 +1039,8 @@ function App() {
             path,
             newPath,
             workspacePath,
-            backlinks
+            backlinks,
+            caseSensitiveFs
           );
 
           if (errors.length > 0) {
@@ -1078,7 +1083,14 @@ function App() {
           alert("Cannot delete: no workspace is open");
           return;
         }
-        await deletePath(path, workspacePath);
+        const result = await deletePath(path, workspacePath);
+
+        // Show warning if trash failed and file was permanently deleted
+        if (result.warning) {
+          console.warn(result.warning);
+          alert(result.warning);
+        }
+
         await loadWorkspace(workspacePath);
         // Clear editor if this was the open file
         if (filePath === path) {
@@ -1113,7 +1125,8 @@ function App() {
           sourcePath,
           targetFolderPath,
           workspacePath,
-          backlinks
+          backlinks,
+          caseSensitiveFs
         );
 
         if (errors.length > 0) {

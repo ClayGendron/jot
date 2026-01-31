@@ -15,6 +15,7 @@ import {
   type FileContent,
 } from "@/lib/links/backlinks";
 import { extractInternalLinks } from "@/lib/markdown/parser";
+import { normalizeForComparison } from "@/lib/path/pathUtils";
 
 export interface LinksState {
   /** The backlinks index mapping targets to their backlinks */
@@ -25,10 +26,12 @@ export interface LinksState {
   lastIndexed: Date | null;
   /** Hash of each indexed file for change detection */
   fileHashes: Record<string, string>;
+  /** Cached case sensitivity setting for the current workspace */
+  caseSensitiveFs: boolean;
 
   // Actions
   /** Build/rebuild the backlinks index from file contents */
-  buildIndex: (files: FileContent[], workspacePath: string) => void;
+  buildIndex: (files: FileContent[], workspacePath: string, caseSensitive: boolean) => void;
   /** Get backlinks for a specific file path */
   getBacklinks: (filePath: string) => BacklinkEntry[];
   /** Clear the index */
@@ -39,10 +42,13 @@ export interface LinksState {
   updateFileInIndex: (
     filePath: string,
     markdownContent: string,
-    workspacePath: string
+    workspacePath: string,
+    caseSensitive: boolean
   ) => void;
   /** Remove a file from the index (when deleted) */
-  removeFileFromIndex: (filePath: string) => void;
+  removeFileFromIndex: (filePath: string, caseSensitive: boolean) => void;
+  /** Set the case sensitivity for the current workspace */
+  setCaseSensitiveFs: (value: boolean) => void;
 }
 
 export const useLinksStore = create<LinksState>((set, get) => ({
@@ -50,12 +56,13 @@ export const useLinksStore = create<LinksState>((set, get) => ({
   isIndexing: false,
   lastIndexed: null,
   fileHashes: {},
+  caseSensitiveFs: false,
 
-  buildIndex: (files, workspacePath) => {
-    set({ isIndexing: true });
+  buildIndex: (files, workspacePath, caseSensitive) => {
+    set({ isIndexing: true, caseSensitiveFs: caseSensitive });
 
     // Build index synchronously (fast enough for most workspaces)
-    const index = buildBacklinksIndex(files, workspacePath);
+    const index = buildBacklinksIndex(files, workspacePath, caseSensitive);
 
     set({
       backlinksIndex: index,
@@ -65,7 +72,8 @@ export const useLinksStore = create<LinksState>((set, get) => ({
   },
 
   getBacklinks: (filePath) => {
-    return getBacklinksForFile(get().backlinksIndex, filePath);
+    const state = get();
+    return getBacklinksForFile(state.backlinksIndex, filePath, state.caseSensitiveFs);
   },
 
   clearIndex: () => {
@@ -82,7 +90,7 @@ export const useLinksStore = create<LinksState>((set, get) => ({
     }));
   },
 
-  updateFileInIndex: (filePath, markdownContent, workspacePath) => {
+  updateFileInIndex: (filePath, markdownContent, workspacePath, caseSensitive) => {
     const state = get();
     const newIndex = { ...state.backlinksIndex };
 
@@ -118,8 +126,11 @@ export const useLinksStore = create<LinksState>((set, get) => ({
         continue;
       }
 
-      if (!newIndex[targetPath]) {
-        newIndex[targetPath] = [];
+      // Use normalized key for index to handle case-insensitive filesystems
+      const indexKey = normalizeForComparison(targetPath, caseSensitive);
+
+      if (!newIndex[indexKey]) {
+        newIndex[indexKey] = [];
       }
 
       // Extract context around the link
@@ -138,7 +149,7 @@ export const useLinksStore = create<LinksState>((set, get) => ({
         context = context.replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
       }
 
-      newIndex[targetPath].push({
+      newIndex[indexKey].push({
         sourcePath: filePath,
         sourceName,
         linkText: link.displayText || link.target,
@@ -149,10 +160,11 @@ export const useLinksStore = create<LinksState>((set, get) => ({
     set({
       backlinksIndex: newIndex,
       lastIndexed: new Date(),
+      caseSensitiveFs: caseSensitive,
     });
   },
 
-  removeFileFromIndex: (filePath) => {
+  removeFileFromIndex: (filePath, caseSensitive) => {
     const state = get();
     const newIndex = { ...state.backlinksIndex };
     const newHashes = { ...state.fileHashes };
@@ -167,8 +179,9 @@ export const useLinksStore = create<LinksState>((set, get) => ({
       }
     }
 
-    // Remove backlinks TO this file
-    delete newIndex[filePath];
+    // Remove backlinks TO this file (use normalized key)
+    const indexKey = normalizeForComparison(filePath, caseSensitive);
+    delete newIndex[indexKey];
 
     // Remove hash
     delete newHashes[filePath];
@@ -178,6 +191,10 @@ export const useLinksStore = create<LinksState>((set, get) => ({
       fileHashes: newHashes,
     });
   },
+
+  setCaseSensitiveFs: (value) => {
+    set({ caseSensitiveFs: value });
+  },
 }));
 
 /**
@@ -186,7 +203,7 @@ export const useLinksStore = create<LinksState>((set, get) => ({
 export function selectBacklinksForFile(filePath: string | null) {
   return (state: LinksState): BacklinkEntry[] => {
     if (!filePath) return [];
-    return getBacklinksForFile(state.backlinksIndex, filePath);
+    return getBacklinksForFile(state.backlinksIndex, filePath, state.caseSensitiveFs);
   };
 }
 
@@ -196,6 +213,6 @@ export function selectBacklinksForFile(filePath: string | null) {
 export function selectBacklinksCount(filePath: string | null) {
   return (state: LinksState): number => {
     if (!filePath) return 0;
-    return getBacklinksForFile(state.backlinksIndex, filePath).length;
+    return getBacklinksForFile(state.backlinksIndex, filePath, state.caseSensitiveFs).length;
   };
 }

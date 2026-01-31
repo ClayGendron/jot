@@ -87,8 +87,10 @@ fn atomic_write(path: &str, content: &str) -> Result<(), String> {
     let had_backup = if target.exists() {
         // Remove any stale backup first
         let _ = fs::remove_file(&backup);
-        // Rename current file to backup
-        fs::rename(target, &backup).ok().is_some()
+        // Rename current file to backup - fail fast if this fails
+        fs::rename(target, &backup)
+            .map_err(|e| format!("Failed to create backup: {}", e))?;
+        true
     } else {
         false
     };
@@ -362,19 +364,40 @@ fn jot_rename_path(old_path: &str, new_path: &str, workspace_path: &str) -> Resu
     fs::rename(old_path, new_path).map_err(|e| format!("Failed to rename: {}", e))
 }
 
-/// Delete a file or folder permanently with workspace validation
-/// WARNING: This permanently deletes files, not moves to trash
-/// TODO: Consider using the `trash` crate for safer deletion
+/// Result of delete operation, includes optional warning
+#[derive(serde::Serialize)]
+struct DeleteResult {
+    warning: Option<String>,
+}
+
+/// Delete a file or folder with workspace validation
+/// Attempts to move to system trash first, falls back to permanent deletion
 #[tauri::command]
-fn jot_delete_path(path: &str, workspace_path: &str) -> Result<(), String> {
+fn jot_delete_path(path: &str, workspace_path: &str) -> Result<DeleteResult, String> {
     validate_in_workspace(path, workspace_path, true)?;
 
     let path = Path::new(path);
 
-    if path.is_dir() {
-        fs::remove_dir_all(path).map_err(|e| format!("Failed to delete folder: {}", e))
-    } else {
-        fs::remove_file(path).map_err(|e| format!("Failed to delete file: {}", e))
+    // Try to move to trash first
+    match trash::delete(path) {
+        Ok(()) => Ok(DeleteResult { warning: None }),
+        Err(trash_err) => {
+            // Fallback to hard delete with warning
+            let warning_msg = format!(
+                "Could not move to trash ({}). File was permanently deleted.",
+                trash_err
+            );
+
+            let result = if path.is_dir() {
+                fs::remove_dir_all(path)
+            } else {
+                fs::remove_file(path)
+            };
+
+            result
+                .map(|()| DeleteResult { warning: Some(warning_msg) })
+                .map_err(|e| format!("Failed to delete: {}", e))
+        }
     }
 }
 
@@ -471,15 +494,40 @@ fn jot_watch_directory(_path: &str) -> Result<(), String> {
 /// Linux filesystems are typically case-sensitive, while Windows and macOS are case-insensitive.
 /// This is used for link resolution to match the correct file on each platform.
 #[tauri::command]
-fn jot_is_case_sensitive_fs() -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        true
+fn jot_is_case_sensitive_fs(workspace_path: &str) -> Result<bool, String> {
+    detect_case_sensitivity(Path::new(workspace_path))
+}
+
+fn detect_case_sensitivity(workspace_path: &Path) -> Result<bool, String> {
+    if !workspace_path.exists() || !workspace_path.is_dir() {
+        return Err("Invalid workspace path".to_string());
     }
-    #[cfg(not(target_os = "linux"))]
-    {
-        false
+
+    let pid = std::process::id();
+
+    for attempt in 0..5 {
+        let name = format!(".jot-case-test-{}-{}", pid, attempt);
+        let alt_name = name.to_uppercase();
+
+        if name == alt_name {
+            continue;
+        }
+
+        let path = workspace_path.join(&name);
+        let alt_path = workspace_path.join(&alt_name);
+
+        if path.exists() || alt_path.exists() {
+            continue;
+        }
+
+        fs::write(&path, "").map_err(|e| format!("Failed to create test file: {}", e))?;
+        let alt_exists = alt_path.exists();
+        let _ = fs::remove_file(&path);
+
+        return Ok(!alt_exists);
     }
+
+    Err("Unable to determine filesystem case sensitivity".to_string())
 }
 
 // ==========================================
@@ -1091,4 +1139,141 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn validate_in_workspace_accepts_nested_path() {
+        let workspace = TempDir::new().unwrap();
+        let workspace_path = workspace.path().to_str().unwrap();
+
+        // Create a nested file
+        let nested_dir = workspace.path().join("subdir");
+        fs::create_dir(&nested_dir).unwrap();
+        let nested_file = nested_dir.join("test.txt");
+        fs::write(&nested_file, "content").unwrap();
+
+        // Should accept nested path
+        let result = validate_in_workspace(
+            nested_file.to_str().unwrap(),
+            workspace_path,
+            true,
+        );
+        assert!(result.is_ok(), "Should accept nested path within workspace");
+    }
+
+    #[test]
+    fn validate_in_workspace_rejects_outside_path() {
+        let workspace = TempDir::new().unwrap();
+        let outside = TempDir::new().unwrap();
+
+        let workspace_path = workspace.path().to_str().unwrap();
+
+        // Create a file outside workspace
+        let outside_file = outside.path().join("secret.txt");
+        fs::write(&outside_file, "secret").unwrap();
+
+        // Should reject path outside workspace
+        let result = validate_in_workspace(
+            outside_file.to_str().unwrap(),
+            workspace_path,
+            true,
+        );
+        assert!(result.is_err(), "Should reject path outside workspace");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn validate_in_workspace_rejects_symlink_escape() {
+        use std::os::unix::fs::symlink;
+
+        // Create temp workspace
+        let workspace = TempDir::new().unwrap();
+        let workspace_path = workspace.path().to_str().unwrap();
+
+        // Create a file outside workspace
+        let outside = TempDir::new().unwrap();
+        let outside_file = outside.path().join("secret.txt");
+        fs::write(&outside_file, "secret").unwrap();
+
+        // Create symlink inside workspace pointing outside
+        let symlink_path = workspace.path().join("escape");
+        symlink(outside.path(), &symlink_path).unwrap();
+
+        // Attempt to access via symlink should fail
+        let escape_attempt = symlink_path.join("secret.txt");
+        let result = validate_in_workspace(
+            escape_attempt.to_str().unwrap(),
+            workspace_path,
+            true,
+        );
+
+        assert!(result.is_err(), "Should reject symlink escape");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn validate_in_workspace_rejects_symlink_escape() {
+        use std::os::windows::fs::symlink_dir;
+
+        // Create temp workspace
+        let workspace = TempDir::new().unwrap();
+        let workspace_path = workspace.path().to_str().unwrap();
+
+        // Create a file outside workspace
+        let outside = TempDir::new().unwrap();
+        let outside_file = outside.path().join("secret.txt");
+        fs::write(&outside_file, "secret").unwrap();
+
+        // Create symlink inside workspace pointing outside
+        let symlink_path = workspace.path().join("escape");
+        if symlink_dir(outside.path(), &symlink_path).is_ok() {
+            // Attempt to access via symlink should fail
+            let escape_attempt = symlink_path.join("secret.txt");
+            let result = validate_in_workspace(
+                escape_attempt.to_str().unwrap(),
+                workspace_path,
+                true,
+            );
+
+            assert!(result.is_err(), "Should reject symlink escape");
+        }
+        // If symlink creation fails (no admin privileges), skip the test
+    }
+
+    #[test]
+    fn atomic_write_creates_new_file() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("new_file.txt");
+
+        let result = atomic_write(file_path.to_str().unwrap(), "test content");
+        assert!(result.is_ok(), "Should create new file");
+
+        let content = fs::read_to_string(&file_path).unwrap();
+        assert_eq!(content, "test content");
+    }
+
+    #[test]
+    fn atomic_write_overwrites_existing_file() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("existing.txt");
+
+        // Create existing file
+        fs::write(&file_path, "old content").unwrap();
+
+        // Overwrite with atomic_write
+        let result = atomic_write(file_path.to_str().unwrap(), "new content");
+        assert!(result.is_ok(), "Should overwrite existing file");
+
+        let content = fs::read_to_string(&file_path).unwrap();
+        assert_eq!(content, "new content");
+
+        // Backup should be cleaned up
+        let backup_path = file_path.with_extension("jot-bak");
+        assert!(!backup_path.exists(), "Backup should be cleaned up on success");
+    }
 }

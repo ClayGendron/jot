@@ -8,6 +8,7 @@
 import { readFile, writeFile, renamePath, getFileName } from "@/lib/tauri/files";
 import { buildDisplayPath } from "./linkService";
 import { updateLinksInContent } from "./linkUpdater";
+import { getParentPathSync, normalizeForComparison } from "@/lib/path/pathUtils";
 import normalizePathLib from "normalize-path";
 import isPathInside from "is-path-inside";
 
@@ -45,11 +46,17 @@ function isAbsolutePathWithinWorkspace(
  * - Target is within workspace
  * - Not moving folder into itself or descendant
  * - Not moving to same location
+ *
+ * @param sourcePath - Absolute path of file/folder to move
+ * @param targetFolderPath - Absolute path of destination folder
+ * @param workspacePath - Workspace root path
+ * @param caseSensitiveFs - Whether filesystem is case-sensitive (Linux: true, Windows/macOS: false)
  */
 export function validateMove(
   sourcePath: string,
   targetFolderPath: string,
-  workspacePath: string
+  workspacePath: string,
+  caseSensitiveFs: boolean
 ): MoveValidation {
   // Check source is within workspace (must be an absolute path inside workspace)
   if (!isAbsolutePathWithinWorkspace(sourcePath, workspacePath)) {
@@ -62,9 +69,15 @@ export function validateMove(
   }
 
   // Check not moving folder into itself or descendant
-  // Normalize paths for cross-platform comparison (Windows backslashes → forward slashes)
-  const normalizedSource = normalizePathLib(sourcePath).replace(/\/+$/, "");
-  const normalizedTarget = normalizePathLib(targetFolderPath).replace(/\/+$/, "");
+  // Use normalizeForComparison for case-aware path matching
+  const normalizedSource = normalizeForComparison(
+    normalizePathLib(sourcePath).replace(/\/+$/, ""),
+    caseSensitiveFs
+  );
+  const normalizedTarget = normalizeForComparison(
+    normalizePathLib(targetFolderPath).replace(/\/+$/, ""),
+    caseSensitiveFs
+  );
 
   if (
     normalizedTarget === normalizedSource ||
@@ -74,7 +87,10 @@ export function validateMove(
   }
 
   // Check not moving to same location (parent folder is same as target)
-  const sourceParent = getParentPath(sourcePath);
+  const sourceParent = normalizeForComparison(
+    getParentPathSync(sourcePath),
+    caseSensitiveFs
+  );
   if (normalizedTarget === sourceParent) {
     return { valid: false, error: "File is already in same location" };
   }
@@ -96,29 +112,24 @@ export function calculateNewPath(
 }
 
 /**
- * Get parent directory path
- * Normalizes path for cross-platform consistency (Windows backslashes → forward slashes)
- */
-function getParentPath(path: string): string {
-  const normalized = normalizePathLib(path);
-  const parts = normalized.split("/");
-  parts.pop();
-  return parts.join("/") || "/";
-}
-
-/**
  * Update links in content for a file move
  *
  * This is essentially the same as rename - we're updating
  * the relative paths in links to reflect the new location.
  * Delegates to updateLinksInContent for the actual regex work.
+ *
+ * @param markdown - The markdown content to update
+ * @param oldRelativePath - Old relative path of the moved file
+ * @param newRelativePath - New relative path of the moved file
+ * @param caseSensitive - Whether to use case-sensitive matching
  */
 export function updateLinksForMove(
   markdown: string,
   oldRelativePath: string,
-  newRelativePath: string
+  newRelativePath: string,
+  caseSensitive: boolean
 ): string {
-  return updateLinksInContent(markdown, oldRelativePath, newRelativePath);
+  return updateLinksInContent(markdown, oldRelativePath, newRelativePath, caseSensitive);
 }
 
 /**
@@ -128,13 +139,15 @@ export function updateLinksForMove(
  * @param targetFolderPath - Absolute path of destination folder
  * @param workspacePath - Workspace root for relative path calculations
  * @param affectedFiles - Files that link to the moved file (from backlinks)
+ * @param caseSensitiveFs - Whether filesystem is case-sensitive (Linux: true, Windows/macOS: false)
  * @returns Object with new path, updated files, and any errors
  */
 export async function moveFileWithLinkUpdates(
   sourcePath: string,
   targetFolderPath: string,
   workspacePath: string,
-  affectedFiles: { sourcePath: string }[]
+  affectedFiles: { sourcePath: string }[],
+  caseSensitiveFs: boolean
 ): Promise<{
   newPath: string;
   updatedFiles: string[];
@@ -152,7 +165,7 @@ export async function moveFileWithLinkUpdates(
   for (const file of affectedFiles) {
     try {
       const content = await readFile(file.sourcePath, workspacePath);
-      const updated = updateLinksForMove(content, oldRelative, newRelative);
+      const updated = updateLinksForMove(content, oldRelative, newRelative, caseSensitiveFs);
 
       if (updated !== content) {
         await writeFile(file.sourcePath, updated, workspacePath);

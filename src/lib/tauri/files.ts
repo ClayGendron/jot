@@ -68,10 +68,19 @@ export async function renamePath(
 }
 
 /**
- * Delete file or folder with workspace validation
+ * Result of delete operation, includes optional warning
  */
-export async function deletePath(path: string, workspacePath: string): Promise<void> {
-  return invoke("jot_delete_path", { path, workspacePath });
+export interface DeleteResult {
+  warning: string | null;
+}
+
+/**
+ * Delete file or folder with workspace validation.
+ * Attempts to move to system trash first, falls back to permanent deletion.
+ * @returns DeleteResult with optional warning if trash failed
+ */
+export async function deletePath(path: string, workspacePath: string): Promise<DeleteResult> {
+  return invoke<DeleteResult>("jot_delete_path", { path, workspacePath });
 }
 
 /**
@@ -119,30 +128,10 @@ export async function openFileDialog(): Promise<string | null> {
 // These are now implemented in @/lib/path/pathUtils
 export { getFileName, getParentPath as getParentPathFs } from "@/lib/path/pathUtils";
 
-import { normalizeForDisplay } from "@/lib/path/pathUtils";
-
 /**
  * Check if the filesystem is case-sensitive (Linux: true, Windows/macOS: false)
  * Used for link resolution to match the correct file on each platform.
  */
-export async function isCaseSensitiveFs(): Promise<boolean> {
-  return invoke<boolean>("jot_is_case_sensitive_fs");
-}
-
-/**
- * Get the parent directory from a path
- */
-export function getParentDir(path: string): string {
-  const normalized = normalizeForDisplay(path);
-  const parts = normalized.split("/");
-  parts.pop();
-  return parts.join("/") || "/";
-}
-
-/**
- * Join path segments
- * Uses forward slashes for consistency (display purposes)
- */
-export function joinPath(...segments: string[]): string {
-  return segments.join("/").replace(/\/+/g, "/");
+export async function isCaseSensitiveFs(workspacePath: string): Promise<boolean> {
+  return invoke<boolean>("jot_is_case_sensitive_fs", { workspacePath });
 }

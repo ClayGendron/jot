@@ -7,6 +7,7 @@
 
 import { extractInternalLinks } from "@/lib/markdown/parser";
 import normalizePath from "normalize-path";
+import { normalizeForComparison } from "@/lib/path/pathUtils";
 
 export interface BacklinkEntry {
   /** Path of the file containing the link */
@@ -33,10 +34,15 @@ export interface FileContent {
 /**
  * Build a backlinks index from file contents
  * Returns a map from target file path to backlinks
+ *
+ * @param files - Array of file contents to index
+ * @param workspacePath - Workspace root path
+ * @param caseSensitive - Whether filesystem is case-sensitive (Linux: true, Windows/macOS: false)
  */
 export function buildBacklinksIndex(
   files: FileContent[],
-  workspacePath: string
+  workspacePath: string,
+  caseSensitive: boolean
 ): BacklinksIndex {
   const index: BacklinksIndex = {};
 
@@ -56,11 +62,14 @@ export function buildBacklinksIndex(
         continue;
       }
 
-      if (!index[targetPath]) {
-        index[targetPath] = [];
+      // Use normalized key for index to handle case-insensitive filesystems
+      const indexKey = normalizeForComparison(targetPath, caseSensitive);
+
+      if (!index[indexKey]) {
+        index[indexKey] = [];
       }
 
-      index[targetPath].push({
+      index[indexKey].push({
         sourcePath: file.path,
         sourceName: file.name.replace(/\.md$/, ""),
         linkText: link.displayText || link.target,
@@ -74,12 +83,18 @@ export function buildBacklinksIndex(
 
 /**
  * Get backlinks for a specific file
+ *
+ * @param index - The backlinks index
+ * @param filePath - Path of the file to get backlinks for
+ * @param caseSensitive - Whether filesystem is case-sensitive (Linux: true, Windows/macOS: false)
  */
 export function getBacklinksForFile(
   index: BacklinksIndex,
-  filePath: string
+  filePath: string,
+  caseSensitive: boolean
 ): BacklinkEntry[] {
-  return index[filePath] || [];
+  const key = normalizeForComparison(filePath, caseSensitive);
+  return index[key] || [];
 }
 
 /**

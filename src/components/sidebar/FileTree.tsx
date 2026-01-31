@@ -1,5 +1,6 @@
 import { useCallback, useState, useRef, useEffect, useMemo } from "react";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { useEditorStore } from "@/stores/editorStore";
 import { readFolderChildren, type FileEntry } from "@/lib/tauri/files";
 import { validateMove } from "@/lib/links/moveFile";
 import { sortFileEntries } from "@/lib/files/sortFiles";
@@ -196,6 +197,7 @@ export function FileTree({
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const sortBy = useWorkspaceStore((state) => state.sortBy);
   const sortDirection = useWorkspaceStore((state) => state.sortDirection);
+  const caseSensitiveFs = useEditorStore((state) => state.isCaseSensitiveFs);
 
   // Compute sorted file tree (memoized to avoid unnecessary re-sorts)
   const sortedFileTree = useMemo(
@@ -351,7 +353,7 @@ export function FileTree({
         : normalizeForDisplay(entry.path).split("/").slice(0, -1).join("/");
 
       // Validate the move
-      const validation = validateMove(draggedPath, targetFolder, workspacePath);
+      const validation = validateMove(draggedPath, targetFolder, workspacePath, caseSensitiveFs);
 
       setDragOverPath(entry.path);
       setIsDragValid(validation.valid);
@@ -359,7 +361,7 @@ export function FileTree({
       // Set cursor feedback
       e.dataTransfer.dropEffect = validation.valid ? "move" : "none";
     },
-    [draggedPath, workspacePath]
+    [draggedPath, workspacePath, caseSensitiveFs]
   );
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
@@ -400,7 +402,7 @@ export function FileTree({
         : normalizeForDisplay(targetEntry.path).split("/").slice(0, -1).join("/");
 
       // Validate one more time before executing
-      const validation = validateMove(draggedPath, targetFolder, workspacePath);
+      const validation = validateMove(draggedPath, targetFolder, workspacePath, caseSensitiveFs);
 
       if (validation.valid) {
         onMove(draggedPath, targetFolder);
@@ -408,7 +410,7 @@ export function FileTree({
 
       handleDragEnd();
     },
-    [draggedPath, workspacePath, onMove, handleDragEnd]
+    [draggedPath, workspacePath, onMove, handleDragEnd, caseSensitiveFs]
   );
 
   // Handle drops on the root file tree area (workspace root)
@@ -418,11 +420,11 @@ export function FileTree({
 
       if (!draggedPath || !workspacePath) return;
 
-      const validation = validateMove(draggedPath, workspacePath, workspacePath);
+      const validation = validateMove(draggedPath, workspacePath, workspacePath, caseSensitiveFs);
       setIsDragValid(validation.valid);
       e.dataTransfer.dropEffect = validation.valid ? "move" : "none";
     },
-    [draggedPath, workspacePath]
+    [draggedPath, workspacePath, caseSensitiveFs]
   );
 
   const handleRootDrop = useCallback(
@@ -434,7 +436,7 @@ export function FileTree({
         return;
       }
 
-      const validation = validateMove(draggedPath, workspacePath, workspacePath);
+      const validation = validateMove(draggedPath, workspacePath, workspacePath, caseSensitiveFs);
 
       if (validation.valid) {
         onMove(draggedPath, workspacePath);
@@ -442,7 +444,7 @@ export function FileTree({
 
       handleDragEnd();
     },
-    [draggedPath, workspacePath, onMove, handleDragEnd]
+    [draggedPath, workspacePath, onMove, handleDragEnd, caseSensitiveFs]
   );
 
   if (fileTree.length === 0) {

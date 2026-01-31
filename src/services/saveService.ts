@@ -138,10 +138,12 @@ export async function saveDocumentPipeline(
 
     // 9. Update backlinks index for this file
     if (workspacePath) {
+      const caseSensitiveFs = useEditorStore.getState().isCaseSensitiveFs;
       useLinksStore.getState().updateFileInIndex(
         tab.filePath,
         normalizedMarkdown,
-        workspacePath
+        workspacePath,
+        caseSensitiveFs
       );
     }
 

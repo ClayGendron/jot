@@ -6,26 +6,13 @@
  */
 
 import { readFile, writeFile, renamePath } from "@/lib/tauri/files";
-import normalizePath from "normalize-path";
+import { getRelativePathStrict } from "@/lib/path/pathUtils";
 
 /**
  * Escape special regex characters in a string
  */
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/**
- * Get relative path from workspace root
- * Normalizes paths for cross-platform consistency (Windows backslashes → forward slashes)
- */
-function getRelativePath(absolutePath: string, workspacePath: string): string {
-  const normalizedPath = normalizePath(absolutePath);
-  const normalizedWorkspace = normalizePath(workspacePath);
-  if (normalizedPath.startsWith(normalizedWorkspace + "/")) {
-    return normalizedPath.slice(normalizedWorkspace.length + 1);
-  }
-  return normalizedPath;
 }
 
 /**
@@ -38,11 +25,17 @@ function getRelativePath(absolutePath: string, workspacePath: string): string {
  * - [text](old-path.md) → [text](new-path.md)
  * - [text](old-path.md#heading) → [text](new-path.md#heading)
  * - [text](./old-path.md) → [text](new-path.md)
+ *
+ * @param markdown - The markdown content to update
+ * @param oldRelativePath - Old relative path to match
+ * @param newRelativePath - New relative path to replace with
+ * @param caseSensitive - Whether to match paths case-sensitively (Linux: true, Windows/macOS: false)
  */
 export function updateLinksInContent(
   markdown: string,
   oldRelativePath: string,
-  newRelativePath: string
+  newRelativePath: string,
+  caseSensitive: boolean
 ): string {
   // Replace markdown links: [text](path.md) or [text](path.md#anchor)
   // The path could be with or without leading ./
@@ -51,13 +44,16 @@ export function updateLinksInContent(
     "./" + oldRelativePath, // "./folder/file.md"
   ];
 
+  // Use case-insensitive matching when filesystem is case-insensitive
+  const flags = caseSensitive ? "g" : "gi";
+
   let result = markdown;
   for (const pattern of patterns) {
     // Match [any text](exact-path) or [any text](exact-path#anchor)
     // The negative lookbehind (?<!\!) ensures we don't match images ![...]
     const linkRegex = new RegExp(
       `(?<!\\!)\\[([^\\]]*)\\]\\(${escapeRegex(pattern)}(#[^)]*)?\\)`,
-      "g"
+      flags
     );
     result = result.replace(linkRegex, `[$1](${newRelativePath}$2)`);
   }
@@ -72,26 +68,28 @@ export function updateLinksInContent(
  * @param newPath - New absolute path
  * @param workspacePath - Workspace root for relative path calculations
  * @param affectedFiles - Files that link to the renamed file (from backlinks)
+ * @param caseSensitiveFs - Whether filesystem is case-sensitive (Linux: true, Windows/macOS: false)
  * @returns Object with updated file paths and any errors encountered
  */
 export async function renameFileWithLinkUpdates(
   oldPath: string,
   newPath: string,
   workspacePath: string,
-  affectedFiles: { sourcePath: string }[]
+  affectedFiles: { sourcePath: string }[],
+  caseSensitiveFs: boolean
 ): Promise<{ updatedFiles: string[]; errors: string[] }> {
   const updatedFiles: string[] = [];
   const errors: string[] = [];
 
   // Calculate relative paths from workspace root
-  const oldRelative = getRelativePath(oldPath, workspacePath);
-  const newRelative = getRelativePath(newPath, workspacePath);
+  const oldRelative = getRelativePathStrict(workspacePath, oldPath, caseSensitiveFs);
+  const newRelative = getRelativePathStrict(workspacePath, newPath, caseSensitiveFs);
 
   // Update links in each affected file BEFORE renaming
   for (const file of affectedFiles) {
     try {
       const content = await readFile(file.sourcePath, workspacePath);
-      const updated = updateLinksInContent(content, oldRelative, newRelative);
+      const updated = updateLinksInContent(content, oldRelative, newRelative, caseSensitiveFs);
 
       if (updated !== content) {
         await writeFile(file.sourcePath, updated, workspacePath);
