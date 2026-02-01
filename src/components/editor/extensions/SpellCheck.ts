@@ -88,8 +88,12 @@ export const SpellCheckPluginKey = new PluginKey("spellCheck");
 /** Delay before checking a word after typing stops */
 const WORD_DEBOUNCE_MS = 500;
 
+/** Counter for generating unique pending word IDs */
+let nextSpellPendingId = 0;
+
 /** A word that was recently modified and hasn't been checked yet */
 interface PendingWord {
+  id: number;
   from: number;
   to: number;
   word: string;
@@ -185,16 +189,22 @@ function createDecorations(
 
 /**
  * Create decorations excluding words that are currently pending (being typed)
+ * Uses overlap-based filtering to handle position shifts correctly
  */
 function createDecorationsExcludingPending(
   doc: ProseMirrorNode,
   errors: MisspelledWord[],
   errorClass: string,
-  pendingWords: Map<string, PendingWord>
+  pendingWords: Map<number, PendingWord>
 ): DecorationSet {
-  const visibleErrors = errors.filter((e) => {
-    const key = `${e.from}-${e.to}`;
-    return !pendingWords.has(key);
+  const visibleErrors = errors.filter((error) => {
+    for (const pending of pendingWords.values()) {
+      // Check for overlap between error and pending word
+      if (error.to >= pending.from && error.from <= pending.to) {
+        return false; // Hide - user is typing this word
+      }
+    }
+    return true;
   });
   return createDecorations(doc, visibleErrors, errorClass);
 }
@@ -373,7 +383,8 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
     const editor = this.editor;
 
     // Track pending words (recently modified, not yet checked)
-    const pendingWords = new Map<string, PendingWord>();
+    // Use numeric IDs as keys for stability across position shifts
+    const pendingWords = new Map<number, PendingWord>();
 
     return [
       new Plugin({
@@ -387,7 +398,13 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
 
             // Initial spell check (may be empty if dictionary not loaded)
             storage.errors = findMisspelledWords(doc, storage.ignoredWords);
-            return createDecorations(doc, storage.errors, spellErrorClass);
+            // Use pending-aware decorations even on init
+            return createDecorationsExcludingPending(
+              doc,
+              storage.errors,
+              spellErrorClass,
+              pendingWords
+            );
           },
 
           apply(tr, oldDecorations, _oldState, newState) {
@@ -404,8 +421,8 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
             // Handle debounce completion signal
             const meta = tr.getMeta(SpellCheckPluginKey);
             if (meta?.type === "checkComplete") {
-              const key = meta.wordKey as string;
-              pendingWords.delete(key);
+              const pendingId = meta.pendingId as number;
+              pendingWords.delete(pendingId);
               // Recheck all words and update errors
               storage.errors = findMisspelledWords(
                 newState.doc,
@@ -450,50 +467,37 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
             // 2. Find words overlapping changed ranges
             const affectedWords = findWordsInRanges(newState.doc, changedRanges);
 
-            // 3. Mark affected words as pending
+            // 3. For each affected word, clear any overlapping pending word and create new one
             for (const word of affectedWords) {
-              const key = `${word.from}-${word.to}`;
-
-              // Clear existing timer for this key
-              const existing = pendingWords.get(key);
-              if (existing) {
-                clearTimeout(existing.timerId);
+              // Find and clear any existing pending word that overlaps
+              for (const [id, pending] of pendingWords) {
+                if (word.to >= pending.from && word.from <= pending.to) {
+                  clearTimeout(pending.timerId);
+                  pendingWords.delete(id);
+                  break;
+                }
               }
 
-              // Schedule check after debounce
+              // Create new pending word with unique ID
+              const id = nextSpellPendingId++;
               const timerId = setTimeout(() => {
                 if (editor?.view) {
                   editor.view.dispatch(
                     editor.state.tr.setMeta(SpellCheckPluginKey, {
                       type: "checkComplete",
-                      wordKey: key,
+                      pendingId: id,
                     })
                   );
                 }
               }, WORD_DEBOUNCE_MS);
 
-              pendingWords.set(key, { ...word, timerId });
+              pendingWords.set(id, { id, ...word, timerId });
             }
 
-            // 4. Map positions of existing pending words that weren't affected
-            for (const [key, pending] of [...pendingWords]) {
-              // Skip words we just added
-              if (affectedWords.some((w) => `${w.from}-${w.to}` === key)) {
-                continue;
-              }
-
-              const newFrom = tr.mapping.map(pending.from);
-              const newTo = tr.mapping.map(pending.to);
-              const newKey = `${newFrom}-${newTo}`;
-
-              if (newKey !== key) {
-                pendingWords.delete(key);
-                pendingWords.set(newKey, {
-                  ...pending,
-                  from: newFrom,
-                  to: newTo,
-                });
-              }
+            // 4. Map positions of existing pending words in place
+            for (const pending of pendingWords.values()) {
+              pending.from = tr.mapping.map(pending.from);
+              pending.to = tr.mapping.map(pending.to);
             }
 
             // 5. Update stored errors with mapped positions

@@ -90,8 +90,12 @@ export const GrammarCheckPluginKey = new PluginKey("grammarCheck");
 /** Delay before checking a word after typing stops */
 const WORD_DEBOUNCE_MS = 500;
 
+/** Counter for generating unique pending word IDs */
+let nextGrammarPendingId = 0;
+
 /** A word that was recently modified and hasn't been checked yet */
 interface PendingWord {
+  id: number;
   from: number;
   to: number;
   word: string;
@@ -206,19 +210,20 @@ function createDecorations(
 
 /**
  * Create decorations excluding words that are currently pending (being typed)
+ * Uses overlap-based filtering to handle position shifts correctly
  */
 function createDecorationsExcludingPending(
   doc: ProseMirrorNode,
   issues: GrammarIssue[],
   errorClass: string,
-  pendingWords: Map<string, PendingWord>
+  pendingWords: Map<number, PendingWord>
 ): DecorationSet {
   // Filter out issues that overlap with pending words
   const visibleIssues = issues.filter((issue) => {
     for (const pending of pendingWords.values()) {
-      // Check for overlap
+      // Check for overlap between issue and pending word
       if (issue.to >= pending.from && issue.from <= pending.to) {
-        return false;
+        return false; // Hide - user is typing this word
       }
     }
     return true;
@@ -407,7 +412,8 @@ export const GrammarCheck = Extension.create<GrammarCheckOptions, GrammarCheckSt
     const editor = this.editor;
 
     // Track pending words (recently modified, not yet checked)
-    const pendingWords = new Map<string, PendingWord>();
+    // Use numeric IDs as keys for stability across position shifts
+    const pendingWords = new Map<number, PendingWord>();
 
     return [
       new Plugin({
@@ -433,8 +439,8 @@ export const GrammarCheck = Extension.create<GrammarCheckOptions, GrammarCheckSt
             // Handle debounce completion signal
             const meta = tr.getMeta(GrammarCheckPluginKey);
             if (meta?.type === "checkComplete") {
-              const key = meta.wordKey as string;
-              pendingWords.delete(key);
+              const pendingId = meta.pendingId as number;
+              pendingWords.delete(pendingId);
               // Create decorations excluding remaining pending words
               return createDecorationsExcludingPending(
                 newState.doc,
@@ -489,17 +495,19 @@ export const GrammarCheck = Extension.create<GrammarCheckOptions, GrammarCheckSt
             // 2. Find words overlapping changed ranges
             const affectedWords = findWordsInRanges(newState.doc, changedRanges);
 
-            // 3. Mark affected words as pending
+            // 3. For each affected word, clear any overlapping pending word and create new one
             for (const word of affectedWords) {
-              const key = `${word.from}-${word.to}`;
-
-              // Clear existing timer for this key
-              const existing = pendingWords.get(key);
-              if (existing) {
-                clearTimeout(existing.timerId);
+              // Find and clear any existing pending word that overlaps
+              for (const [id, pending] of pendingWords) {
+                if (word.to >= pending.from && word.from <= pending.to) {
+                  clearTimeout(pending.timerId);
+                  pendingWords.delete(id);
+                  break;
+                }
               }
 
-              // Schedule check after debounce
+              // Create new pending word with unique ID
+              const id = nextGrammarPendingId++;
               const timerId = setTimeout(() => {
                 // Run async grammar check for the whole document
                 // (Harper.js checks entire text at once, so we recheck everything)
@@ -513,35 +521,20 @@ export const GrammarCheck = Extension.create<GrammarCheckOptions, GrammarCheckSt
                     editor.view.dispatch(
                       editor.state.tr.setMeta(GrammarCheckPluginKey, {
                         type: "checkComplete",
-                        wordKey: key,
+                        pendingId: id,
                       })
                     );
                   }
                 });
               }, WORD_DEBOUNCE_MS);
 
-              pendingWords.set(key, { ...word, timerId });
+              pendingWords.set(id, { id, ...word, timerId });
             }
 
-            // 4. Map positions of existing pending words that weren't affected
-            for (const [key, pending] of [...pendingWords]) {
-              // Skip words we just added
-              if (affectedWords.some((w) => `${w.from}-${w.to}` === key)) {
-                continue;
-              }
-
-              const newFrom = tr.mapping.map(pending.from);
-              const newTo = tr.mapping.map(pending.to);
-              const newKey = `${newFrom}-${newTo}`;
-
-              if (newKey !== key) {
-                pendingWords.delete(key);
-                pendingWords.set(newKey, {
-                  ...pending,
-                  from: newFrom,
-                  to: newTo,
-                });
-              }
+            // 4. Map positions of existing pending words in place
+            for (const pending of pendingWords.values()) {
+              pending.from = tr.mapping.map(pending.from);
+              pending.to = tr.mapping.map(pending.to);
             }
 
             // 5. Update stored issues with mapped positions
