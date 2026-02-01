@@ -496,6 +496,7 @@ export const GrammarCheck = Extension.create<GrammarCheckOptions, GrammarCheckSt
             const affectedWords = findWordsInRanges(newState.doc, changedRanges);
 
             // 3. For each affected word, clear any overlapping pending word and create new one
+            const newlyAddedIds = new Set<number>();
             for (const word of affectedWords) {
               // Find and clear any existing pending word that overlaps
               for (const [id, pending] of pendingWords) {
@@ -529,12 +530,16 @@ export const GrammarCheck = Extension.create<GrammarCheckOptions, GrammarCheckSt
               }, WORD_DEBOUNCE_MS);
 
               pendingWords.set(id, { id, ...word, timerId });
+              newlyAddedIds.add(id);
             }
 
-            // 4. Map positions of existing pending words in place
-            for (const pending of pendingWords.values()) {
-              pending.from = tr.mapping.map(pending.from);
-              pending.to = tr.mapping.map(pending.to);
+            // 4. Map positions of PRE-EXISTING pending words only
+            // (newly added words already have correct positions from newState.doc)
+            for (const [id, pending] of pendingWords) {
+              if (!newlyAddedIds.has(id)) {
+                pending.from = tr.mapping.map(pending.from);
+                pending.to = tr.mapping.map(pending.to);
+              }
             }
 
             // 5. Update stored issues with mapped positions
