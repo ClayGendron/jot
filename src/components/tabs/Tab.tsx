@@ -123,11 +123,23 @@ export function Tab({
     .filter(Boolean)
     .join(" ");
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onSelect();
+      }
+    },
+    [onSelect]
+  );
+
   return (
-    <button
-      type="button"
+    <div
+      role="tab"
+      tabIndex={0}
       className={classNames}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
       onAuxClick={handleMiddleClick}
       onContextMenu={handleContextMenu}
       draggable
@@ -136,6 +148,7 @@ export function Tab({
       onDragLeave={onDragLeave}
       onDrop={onDrop}
       title={tab.filePath}
+      aria-selected={isActive}
       data-testid={`tab-${tab.id}`}
     >
       {/* Drop indicator - left */}
@@ -173,6 +186,6 @@ export function Tab({
 
       {/* Drop indicator - right */}
       {dragOverPosition === "right" && <span className="tab-drop-indicator right" />}
-    </button>
+    </div>
   );
 }
