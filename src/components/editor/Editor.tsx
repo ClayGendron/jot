@@ -32,17 +32,21 @@ import { InternalLinkMark } from "./extensions/InternalLinkMark";
 import { InternalLink } from "./extensions/InternalLink";
 import { SearchAndReplace } from "./extensions/SearchAndReplace";
 import { SpellCheck } from "./extensions/SpellCheck";
+import { GrammarCheck } from "./extensions/GrammarCheck";
 import { createSuggestionRender } from "./extensions/internalLinkSuggestionRender";
 import { SourceEditor } from "./SourceEditor";
 import { EditorContextMenu } from "./EditorContextMenu";
 import { SpellCheckContextMenu } from "./SpellCheckContextMenu";
+import { GrammarCheckContextMenu } from "./GrammarCheckContextMenu";
 import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
 import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { useInternalLinkNavigation } from "@/hooks/useInternalLinkNavigation";
 import { readFile } from "@/lib/tauri/files";
 import { getRelativePath } from "@/lib/path/pathUtils";
 import { loadPersonalDictionary } from "@/lib/spellcheck/personalDictionary";
+import { loadIgnoredRules } from "@/lib/grammarcheck/ignoredRules";
 import type { SpellCheckLanguage } from "@/lib/spellcheck";
+import type { GrammarDialect, GrammarIssue } from "@/lib/grammarcheck";
 
 // Create lowlight instance with common languages
 const lowlight = createLowlight(common);
@@ -105,8 +109,9 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
     position: { x: number; y: number };
-    type: "regular" | "spellcheck";
+    type: "regular" | "spellcheck" | "grammarcheck";
     spellError?: { word: string; from: number; to: number };
+    grammarIssue?: GrammarIssue;
   } | null>(null);
 
   // Spell check settings
@@ -115,6 +120,14 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
   );
   const spellCheckLanguage = useSettingsStore(
     (s) => (s.appearance?.spellCheckLanguage ?? "en_US") as SpellCheckLanguage
+  );
+
+  // Grammar check settings
+  const grammarCheckEnabled = useSettingsStore(
+    (s) => s.appearance?.grammarCheckEnabled ?? true
+  );
+  const grammarDialect = useSettingsStore(
+    (s) => (s.appearance?.grammarDialect ?? "american") as GrammarDialect
   );
 
   // Get files for internal link suggestions - compute with useMemo for React 19 compatibility
@@ -200,9 +213,10 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
   const [markdownSource, setMarkdownSource] = useState("");
   const wasInSourceMode = useRef(false);
 
-  // Load personal dictionary on mount
+  // Load personal dictionary and ignored grammar rules on mount
   useEffect(() => {
     loadPersonalDictionary().catch(console.error);
+    loadIgnoredRules().catch(console.error);
   }, []);
 
   const editor = useEditor({
@@ -265,6 +279,11 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
         language: spellCheckLanguage,
         enabled: spellCheckEnabled,
       }),
+      GrammarCheck.configure({
+        grammarErrorClass: "grammar-error",
+        dialect: grammarDialect,
+        enabled: grammarCheckEnabled,
+      }),
     ],
     content: initialContent || content,
     autofocus,
@@ -309,6 +328,18 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
     }
   }, [editor, spellCheckEnabled, spellCheckLanguage]);
 
+  // Sync grammar check settings with editor
+  useEffect(() => {
+    if (!editor) return;
+
+    if (grammarCheckEnabled) {
+      editor.commands.enableGrammarCheck();
+      editor.commands.setGrammarDialect(grammarDialect);
+    } else {
+      editor.commands.disableGrammarCheck();
+    }
+  }, [editor, grammarCheckEnabled, grammarDialect]);
+
   // Handle mode switching
   useEffect(() => {
     if (!editor) return;
@@ -346,8 +377,71 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
 
       event.preventDefault();
 
-      // Check if we clicked on a spell error
       const target = event.target as HTMLElement;
+
+      // Check if we clicked on a grammar error (check first, grammar errors may overlap spell errors)
+      const grammarErrorElement = target.closest("[data-grammar-error]") as HTMLElement | null;
+
+      if (grammarErrorElement && grammarCheckEnabled) {
+        // Get grammar error data from the element
+        const ruleId = grammarErrorElement.getAttribute("data-rule-id") || "";
+        const message = grammarErrorElement.getAttribute("data-message") || "";
+        const category = grammarErrorElement.getAttribute("data-category") || "";
+        const text = grammarErrorElement.textContent || "";
+
+        // Find the position in the document
+        const view = editor?.view;
+        if (view) {
+          const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          if (pos) {
+            // Get the grammar issues from the extension storage
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const grammarStorage = (editor?.storage as any)?.grammarCheck;
+            if (grammarStorage?.issues) {
+              // Find the issue that contains this position
+              const issue = grammarStorage.issues.find(
+                (i: GrammarIssue) => pos.pos >= i.from && pos.pos <= i.to
+              );
+
+              if (issue) {
+                setContextMenu({
+                  position: { x: event.clientX, y: event.clientY },
+                  type: "grammarcheck",
+                  grammarIssue: issue,
+                });
+                return;
+              }
+            }
+
+            // Fallback: construct issue from element attributes
+            const $pos = view.state.doc.resolve(pos.pos);
+            const start = $pos.start();
+            const textBefore = view.state.doc.textBetween(start, pos.pos, "");
+            const textAfter = view.state.doc.textBetween(pos.pos, $pos.end(), "");
+            const beforeMatch = textBefore.match(/[a-zA-Z\u00C0-\u024F\u0400-\u04FF\s]*$/);
+            const afterMatch = textAfter.match(/^[a-zA-Z\u00C0-\u024F\u0400-\u04FF\s]*/);
+            const from = pos.pos - (beforeMatch?.[0]?.length || 0);
+            const to = pos.pos + (afterMatch?.[0]?.length || 0);
+
+            setContextMenu({
+              position: { x: event.clientX, y: event.clientY },
+              type: "grammarcheck",
+              grammarIssue: {
+                text,
+                from,
+                to,
+                ruleId,
+                message,
+                suggestions: [],
+                category,
+              },
+            });
+            return;
+          }
+        }
+      }
+
+      // Check if we clicked on a spell error
       const spellErrorElement = target.closest("[data-spell-error]") as HTMLElement | null;
 
       if (spellErrorElement && spellCheckEnabled) {
@@ -389,7 +483,7 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
         type: "regular",
       });
     },
-    [sourceMode, spellCheckEnabled, editor]
+    [sourceMode, spellCheckEnabled, grammarCheckEnabled, editor]
   );
 
   // Dismiss context menu
@@ -450,6 +544,14 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
           word={contextMenu.spellError.word}
           from={contextMenu.spellError.from}
           to={contextMenu.spellError.to}
+          editor={editor}
+          onDismiss={handleDismissContextMenu}
+        />
+      )}
+      {contextMenu && contextMenu.type === "grammarcheck" && contextMenu.grammarIssue && (
+        <GrammarCheckContextMenu
+          position={contextMenu.position}
+          issue={contextMenu.grammarIssue}
           editor={editor}
           onDismiss={handleDismissContextMenu}
         />

@@ -50,8 +50,17 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const focusMode = useEditorStore((s) => s.focusMode);
   const toggleFocusMode = useEditorStore((s) => s.toggleFocusMode);
 
-  // Settings store - persistence
+  // Settings store - persistence and settings values
   const updateAppearance = useSettingsStore((s) => s.updateAppearance);
+  const spellCheckEnabled = useSettingsStore(
+    (s) => s.appearance?.spellCheckEnabled ?? true
+  );
+  const grammarCheckEnabled = useSettingsStore(
+    (s) => s.appearance?.grammarCheckEnabled ?? true
+  );
+  const grammarDialect = useSettingsStore(
+    (s) => s.appearance?.grammarDialect ?? "american"
+  );
 
   // Theme change handler (legacy light/dark/system)
   const handleThemeChange = useCallback(
@@ -133,6 +142,24 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const handleFocusModeToggle = useCallback(() => {
     toggleFocusMode();
   }, [toggleFocusMode]);
+
+  // Spell check toggle handler
+  const handleSpellCheckToggle = useCallback(() => {
+    updateAppearance({ spellCheckEnabled: !spellCheckEnabled });
+  }, [spellCheckEnabled, updateAppearance]);
+
+  // Grammar check toggle handler
+  const handleGrammarCheckToggle = useCallback(() => {
+    updateAppearance({ grammarCheckEnabled: !grammarCheckEnabled });
+  }, [grammarCheckEnabled, updateAppearance]);
+
+  // Grammar dialect change handler
+  const handleGrammarDialectChange = useCallback(
+    (dialect: "american" | "british" | "canadian" | "australian") => {
+      updateAppearance({ grammarDialect: dialect });
+    },
+    [updateAppearance]
+  );
 
   return (
     <div className="settings-panel-overlay" onClick={onClose}>
@@ -337,6 +364,63 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                 <span className="settings-toggle-knob" />
               </button>
             </div>
+
+            {/* Spell Check */}
+            <div className="settings-row toggle-row">
+              <div className="settings-toggle-info">
+                <label className="settings-label">Spell check</label>
+                <span className="settings-description">
+                  Highlight misspelled words as you type
+                </span>
+              </div>
+              <button
+                className={`settings-toggle ${spellCheckEnabled ? "active" : ""}`}
+                onClick={handleSpellCheckToggle}
+                role="switch"
+                aria-checked={spellCheckEnabled}
+              >
+                <span className="settings-toggle-knob" />
+              </button>
+            </div>
+
+            {/* Grammar Check */}
+            <div className="settings-row toggle-row">
+              <div className="settings-toggle-info">
+                <label className="settings-label">Grammar check</label>
+                <span className="settings-description">
+                  Highlight grammar issues as you type
+                </span>
+              </div>
+              <button
+                className={`settings-toggle ${grammarCheckEnabled ? "active" : ""}`}
+                onClick={handleGrammarCheckToggle}
+                role="switch"
+                aria-checked={grammarCheckEnabled}
+              >
+                <span className="settings-toggle-knob" />
+              </button>
+            </div>
+
+            {/* Grammar Dialect (shown when grammar check enabled) */}
+            {grammarCheckEnabled && (
+              <div className="settings-row">
+                <label className="settings-label">English dialect</label>
+                <select
+                  className="settings-select"
+                  value={grammarDialect}
+                  onChange={(e) =>
+                    handleGrammarDialectChange(
+                      e.target.value as "american" | "british" | "canadian" | "australian"
+                    )
+                  }
+                >
+                  <option value="american">American</option>
+                  <option value="british">British</option>
+                  <option value="canadian">Canadian</option>
+                  <option value="australian">Australian</option>
+                </select>
+              </div>
+            )}
           </section>
 
           {/* Keyboard Shortcuts Info */}

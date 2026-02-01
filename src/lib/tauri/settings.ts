@@ -46,6 +46,8 @@ interface RustAppearancePreferences {
   default_copy_format?: string;
   spell_check_enabled?: boolean;
   spell_check_language?: string;
+  grammar_check_enabled?: boolean;
+  grammar_dialect?: string;
 }
 
 interface RustGlobalAppSettings {
@@ -97,6 +99,8 @@ function fromRustAppearance(rust: RustAppearancePreferences): AppearancePreferen
     defaultCopyFormat: (rust.default_copy_format as CopyFormat) || "formatted",
     spellCheckEnabled: rust.spell_check_enabled ?? true,
     spellCheckLanguage: rust.spell_check_language ?? "en_US",
+    grammarCheckEnabled: rust.grammar_check_enabled ?? true,
+    grammarDialect: (rust.grammar_dialect as "american" | "british" | "canadian" | "australian") ?? "american",
   };
 }
 
@@ -116,6 +120,8 @@ function toRustAppearance(ts: AppearancePreferences): RustAppearancePreferences 
     default_copy_format: ts.defaultCopyFormat ?? "formatted",
     spell_check_enabled: ts.spellCheckEnabled ?? true,
     spell_check_language: ts.spellCheckLanguage ?? "en_US",
+    grammar_check_enabled: ts.grammarCheckEnabled ?? true,
+    grammar_dialect: ts.grammarDialect ?? "american",
   };
 }
 

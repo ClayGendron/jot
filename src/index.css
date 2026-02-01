@@ -4191,6 +4191,180 @@ body.resize-dragging * {
   font-weight: 500;
 }
 
+/* ==========================================
+   Grammar Check Styles
+   ========================================== */
+
+/* Grammar error underline - cyan to distinguish from red spell errors */
+.grammar-error {
+  text-decoration: underline wavy;
+  text-decoration-color: #0891b2;
+  text-underline-offset: 2px;
+  text-decoration-skip-ink: none;
+  cursor: pointer;
+}
+
+/* Dark mode - slightly brighter cyan */
+@media (prefers-color-scheme: dark) {
+  .grammar-error {
+    text-decoration-color: #22d3ee;
+  }
+}
+
+/* Grammar context menu */
+.grammar-context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 280px;
+  max-width: 400px;
+  background: var(--color-paper);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  padding: 0.5rem 0;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+}
+
+.grammar-context-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--color-ink-muted);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 0.25rem;
+}
+
+.grammar-context-menu-icon {
+  color: #0891b2;
+  flex-shrink: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .grammar-context-menu-icon {
+    color: #22d3ee;
+  }
+}
+
+.grammar-context-menu-category {
+  font-weight: 600;
+  color: var(--color-ink);
+  text-transform: capitalize;
+}
+
+.grammar-context-menu-message {
+  padding: 0.5rem 0.75rem;
+  color: var(--color-ink);
+  line-height: 1.4;
+}
+
+.grammar-context-menu-original {
+  padding: 0.25rem 0.75rem 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.grammar-context-menu-original-label {
+  color: var(--color-ink-muted);
+  margin-right: 0.25rem;
+}
+
+.grammar-context-menu-original-text {
+  color: var(--color-ink);
+  font-style: italic;
+  background: var(--color-paper-warm);
+  padding: 0.125rem 0.25rem;
+  border-radius: 3px;
+}
+
+.grammar-context-menu-suggestions {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.grammar-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  transition: background var(--transition-fast);
+}
+
+.grammar-context-menu-item:hover {
+  background: var(--color-paper-warm);
+}
+
+.grammar-context-menu-item svg {
+  color: var(--color-ink-muted);
+  flex-shrink: 0;
+}
+
+.grammar-context-menu-suggestion {
+  font-weight: 500;
+}
+
+.grammar-context-menu-suggestion:hover {
+  background: var(--color-accent-soft);
+}
+
+.grammar-context-menu-suggestion svg {
+  color: #0891b2;
+}
+
+@media (prefers-color-scheme: dark) {
+  .grammar-context-menu-suggestion svg {
+    color: #22d3ee;
+  }
+}
+
+.grammar-context-menu-divider {
+  height: 1px;
+  background: var(--color-border);
+  margin: 0.25rem 0;
+}
+
+.grammar-context-menu-feedback {
+  padding: 1rem 0.75rem;
+  text-align: center;
+  color: #0891b2;
+  font-weight: 500;
+}
+
+@media (prefers-color-scheme: dark) {
+  .grammar-context-menu-feedback {
+    color: #22d3ee;
+  }
+}
+
+/* Settings select for dialect dropdown */
+.settings-select {
+  padding: 0.5rem 0.75rem;
+  background: var(--color-paper);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-ink);
+  font-size: 0.875rem;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.settings-select:hover {
+  border-color: var(--color-border-strong);
+}
+
+.settings-select:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
 /* Dark mode adjustments for find/replace */
 @media (prefers-color-scheme: dark) {
   .find-replace-bar {

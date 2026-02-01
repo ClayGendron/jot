@@ -261,27 +261,27 @@ workspace/
 
 ### 5.1 Spell Checking
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
 | E5.1.1 | As a user, misspelled words are underlined | Red squiggly underline on misspelled words |
 | E5.1.2 | As a user, I can right-click for suggestions | Context menu shows spelling suggestions |
-| E5.1.3 | As a user, I can add words to personal dictionary | “Add to dictionary” option in context menu |
+| E5.1.3 | As a user, I can add words to personal dictionary | "Add to dictionary" option in context menu |
 | E5.1.4 | As a user, I can change spell check language | Settings to select language(s) |
 | E5.1.5 | As a user, spell check ignores code blocks | Code blocks not spell-checked |
 
 ### 5.2 Grammar Checking
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
-| E5.2.1 | As a user, grammar issues are highlighted | Blue/green underline for grammar problems |
-| E5.2.2 | As a user, I see explanations for grammar issues | Hover/click shows explanation and suggestion |
-| E5.2.3 | As a user, I can accept or ignore suggestions | Quick-fix buttons in hover panel |
-| E5.2.4 | As a user, grammar check runs on-device | LanguageTool runs locally, no cloud |
-| E5.2.5 | As a user, I can disable grammar check if desired | Toggle in settings |
+| E5.2.1 | As a user, grammar issues are highlighted | Cyan underline for grammar problems |
+| E5.2.2 | As a user, I see explanations for grammar issues | Right-click shows explanation and suggestion |
+| E5.2.3 | As a user, I can accept or ignore suggestions | Quick-fix buttons in context menu |
+| E5.2.4 | As a user, grammar check runs on-device | Harper.js runs locally via WebAssembly, no cloud |
+| E5.2.5 | As a user, I can disable grammar check if desired | Toggle in settings with dialect selector |
 
 ---
 
@@ -837,12 +837,20 @@ workspace/
 
 -   E6.2.4: docx library bundled, works offline ✅
 
+-   E5.1.1: Misspelled words underlined with red squiggly ✅
+
+-   E5.1.2: Right-click context menu shows spelling suggestions ✅
+
+-   E5.1.3: Add words to personal dictionary via context menu ✅
+
+-   E5.1.4: Spell check language configurable in settings ✅
+
+-   E5.1.5: Spell check ignores code blocks, URLs, and paths ✅
+
 
 ### Remaining P0 Work
 
 -   Epic 4.2: Semantic search (vector)
-
--   Epic 5.1-5.2: Spell/grammar check
 
 -   Epic 10.1: iOS app
 
@@ -859,6 +867,7 @@ workspace/
 -   ~~Epic 3.1: Automatic Saving~~ ✅
 -   ~~Epic 3.2: Version History~~ ✅
 -   ~~Epic 4.1: Keyword Search~~ ✅
+-   ~~Epic 5.1: Spell Checking~~ ✅
 -   ~~Epic 6.1: PDF Export~~ ✅
 -   ~~Epic 6.2: Word/DOCX Export~~ ✅
 -   ~~Epic 6.4: Copy Formatted~~ ✅

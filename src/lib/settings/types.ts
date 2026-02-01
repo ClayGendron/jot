@@ -32,6 +32,11 @@ export interface LayoutPreferences {
 }
 
 /**
+ * Grammar check dialect type
+ */
+export type GrammarDialect = "american" | "british" | "canadian" | "australian";
+
+/**
  * Appearance preferences for theme and typography
  */
 export interface AppearancePreferences {
@@ -57,6 +62,10 @@ export interface AppearancePreferences {
   spellCheckEnabled: boolean;
   /** Spell check language code (e.g., "en_US", "fr_FR") */
   spellCheckLanguage: string;
+  /** Whether grammar checking is enabled */
+  grammarCheckEnabled: boolean;
+  /** Grammar check dialect */
+  grammarDialect: GrammarDialect;
 }
 
 /**
@@ -135,6 +144,8 @@ export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
   defaultCopyFormat: "formatted",
   spellCheckEnabled: true,
   spellCheckLanguage: "en_US",
+  grammarCheckEnabled: true,
+  grammarDialect: "american",
 };
 
 /**

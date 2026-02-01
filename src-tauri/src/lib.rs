@@ -941,6 +941,10 @@ pub struct AppearancePreferences {
     pub spell_check_enabled: bool,
     #[serde(default = "default_spell_check_language")]
     pub spell_check_language: String,
+    #[serde(default = "default_grammar_check_enabled")]
+    pub grammar_check_enabled: bool,
+    #[serde(default = "default_grammar_dialect")]
+    pub grammar_dialect: String,
 }
 
 fn default_copy_format() -> String {
@@ -953,6 +957,14 @@ fn default_spell_check_enabled() -> bool {
 
 fn default_spell_check_language() -> String {
     "en_US".to_string()
+}
+
+fn default_grammar_check_enabled() -> bool {
+    true
+}
+
+fn default_grammar_dialect() -> String {
+    "american".to_string()
 }
 
 impl Default for AppearancePreferences {
@@ -969,6 +981,8 @@ impl Default for AppearancePreferences {
             default_copy_format: default_copy_format(),
             spell_check_enabled: default_spell_check_enabled(),
             spell_check_language: default_spell_check_language(),
+            grammar_check_enabled: default_grammar_check_enabled(),
+            grammar_dialect: default_grammar_dialect(),
         }
     }
 }
@@ -1244,6 +1258,129 @@ fn jot_remove_from_personal_dictionary(app: tauri::AppHandle, word: String) -> R
     )
 }
 
+// ==========================================
+// Ignored Grammar Rules Commands
+// ==========================================
+
+/// An ignored grammar rule entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct IgnoredRuleEntry {
+    rule_id: String,
+    added_at: i64,
+}
+
+/// Ignored grammar rules stored on disk
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct IgnoredGrammarRules {
+    version: i32,
+    rules: Vec<IgnoredRuleEntry>,
+}
+
+impl Default for IgnoredGrammarRules {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            rules: Vec::new(),
+        }
+    }
+}
+
+/// Get the ignored grammar rules file path
+fn get_ignored_rules_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let app_data_dir = app.path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    Ok(app_data_dir.join("ignored-grammar-rules.json"))
+}
+
+/// Read ignored grammar rules from disk
+#[tauri::command]
+fn jot_read_ignored_grammar_rules(app: tauri::AppHandle) -> Result<Option<IgnoredGrammarRules>, String> {
+    let rules_path = get_ignored_rules_path(&app)?;
+
+    if !rules_path.exists() {
+        return Ok(None);
+    }
+
+    let content = fs::read_to_string(&rules_path)
+        .map_err(|e| format!("Failed to read ignored grammar rules: {}", e))?;
+
+    let rules: IgnoredGrammarRules = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse ignored grammar rules: {}", e))?;
+
+    Ok(Some(rules))
+}
+
+/// Add a rule to the ignored grammar rules
+#[tauri::command]
+fn jot_add_ignored_grammar_rule(app: tauri::AppHandle, rule_id: String) -> Result<(), String> {
+    let rules_path = get_ignored_rules_path(&app)?;
+    let app_data_dir = app.path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    // Create directory if needed
+    if !app_data_dir.exists() {
+        fs::create_dir_all(&app_data_dir)
+            .map_err(|e| format!("Failed to create app data dir: {}", e))?;
+    }
+
+    // Load existing or create new
+    let mut rules = if rules_path.exists() {
+        let content = fs::read_to_string(&rules_path)
+            .map_err(|e| format!("Failed to read ignored grammar rules: {}", e))?;
+        serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse ignored grammar rules: {}", e))?
+    } else {
+        IgnoredGrammarRules::default()
+    };
+
+    // Check if already exists
+    if !rules.rules.iter().any(|e| e.rule_id == rule_id) {
+        rules.rules.push(IgnoredRuleEntry {
+            rule_id,
+            added_at: chrono::Utc::now().timestamp_millis(),
+        });
+    }
+
+    // Save
+    let content = serde_json::to_string_pretty(&rules)
+        .map_err(|e| format!("Failed to serialize ignored grammar rules: {}", e))?;
+
+    atomic_write(
+        rules_path.to_str().ok_or("Invalid rules path")?,
+        &content
+    )
+}
+
+/// Remove a rule from the ignored grammar rules
+#[tauri::command]
+fn jot_remove_ignored_grammar_rule(app: tauri::AppHandle, rule_id: String) -> Result<(), String> {
+    let rules_path = get_ignored_rules_path(&app)?;
+
+    if !rules_path.exists() {
+        return Ok(()); // Nothing to remove
+    }
+
+    let content = fs::read_to_string(&rules_path)
+        .map_err(|e| format!("Failed to read ignored grammar rules: {}", e))?;
+
+    let mut rules: IgnoredGrammarRules = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse ignored grammar rules: {}", e))?;
+
+    // Remove rule
+    rules.rules.retain(|e| e.rule_id != rule_id);
+
+    // Save
+    let content = serde_json::to_string_pretty(&rules)
+        .map_err(|e| format!("Failed to serialize ignored grammar rules: {}", e))?;
+
+    atomic_write(
+        rules_path.to_str().ok_or("Invalid rules path")?,
+        &content
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1290,6 +1427,10 @@ pub fn run() {
             jot_read_personal_dictionary,
             jot_add_to_personal_dictionary,
             jot_remove_from_personal_dictionary,
+            // Ignored grammar rules commands
+            jot_read_ignored_grammar_rules,
+            jot_add_ignored_grammar_rule,
+            jot_remove_ignored_grammar_rule,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
