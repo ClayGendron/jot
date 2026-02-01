@@ -318,7 +318,7 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
   },
 
   addProseMirrorPlugins() {
-    const { spellErrorClass, debounceMs } = this.options;
+    const { spellErrorClass } = this.options;
     const storage = this.storage;
 
     return [
@@ -354,44 +354,16 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
               (oldDecorations === DecorationSet.empty && storage.errors.length === 0);
 
             if (needsRecheck) {
-              // Clear any pending debounce
-              if (storage.debounceTimer) {
-                clearTimeout(storage.debounceTimer);
-              }
-
-              // Debounce the spell check for performance
-              // But for small documents, do it immediately
-              const wordCount = newState.doc.textContent.length;
-              if (wordCount < 1000) {
-                // Small document - check immediately
-                storage.errors = findMisspelledWords(
-                  newState.doc,
-                  storage.ignoredWords
-                );
-                return createDecorations(
-                  newState.doc,
-                  storage.errors,
-                  spellErrorClass
-                );
-              }
-
-              // Large document - debounce
-              // For now, map old decorations and schedule recheck
-              const mappedDecorations = tr.docChanged
-                ? oldDecorations.map(tr.mapping, tr.doc)
-                : oldDecorations;
-
-              // Schedule recheck
-              storage.debounceTimer = setTimeout(() => {
-                storage.errors = findMisspelledWords(
-                  newState.doc,
-                  storage.ignoredWords
-                );
-                // Note: This won't actually update decorations
-                // A proper implementation would emit an event
-              }, debounceMs);
-
-              return mappedDecorations;
+              // Check all words and create decorations
+              storage.errors = findMisspelledWords(
+                newState.doc,
+                storage.ignoredWords
+              );
+              return createDecorations(
+                newState.doc,
+                storage.errors,
+                spellErrorClass
+              );
             }
 
             // No document change - keep existing decorations

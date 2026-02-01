@@ -123,7 +123,8 @@ export function getCurrentLanguage(): SpellCheckLanguage {
  * Check if the spell checker is ready
  */
 export function isSpellCheckerReady(): boolean {
-  return currentTypo !== null && !isLoading;
+  const ready = currentTypo !== null && !isLoading;
+  return ready;
 }
 
 /**
