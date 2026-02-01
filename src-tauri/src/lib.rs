@@ -937,10 +937,22 @@ pub struct AppearancePreferences {
     pub typewriter_mode: bool,
     #[serde(default = "default_copy_format")]
     pub default_copy_format: String,
+    #[serde(default = "default_spell_check_enabled")]
+    pub spell_check_enabled: bool,
+    #[serde(default = "default_spell_check_language")]
+    pub spell_check_language: String,
 }
 
 fn default_copy_format() -> String {
     "formatted".to_string()
+}
+
+fn default_spell_check_enabled() -> bool {
+    true
+}
+
+fn default_spell_check_language() -> String {
+    "en_US".to_string()
 }
 
 impl Default for AppearancePreferences {
@@ -955,6 +967,8 @@ impl Default for AppearancePreferences {
             max_line_width: 72,
             typewriter_mode: false,
             default_copy_format: default_copy_format(),
+            spell_check_enabled: default_spell_check_enabled(),
+            spell_check_language: default_spell_check_language(),
         }
     }
 }
@@ -1101,6 +1115,135 @@ fn jot_directory_exists(path: &str) -> bool {
     p.exists() && p.is_dir()
 }
 
+// ==========================================
+// Personal Dictionary Commands
+// ==========================================
+
+/// A personal dictionary entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersonalDictionaryEntry {
+    pub word: String,
+    pub added_at: i64,
+}
+
+/// Personal dictionary stored on disk
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PersonalDictionary {
+    pub version: i32,
+    pub words: Vec<PersonalDictionaryEntry>,
+}
+
+impl Default for PersonalDictionary {
+    fn default() -> Self {
+        Self {
+            version: 1,
+            words: Vec::new(),
+        }
+    }
+}
+
+/// Get the personal dictionary file path
+fn get_personal_dictionary_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let app_data_dir = app.path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    Ok(app_data_dir.join("personal-dictionary.json"))
+}
+
+/// Read personal dictionary from disk
+#[tauri::command]
+fn jot_read_personal_dictionary(app: tauri::AppHandle) -> Result<Option<PersonalDictionary>, String> {
+    let dict_path = get_personal_dictionary_path(&app)?;
+
+    if !dict_path.exists() {
+        return Ok(None);
+    }
+
+    let content = fs::read_to_string(&dict_path)
+        .map_err(|e| format!("Failed to read personal dictionary: {}", e))?;
+
+    let dict: PersonalDictionary = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse personal dictionary: {}", e))?;
+
+    Ok(Some(dict))
+}
+
+/// Add a word to the personal dictionary
+#[tauri::command]
+fn jot_add_to_personal_dictionary(app: tauri::AppHandle, word: String) -> Result<(), String> {
+    let dict_path = get_personal_dictionary_path(&app)?;
+    let app_data_dir = app.path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+
+    // Create directory if needed
+    fs::create_dir_all(&app_data_dir)
+        .map_err(|e| format!("Failed to create app data dir: {}", e))?;
+
+    // Load existing dictionary or create new
+    let mut dict = if dict_path.exists() {
+        let content = fs::read_to_string(&dict_path)
+            .map_err(|e| format!("Failed to read personal dictionary: {}", e))?;
+        serde_json::from_str(&content)
+            .unwrap_or_else(|_| PersonalDictionary::default())
+    } else {
+        PersonalDictionary::default()
+    };
+
+    // Check if word already exists (case-insensitive)
+    let word_lower = word.to_lowercase();
+    if dict.words.iter().any(|e| e.word.to_lowercase() == word_lower) {
+        return Ok(()); // Already exists
+    }
+
+    // Add word
+    dict.words.push(PersonalDictionaryEntry {
+        word,
+        added_at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0),
+    });
+
+    // Save
+    let content = serde_json::to_string_pretty(&dict)
+        .map_err(|e| format!("Failed to serialize personal dictionary: {}", e))?;
+
+    atomic_write(
+        dict_path.to_str().ok_or("Invalid dictionary path")?,
+        &content
+    )
+}
+
+/// Remove a word from the personal dictionary
+#[tauri::command]
+fn jot_remove_from_personal_dictionary(app: tauri::AppHandle, word: String) -> Result<(), String> {
+    let dict_path = get_personal_dictionary_path(&app)?;
+
+    if !dict_path.exists() {
+        return Ok(()); // Nothing to remove
+    }
+
+    let content = fs::read_to_string(&dict_path)
+        .map_err(|e| format!("Failed to read personal dictionary: {}", e))?;
+
+    let mut dict: PersonalDictionary = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse personal dictionary: {}", e))?;
+
+    // Remove word (case-insensitive)
+    let word_lower = word.to_lowercase();
+    dict.words.retain(|e| e.word.to_lowercase() != word_lower);
+
+    // Save
+    let content = serde_json::to_string_pretty(&dict)
+        .map_err(|e| format!("Failed to serialize personal dictionary: {}", e))?;
+
+    atomic_write(
+        dict_path.to_str().ok_or("Invalid dictionary path")?,
+        &content
+    )
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -1143,6 +1286,10 @@ pub fn run() {
             jot_read_workspace_settings,
             jot_write_workspace_settings,
             jot_directory_exists,
+            // Personal dictionary commands
+            jot_read_personal_dictionary,
+            jot_add_to_personal_dictionary,
+            jot_remove_from_personal_dictionary,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

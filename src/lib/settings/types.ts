@@ -53,6 +53,10 @@ export interface AppearancePreferences {
   typewriterMode: boolean;
   /** Default copy format (formatted = rich text, markdown = plain text) */
   defaultCopyFormat: CopyFormat;
+  /** Whether spell checking is enabled */
+  spellCheckEnabled: boolean;
+  /** Spell check language code (e.g., "en_US", "fr_FR") */
+  spellCheckLanguage: string;
 }
 
 /**
@@ -129,6 +133,8 @@ export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
   maxLineWidth: 72,
   typewriterMode: false,
   defaultCopyFormat: "formatted",
+  spellCheckEnabled: true,
+  spellCheckLanguage: "en_US",
 };
 
 /**

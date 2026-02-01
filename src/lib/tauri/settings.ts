@@ -44,6 +44,8 @@ interface RustAppearancePreferences {
   max_line_width: number;
   typewriter_mode: boolean;
   default_copy_format?: string;
+  spell_check_enabled?: boolean;
+  spell_check_language?: string;
 }
 
 interface RustGlobalAppSettings {
@@ -93,6 +95,8 @@ function fromRustAppearance(rust: RustAppearancePreferences): AppearancePreferen
     maxLineWidth: rust.max_line_width,
     typewriterMode: rust.typewriter_mode,
     defaultCopyFormat: (rust.default_copy_format as CopyFormat) || "formatted",
+    spellCheckEnabled: rust.spell_check_enabled ?? true,
+    spellCheckLanguage: rust.spell_check_language ?? "en_US",
   };
 }
 
@@ -110,6 +114,8 @@ function toRustAppearance(ts: AppearancePreferences): RustAppearancePreferences 
     max_line_width: ts.maxLineWidth,
     typewriter_mode: ts.typewriterMode,
     default_copy_format: ts.defaultCopyFormat ?? "formatted",
+    spell_check_enabled: ts.spellCheckEnabled ?? true,
+    spell_check_language: ts.spellCheckLanguage ?? "en_US",
   };
 }
 

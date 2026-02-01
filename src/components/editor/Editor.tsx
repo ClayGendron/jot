@@ -23,6 +23,7 @@ import {
 } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 import type { FileEntry } from "@/lib/tauri/files";
 import { EditorToolbar } from "./EditorToolbar";
 import { CodeBlockWithCopy } from "./extensions/CodeBlockWithCopy";
@@ -30,14 +31,18 @@ import { HeadingWithId } from "./extensions/HeadingWithId";
 import { InternalLinkMark } from "./extensions/InternalLinkMark";
 import { InternalLink } from "./extensions/InternalLink";
 import { SearchAndReplace } from "./extensions/SearchAndReplace";
+import { SpellCheck } from "./extensions/SpellCheck";
 import { createSuggestionRender } from "./extensions/internalLinkSuggestionRender";
 import { SourceEditor } from "./SourceEditor";
 import { EditorContextMenu } from "./EditorContextMenu";
+import { SpellCheckContextMenu } from "./SpellCheckContextMenu";
 import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
 import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { useInternalLinkNavigation } from "@/hooks/useInternalLinkNavigation";
 import { readFile } from "@/lib/tauri/files";
 import { getRelativePath } from "@/lib/path/pathUtils";
+import { loadPersonalDictionary } from "@/lib/spellcheck/personalDictionary";
+import type { SpellCheckLanguage } from "@/lib/spellcheck";
 
 // Create lowlight instance with common languages
 const lowlight = createLowlight(common);
@@ -100,7 +105,17 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
     position: { x: number; y: number };
+    type: "regular" | "spellcheck";
+    spellError?: { word: string; from: number; to: number };
   } | null>(null);
+
+  // Spell check settings
+  const spellCheckEnabled = useSettingsStore(
+    (s) => s.appearance?.spellCheckEnabled ?? true
+  );
+  const spellCheckLanguage = useSettingsStore(
+    (s) => (s.appearance?.spellCheckLanguage ?? "en_US") as SpellCheckLanguage
+  );
 
   // Get files for internal link suggestions - compute with useMemo for React 19 compatibility
   // Using primitive selectors to avoid Zustand snapshot caching issues
@@ -185,6 +200,11 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
   const [markdownSource, setMarkdownSource] = useState("");
   const wasInSourceMode = useRef(false);
 
+  // Load personal dictionary on mount
+  useEffect(() => {
+    loadPersonalDictionary().catch(console.error);
+  }, []);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -240,6 +260,12 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
         searchResultClass: "search-result",
         searchResultCurrentClass: "search-result-current",
       }),
+      SpellCheck.configure({
+        spellErrorClass: "spell-error",
+        debounceMs: 500,
+        language: spellCheckLanguage,
+        enabled: spellCheckEnabled,
+      }),
     ],
     content: initialContent || content,
     autofocus,
@@ -271,6 +297,18 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
       editor.commands.setContent(initialContent);
     }
   }, [editor, initialContent]);
+
+  // Sync spell check settings with editor
+  useEffect(() => {
+    if (!editor) return;
+
+    if (spellCheckEnabled) {
+      editor.commands.enableSpellCheck();
+      editor.commands.setSpellCheckLanguage(spellCheckLanguage);
+    } else {
+      editor.commands.disableSpellCheck();
+    }
+  }, [editor, spellCheckEnabled, spellCheckLanguage]);
 
   // Handle mode switching
   useEffect(() => {
@@ -308,11 +346,51 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
       if (sourceMode) return;
 
       event.preventDefault();
+
+      // Check if we clicked on a spell error
+      const target = event.target as HTMLElement;
+      const spellErrorElement = target.closest("[data-spell-error]") as HTMLElement | null;
+
+      if (spellErrorElement && spellCheckEnabled) {
+        // Get spell error data from the element
+        const word = spellErrorElement.getAttribute("data-word") || spellErrorElement.textContent || "";
+
+        // Find the position in the document
+        // We need to find the decoration's position
+        const view = editor?.view;
+        if (view) {
+          const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          if (pos) {
+            // Search for the word boundaries around this position
+            const $pos = view.state.doc.resolve(pos.pos);
+            const start = $pos.start();
+            const textBefore = view.state.doc.textBetween(start, pos.pos, "");
+            const textAfter = view.state.doc.textBetween(pos.pos, $pos.end(), "");
+
+            // Find word boundaries
+            const beforeMatch = textBefore.match(/[a-zA-Z\u00C0-\u024F\u0400-\u04FF]*$/);
+            const afterMatch = textAfter.match(/^[a-zA-Z\u00C0-\u024F\u0400-\u04FF]*/);
+
+            const from = pos.pos - (beforeMatch?.[0]?.length || 0);
+            const to = pos.pos + (afterMatch?.[0]?.length || 0);
+
+            setContextMenu({
+              position: { x: event.clientX, y: event.clientY },
+              type: "spellcheck",
+              spellError: { word, from, to },
+            });
+            return;
+          }
+        }
+      }
+
+      // Regular context menu
       setContextMenu({
         position: { x: event.clientX, y: event.clientY },
+        type: "regular",
       });
     },
-    [sourceMode]
+    [sourceMode, spellCheckEnabled, editor]
   );
 
   // Dismiss context menu
@@ -367,7 +445,17 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
       ) : (
         <EditorContent editor={editor} />
       )}
-      {contextMenu && (
+      {contextMenu && contextMenu.type === "spellcheck" && contextMenu.spellError && (
+        <SpellCheckContextMenu
+          position={contextMenu.position}
+          word={contextMenu.spellError.word}
+          from={contextMenu.spellError.from}
+          to={contextMenu.spellError.to}
+          editor={editor}
+          onDismiss={handleDismissContextMenu}
+        />
+      )}
+      {contextMenu && contextMenu.type === "regular" && (
         <EditorContextMenu
           position={contextMenu.position}
           editor={editor}
