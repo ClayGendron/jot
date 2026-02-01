@@ -78,7 +78,6 @@ function createEditor(content: string = "<p>Hello world</p>"): Editor {
       StarterKit,
       SpellCheck.configure({
         spellErrorClass: "spell-error",
-        debounceMs: 0, // No debounce for tests
         language: "en_US",
         enabled: true,
       }),

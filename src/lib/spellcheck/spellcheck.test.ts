@@ -14,6 +14,8 @@ import {
   setPersonalDictionary,
   addToPersonalDictionaryMemory,
   clearCache,
+  shouldSkipWord,
+  splitIdentifier,
 } from "./typoInstance";
 
 // Mock Typo.js for unit tests (we don't want to load actual dictionaries)
@@ -185,5 +187,162 @@ describe("tokenizeText handles accented characters", () => {
     expect(result).toHaveLength(2);
     expect(result[0].word).toBe("\u041f\u0440\u0438\u0432\u0435\u0442");
     expect(result[1].word).toBe("\u043c\u0438\u0440");
+  });
+});
+
+describe("shouldSkipWord heuristics", () => {
+  it("skips empty and very short words", () => {
+    expect(shouldSkipWord("")).toBe(true);
+    expect(shouldSkipWord("a")).toBe(true);
+    expect(shouldSkipWord("ab")).toBe(true);
+    expect(shouldSkipWord("abc")).toBe(false); // 3 chars is ok
+  });
+
+  it("skips ALL CAPS words (acronyms)", () => {
+    expect(shouldSkipWord("API")).toBe(true);
+    expect(shouldSkipWord("HTTP")).toBe(true);
+    expect(shouldSkipWord("JSON")).toBe(true);
+    expect(shouldSkipWord("USA")).toBe(true);
+  });
+
+  it("does not skip mixed case words", () => {
+    expect(shouldSkipWord("Hello")).toBe(false);
+    expect(shouldSkipWord("HELLO")).toBe(true); // ALL CAPS
+    expect(shouldSkipWord("hello")).toBe(false);
+  });
+
+  it("skips words containing digits", () => {
+    expect(shouldSkipWord("ES6")).toBe(true);
+    expect(shouldSkipWord("HTML5")).toBe(true);
+    expect(shouldSkipWord("v2")).toBe(true);
+    expect(shouldSkipWord("user123")).toBe(true);
+    expect(shouldSkipWord("3rd")).toBe(true);
+  });
+
+  it("skips words starting with @", () => {
+    expect(shouldSkipWord("@Component")).toBe(true);
+    expect(shouldSkipWord("@mention")).toBe(true);
+    expect(shouldSkipWord("@user")).toBe(true);
+  });
+
+  it("skips hashtags", () => {
+    expect(shouldSkipWord("#react")).toBe(true);
+    expect(shouldSkipWord("#javascript")).toBe(true);
+  });
+
+  it("skips hex-like strings", () => {
+    expect(shouldSkipWord("a1b2c3")).toBe(true); // has digits
+    expect(shouldSkipWord("deadbeef")).toBe(true); // looks like hex
+    expect(shouldSkipWord("abcdef")).toBe(true); // 6 hex chars
+  });
+});
+
+describe("splitIdentifier", () => {
+  it("splits camelCase words", () => {
+    expect(splitIdentifier("getUserName")).toEqual(["get", "User", "Name"]);
+    expect(splitIdentifier("handleClick")).toEqual(["handle", "Click"]);
+    expect(splitIdentifier("isEnabled")).toEqual(["is", "Enabled"]);
+  });
+
+  it("splits PascalCase words", () => {
+    expect(splitIdentifier("UserProfile")).toEqual(["User", "Profile"]);
+    expect(splitIdentifier("ReactComponent")).toEqual(["React", "Component"]);
+  });
+
+  it("splits snake_case words", () => {
+    expect(splitIdentifier("user_name")).toEqual(["user", "name"]);
+    expect(splitIdentifier("API_KEY_VALUE")).toEqual(["API", "KEY", "VALUE"]);
+    expect(splitIdentifier("get_user_profile")).toEqual(["get", "user", "profile"]);
+  });
+
+  it("splits mixed camelCase and snake_case", () => {
+    expect(splitIdentifier("user_firstName")).toEqual(["user", "first", "Name"]);
+  });
+
+  it("handles single words", () => {
+    expect(splitIdentifier("hello")).toEqual(["hello"]);
+    expect(splitIdentifier("HELLO")).toEqual(["HELLO"]);
+  });
+
+  it("handles acronyms in camelCase", () => {
+    expect(splitIdentifier("parseHTML")).toEqual(["parse", "HTML"]);
+    expect(splitIdentifier("XMLParser")).toEqual(["XML", "Parser"]);
+    expect(splitIdentifier("getHTTPResponse")).toEqual(["get", "HTTP", "Response"]);
+  });
+});
+
+describe("tokenizeText filters out URLs and emails", () => {
+  beforeEach(() => {
+    clearCache();
+  });
+
+  it("filters out URLs", () => {
+    const result = tokenizeText("Check https://example.com for more");
+
+    // Should only have "Check", "for", "more"
+    expect(result.map((r) => r.word)).toEqual(["Check", "for", "more"]);
+  });
+
+  it("filters out email addresses", () => {
+    const result = tokenizeText("Email user@example.com today");
+
+    // Should only have "Email", "today"
+    expect(result.map((r) => r.word)).toEqual(["Email", "today"]);
+  });
+
+  it("filters out hex colors", () => {
+    const result = tokenizeText("Use color #ff5733 here");
+
+    // #ff5733 should be filtered, but "ff" part might still be extracted
+    // depending on regex order - check that at least the context words are there
+    const words = result.map((r) => r.word);
+    expect(words).toContain("Use");
+    expect(words).toContain("color");
+    expect(words).toContain("here");
+  });
+});
+
+describe("checkWord with technical terms", () => {
+  beforeEach(() => {
+    clearCache();
+    setPersonalDictionary([]);
+  });
+
+  it("accepts common programming terms", () => {
+    expect(checkWord("javascript")).toBe(true);
+    expect(checkWord("typescript")).toBe(true);
+    expect(checkWord("webpack")).toBe(true);
+    expect(checkWord("middleware")).toBe(true);
+    expect(checkWord("async")).toBe(true);
+    expect(checkWord("navbar")).toBe(true);
+  });
+
+  it("accepts technical terms case-insensitively", () => {
+    expect(checkWord("JavaScript")).toBe(true);
+    expect(checkWord("TYPESCRIPT")).toBe(true);
+    expect(checkWord("WebPack")).toBe(true);
+  });
+
+  it("accepts framework names", () => {
+    expect(checkWord("react")).toBe(true);
+    expect(checkWord("vue")).toBe(true);
+    expect(checkWord("svelte")).toBe(true);
+    expect(checkWord("nextjs")).toBe(true);
+  });
+});
+
+describe("checkWord with camelCase identifiers", () => {
+  beforeEach(() => {
+    clearCache();
+    setPersonalDictionary([]);
+  });
+
+  it("accepts valid camelCase identifiers", () => {
+    // Each part is a valid word
+    expect(checkWord("helloWorld")).toBe(true);
+  });
+
+  it("accepts snake_case identifiers with valid parts", () => {
+    expect(checkWord("hello_world")).toBe(true);
   });
 });

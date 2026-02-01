@@ -5,7 +5,6 @@
  * - Red wavy underline on misspelled words via ProseMirror decorations
  * - Code block exclusion (no spell checking inside code)
  * - Integration with Typo.js and personal dictionary
- * - Debounced checking for performance
  */
 
 import { Extension } from "@tiptap/core";
@@ -25,8 +24,6 @@ import type { SpellCheckLanguage, MisspelledWord } from "@/lib/spellcheck";
 export interface SpellCheckOptions {
   /** CSS class for misspelled words */
   spellErrorClass: string;
-  /** Debounce delay in milliseconds */
-  debounceMs: number;
   /** Language for spell checking */
   language: SpellCheckLanguage;
   /** Whether spell checking is enabled */
@@ -42,8 +39,6 @@ export interface SpellCheckStorage {
   errors: MisspelledWord[];
   /** Words to ignore for this session */
   ignoredWords: Set<string>;
-  /** Debounce timer ID */
-  debounceTimer: ReturnType<typeof setTimeout> | null;
 }
 
 declare module "@tiptap/core" {
@@ -182,7 +177,6 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
   addOptions() {
     return {
       spellErrorClass: "spell-error",
-      debounceMs: 500,
       language: "en_US",
       enabled: true,
     };
@@ -194,7 +188,6 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
       enabled: this.options.enabled,
       errors: [],
       ignoredWords: new Set(),
-      debounceTimer: null,
     };
   },
 

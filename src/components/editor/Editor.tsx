@@ -262,7 +262,6 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
       }),
       SpellCheck.configure({
         spellErrorClass: "spell-error",
-        debounceMs: 500,
         language: spellCheckLanguage,
         enabled: spellCheckEnabled,
       }),
