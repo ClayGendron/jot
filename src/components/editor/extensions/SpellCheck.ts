@@ -201,7 +201,12 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
   onCreate() {
     // Initialize spell checker with configured language
     if (this.storage.enabled) {
-      initSpellChecker(this.storage.language).catch(console.error);
+      initSpellChecker(this.storage.language)
+        .then(() => {
+          // Force a transaction to trigger decoration refresh after dictionary loads
+          this.editor.view.dispatch(this.editor.state.tr);
+        })
+        .catch(console.error);
     }
   },
 
@@ -342,8 +347,13 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
               return DecorationSet.empty;
             }
 
-            // If document changed, recheck spelling
-            if (tr.docChanged) {
+            // Check if we need to recompute decorations:
+            // 1. Document changed
+            // 2. Dictionary just became ready (old decorations empty but checker ready)
+            const needsRecheck = tr.docChanged ||
+              (oldDecorations === DecorationSet.empty && storage.errors.length === 0);
+
+            if (needsRecheck) {
               // Clear any pending debounce
               if (storage.debounceTimer) {
                 clearTimeout(storage.debounceTimer);
@@ -367,7 +377,9 @@ export const SpellCheck = Extension.create<SpellCheckOptions, SpellCheckStorage>
 
               // Large document - debounce
               // For now, map old decorations and schedule recheck
-              const mappedDecorations = oldDecorations.map(tr.mapping, tr.doc);
+              const mappedDecorations = tr.docChanged
+                ? oldDecorations.map(tr.mapping, tr.doc)
+                : oldDecorations;
 
               // Schedule recheck
               storage.debounceTimer = setTimeout(() => {
