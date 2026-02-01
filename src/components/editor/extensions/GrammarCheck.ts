@@ -19,6 +19,8 @@ import {
   addIgnoredRuleMemory,
 } from "@/lib/grammarcheck";
 import type { GrammarDialect, GrammarIssue } from "@/lib/grammarcheck";
+import { getChangedRanges, type Range } from "@/lib/proofing";
+import { tokenizeText } from "@/lib/spellcheck";
 
 export interface GrammarCheckOptions {
   /** CSS class for grammar errors */
@@ -27,8 +29,6 @@ export interface GrammarCheckOptions {
   dialect: GrammarDialect;
   /** Whether grammar checking is enabled */
   enabled: boolean;
-  /** Debounce delay in ms (grammar checking is heavier than spell check) */
-  debounceMs: number;
 }
 
 export interface GrammarCheckStorage {
@@ -86,6 +86,17 @@ declare module "@tiptap/core" {
 }
 
 export const GrammarCheckPluginKey = new PluginKey("grammarCheck");
+
+/** Delay before checking a word after typing stops */
+const WORD_DEBOUNCE_MS = 500;
+
+/** A word that was recently modified and hasn't been checked yet */
+interface PendingWord {
+  from: number;
+  to: number;
+  word: string;
+  timerId: ReturnType<typeof setTimeout>;
+}
 
 /**
  * Check if a position is inside a code block or inline code
@@ -193,6 +204,57 @@ function createDecorations(
   return DecorationSet.create(doc, decorations);
 }
 
+/**
+ * Create decorations excluding words that are currently pending (being typed)
+ */
+function createDecorationsExcludingPending(
+  doc: ProseMirrorNode,
+  issues: GrammarIssue[],
+  errorClass: string,
+  pendingWords: Map<string, PendingWord>
+): DecorationSet {
+  // Filter out issues that overlap with pending words
+  const visibleIssues = issues.filter((issue) => {
+    for (const pending of pendingWords.values()) {
+      // Check for overlap
+      if (issue.to >= pending.from && issue.from <= pending.to) {
+        return false;
+      }
+    }
+    return true;
+  });
+  return createDecorations(doc, visibleIssues, errorClass);
+}
+
+/**
+ * Find words that overlap with the given ranges
+ */
+function findWordsInRanges(
+  doc: ProseMirrorNode,
+  ranges: Range[]
+): Array<{ word: string; from: number; to: number }> {
+  const words: Array<{ word: string; from: number; to: number }> = [];
+
+  for (const range of ranges) {
+    doc.nodesBetween(range.from, range.to, (node, pos) => {
+      if (!node.isText || !node.text) return;
+      if (isInsideCode(doc, pos)) return;
+
+      const tokens = tokenizeText(node.text);
+      for (const token of tokens) {
+        const wordFrom = pos + token.start;
+        const wordTo = pos + token.end;
+        // Include if overlaps with changed range
+        if (wordTo >= range.from && wordFrom <= range.to) {
+          words.push({ word: token.word, from: wordFrom, to: wordTo });
+        }
+      }
+    });
+  }
+
+  return words;
+}
+
 export const GrammarCheck = Extension.create<GrammarCheckOptions, GrammarCheckStorage>({
   name: "grammarCheck",
 
@@ -201,7 +263,6 @@ export const GrammarCheck = Extension.create<GrammarCheckOptions, GrammarCheckSt
       grammarErrorClass: "grammar-error",
       dialect: "american",
       enabled: true,
-      debounceMs: 300,
     };
   },
 
@@ -341,10 +402,12 @@ export const GrammarCheck = Extension.create<GrammarCheckOptions, GrammarCheckSt
   },
 
   addProseMirrorPlugins() {
-    const { grammarErrorClass, debounceMs } = this.options;
+    const { grammarErrorClass } = this.options;
     const storage = this.storage;
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    let pendingCheck = false;
+    const editor = this.editor;
+
+    // Track pending words (recently modified, not yet checked)
+    const pendingWords = new Map<string, PendingWord>();
 
     return [
       new Plugin({
@@ -367,48 +430,134 @@ export const GrammarCheck = Extension.create<GrammarCheckOptions, GrammarCheckSt
               return DecorationSet.empty;
             }
 
-            // If document changed, map existing decorations and schedule recheck
-            if (tr.docChanged) {
-              // Map existing decorations to new positions
-              const mapped = oldDecorations.map(tr.mapping, tr.doc);
-
-              // Schedule debounced recheck
-              if (debounceTimer) {
-                clearTimeout(debounceTimer);
-              }
-
-              if (!pendingCheck) {
-                pendingCheck = true;
-                debounceTimer = setTimeout(() => {
-                  pendingCheck = false;
-                  // Run grammar check asynchronously
-                  findGrammarIssues(
-                    newState.doc,
-                    storage.ignoredRules,
-                    storage.ignoredIssues
-                  ).then((issues) => {
-                    storage.issues = issues;
-                    // Get the editor view from the plugin state
-                    // We need to dispatch a transaction to update decorations
-                    // This is handled by the command system
-                  });
-                }, debounceMs);
-              }
-
-              return mapped;
-            }
-
-            // If we have issues, create decorations
-            if (storage.issues.length > 0) {
-              return createDecorations(
+            // Handle debounce completion signal
+            const meta = tr.getMeta(GrammarCheckPluginKey);
+            if (meta?.type === "checkComplete") {
+              const key = meta.wordKey as string;
+              pendingWords.delete(key);
+              // Create decorations excluding remaining pending words
+              return createDecorationsExcludingPending(
                 newState.doc,
                 storage.issues,
-                grammarErrorClass
+                grammarErrorClass,
+                pendingWords
               );
             }
 
-            // No changes - keep existing or return empty
-            return oldDecorations;
+            // Handle async grammar check completion
+            if (meta?.type === "grammarCheckDone") {
+              return createDecorationsExcludingPending(
+                newState.doc,
+                storage.issues,
+                grammarErrorClass,
+                pendingWords
+              );
+            }
+
+            // Handle init signal (grammar checker just became ready)
+            const needsFullCheck =
+              oldDecorations === DecorationSet.empty &&
+              storage.issues.length === 0;
+
+            if (!tr.docChanged) {
+              if (needsFullCheck) {
+                // Grammar checker just became ready - run full check
+                findGrammarIssues(
+                  newState.doc,
+                  storage.ignoredRules,
+                  storage.ignoredIssues
+                ).then((issues) => {
+                  storage.issues = issues;
+                  if (editor?.view) {
+                    editor.view.dispatch(
+                      editor.state.tr.setMeta(GrammarCheckPluginKey, {
+                        type: "grammarCheckDone",
+                      })
+                    );
+                  }
+                });
+              }
+              // No document change - keep existing decorations
+              return oldDecorations;
+            }
+
+            // Document changed - find affected words and mark them as pending
+
+            // 1. Get changed ranges
+            const changedRanges = getChangedRanges(tr);
+
+            // 2. Find words overlapping changed ranges
+            const affectedWords = findWordsInRanges(newState.doc, changedRanges);
+
+            // 3. Mark affected words as pending
+            for (const word of affectedWords) {
+              const key = `${word.from}-${word.to}`;
+
+              // Clear existing timer for this key
+              const existing = pendingWords.get(key);
+              if (existing) {
+                clearTimeout(existing.timerId);
+              }
+
+              // Schedule check after debounce
+              const timerId = setTimeout(() => {
+                // Run async grammar check for the whole document
+                // (Harper.js checks entire text at once, so we recheck everything)
+                findGrammarIssues(
+                  editor.state.doc,
+                  storage.ignoredRules,
+                  storage.ignoredIssues
+                ).then((issues) => {
+                  storage.issues = issues;
+                  if (editor?.view) {
+                    editor.view.dispatch(
+                      editor.state.tr.setMeta(GrammarCheckPluginKey, {
+                        type: "checkComplete",
+                        wordKey: key,
+                      })
+                    );
+                  }
+                });
+              }, WORD_DEBOUNCE_MS);
+
+              pendingWords.set(key, { ...word, timerId });
+            }
+
+            // 4. Map positions of existing pending words that weren't affected
+            for (const [key, pending] of [...pendingWords]) {
+              // Skip words we just added
+              if (affectedWords.some((w) => `${w.from}-${w.to}` === key)) {
+                continue;
+              }
+
+              const newFrom = tr.mapping.map(pending.from);
+              const newTo = tr.mapping.map(pending.to);
+              const newKey = `${newFrom}-${newTo}`;
+
+              if (newKey !== key) {
+                pendingWords.delete(key);
+                pendingWords.set(newKey, {
+                  ...pending,
+                  from: newFrom,
+                  to: newTo,
+                });
+              }
+            }
+
+            // 5. Update stored issues with mapped positions
+            storage.issues = storage.issues.map((issue) => ({
+              ...issue,
+              from: tr.mapping.map(issue.from),
+              to: tr.mapping.map(issue.to),
+            }));
+
+            // 6. Create decorations, excluding pending words
+            return createDecorationsExcludingPending(
+              newState.doc,
+              storage.issues,
+              grammarErrorClass,
+              pendingWords
+            );
           },
         },
 
