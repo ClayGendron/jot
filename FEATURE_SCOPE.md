@@ -41,7 +41,8 @@ Jot is a distraction-free markdown editor for writers and note-takers who want s
 | **Editor Engine** | TipTap | ProseMirror-based, extensible, great WYSIWYG support |
 | **Vector Search** | Custom HNSW (Rust) | On-device, stored in `.jot/` directory |
 | **Embeddings** | all-MiniLM-L6-v2 | ~30MB model, fast inference, good quality |
-| **Spell/Grammar** | LanguageTool | On-device, no cloud, comprehensive rules |
+| **Spell Check** | SymSpell | On-device, fast fuzzy matching |
+| **Grammar Check** | Harper.js | On-device via WebAssembly, no cloud |
 | **Local Database** | SQLite | Version history, settings, metadata |
 | **Export Engine** | pdf-lib + docx | Built-in, no external dependencies |
 
@@ -244,7 +245,7 @@ workspace/
 
 ### 4.2 Semantic Search (Vector)
 
-**Priority**: P0 | **Status**: 🔴 Backlog
+**Priority**: P0 | **Status**: 🟢 Done
 
 | ID | User Story | Acceptance Criteria |
 | --- | --- | --- |
@@ -542,7 +543,7 @@ workspace/
     
 -   Semantic search (opt-in)
     
--   Spell check and grammar (LanguageTool)
+-   Spell check (SymSpell) and grammar (Harper.js)
     
 -   PDF and Word export
     
@@ -595,14 +596,14 @@ workspace/
 
 ## Technical Notes
 
-### Rust Crates to Evaluate
+### Rust Crates (Selected)
 
--   `hnsw` or custom implementation for vector index
-    
+-   `candle` for embeddings (with Metal GPU acceleration on macOS)
+
+-   `hnsw_rs` for vector index
+
 -   `rusqlite` for SQLite
-    
--   `fastembed-rs` or ONNX runtime for embeddings
-    
+
 -   `tauri` 2.0 for desktop app
     
 
@@ -647,7 +648,7 @@ workspace/
 
 ---
 
-*Document last updated: 2026-01-29Version: 1.0-draft*
+*Document last updated: 2026-02-02 | Version: 1.0-draft*
 
 ---
 
@@ -847,10 +848,30 @@ workspace/
 
 -   E5.1.5: Spell check ignores code blocks, URLs, and paths ✅
 
+-   E5.2.1: Grammar issues highlighted with cyan underline ✅
+
+-   E5.2.2: Right-click shows explanation and suggestion ✅
+
+-   E5.2.3: Accept or ignore suggestions via context menu ✅
+
+-   E5.2.4: Harper.js runs locally via WebAssembly, no cloud ✅
+
+-   E5.2.5: Grammar check toggle in settings with dialect selector ✅
+
+-   E4.2.1: Opt-in semantic search with model download ✅
+
+-   E4.2.2: Search by meaning, not just keywords ✅
+
+-   E4.2.3: Background indexing on save with progress indicator ✅
+
+-   E4.2.4: Related documents panel for current file ✅
+
+-   E4.2.5: All processing on-device, embeddings in `.jot/` ✅
+
+-   E4.2.6: Rebuild index option in settings ✅
+
 
 ### Remaining P0 Work
-
--   Epic 4.2: Semantic search (vector)
 
 -   Epic 10.1: iOS app
 
@@ -867,7 +888,9 @@ workspace/
 -   ~~Epic 3.1: Automatic Saving~~ ✅
 -   ~~Epic 3.2: Version History~~ ✅
 -   ~~Epic 4.1: Keyword Search~~ ✅
+-   ~~Epic 4.2: Semantic Search~~ ✅
 -   ~~Epic 5.1: Spell Checking~~ ✅
+-   ~~Epic 5.2: Grammar Checking~~ ✅
 -   ~~Epic 6.1: PDF Export~~ ✅
 -   ~~Epic 6.2: Word/DOCX Export~~ ✅
 -   ~~Epic 6.4: Copy Formatted~~ ✅
