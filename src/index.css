@@ -10,7 +10,7 @@
 @theme {
   /* Typography */
   --font-serif: "Crimson Pro", Georgia, serif;
-  --font-sans: "Inter", system-ui, sans-serif;
+  --font-sans: "Open Sans", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
   /* Light theme - Warm paper tones */
