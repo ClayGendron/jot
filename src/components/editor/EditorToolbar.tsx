@@ -20,6 +20,11 @@ import {
 import { useEditorStore } from "@/stores/editorStore";
 import { ThemeStyleDropdown } from "./ThemeStyleDropdown";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface EditorToolbarProps {
   editor: Editor;
@@ -29,7 +34,8 @@ interface ToolbarButtonProps {
   onClick: () => void;
   isActive?: boolean;
   disabled?: boolean;
-  title: string;
+  label: string;
+  shortcut?: string;
   children: React.ReactNode;
 }
 
@@ -37,21 +43,33 @@ function ToolbarButton({
   onClick,
   isActive = false,
   disabled = false,
-  title,
+  label,
+  shortcut,
   children,
 }: ToolbarButtonProps) {
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      active={isActive}
-      data-testid={`toolbar-${title.toLowerCase().replace(/\s+/g, "-")}`}
-    >
-      {children}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClick}
+          disabled={disabled}
+          active={isActive}
+          data-testid={`toolbar-${label.toLowerCase().replace(/\s+/g, "-")}`}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={8}>
+        <span>{label}</span>
+        {shortcut && (
+          <kbd className="ml-2 text-[10px] text-muted-foreground/70 font-mono">
+            {shortcut}
+          </kbd>
+        )}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -186,7 +204,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={toggleBold}
           isActive={editor.isActive("bold")}
-          title="Bold"
+          label="Bold"
+          shortcut="⌘B"
           disabled={sourceMode}
         >
           <Bold className="h-4 w-4" />
@@ -194,7 +213,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={toggleItalic}
           isActive={editor.isActive("italic")}
-          title="Italic"
+          label="Italic"
+          shortcut="⌘I"
           disabled={sourceMode}
         >
           <Italic className="h-4 w-4" />
@@ -202,7 +222,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={toggleStrike}
           isActive={editor.isActive("strike")}
-          title="Strikethrough"
+          label="Strikethrough"
+          shortcut="⌘⇧S"
           disabled={sourceMode}
         >
           <Strikethrough className="h-4 w-4" />
@@ -210,7 +231,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={toggleHighlight}
           isActive={editor.isActive("highlight")}
-          title="Highlight"
+          label="Highlight"
+          shortcut="⌘⇧H"
           disabled={sourceMode}
         >
           <Highlighter className="h-4 w-4" />
@@ -218,7 +240,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={toggleCode}
           isActive={editor.isActive("code")}
-          title="Inline Code"
+          label="Inline Code"
+          shortcut="⌘E"
           disabled={sourceMode}
         >
           <Code className="h-4 w-4" />
@@ -232,7 +255,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={setParagraph}
           isActive={editor.isActive("paragraph")}
-          title="Paragraph"
+          label="Paragraph"
+          shortcut="⌘⌥0"
           disabled={sourceMode}
         >
           P
@@ -240,7 +264,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={() => setHeading(1)}
           isActive={editor.isActive("heading", { level: 1 })}
-          title="Heading 1"
+          label="Heading 1"
+          shortcut="⌘⌥1"
           disabled={sourceMode}
         >
           H1
@@ -248,7 +273,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={() => setHeading(2)}
           isActive={editor.isActive("heading", { level: 2 })}
-          title="Heading 2"
+          label="Heading 2"
+          shortcut="⌘⌥2"
           disabled={sourceMode}
         >
           H2
@@ -256,7 +282,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={() => setHeading(3)}
           isActive={editor.isActive("heading", { level: 3 })}
-          title="Heading 3"
+          label="Heading 3"
+          shortcut="⌘⌥3"
           disabled={sourceMode}
         >
           H3
@@ -270,7 +297,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={toggleBulletList}
           isActive={editor.isActive("bulletList")}
-          title="Bullet List"
+          label="Bullet List"
+          shortcut="⌘⇧8"
           disabled={sourceMode}
         >
           <List className="h-4 w-4" />
@@ -278,7 +306,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={toggleOrderedList}
           isActive={editor.isActive("orderedList")}
-          title="Numbered List"
+          label="Numbered List"
+          shortcut="⌘⇧7"
           disabled={sourceMode}
         >
           <ListOrdered className="h-4 w-4" />
@@ -286,7 +315,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={toggleTaskList}
           isActive={editor.isActive("taskList")}
-          title="Task List"
+          label="Task List"
+          shortcut="⌘⇧9"
           disabled={sourceMode}
         >
           <ListTodo className="h-4 w-4" />
@@ -300,7 +330,8 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={toggleBlockquote}
           isActive={editor.isActive("blockquote")}
-          title="Quote"
+          label="Quote"
+          shortcut="⌘⇧B"
           disabled={sourceMode}
         >
           <Quote className="h-4 w-4" />
@@ -308,15 +339,24 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={toggleCodeBlock}
           isActive={editor.isActive("codeBlock")}
-          title="Code Block"
+          label="Code Block"
+          shortcut="⌘⌥C"
           disabled={sourceMode}
         >
           <SquareCode className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton onClick={insertHorizontalRule} title="Horizontal Rule" disabled={sourceMode}>
+        <ToolbarButton
+          onClick={insertHorizontalRule}
+          label="Horizontal Rule"
+          disabled={sourceMode}
+        >
           <Minus className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton onClick={insertTable} title="Insert Table" disabled={sourceMode}>
+        <ToolbarButton
+          onClick={insertTable}
+          label="Insert Table"
+          disabled={sourceMode}
+        >
           <Table className="h-4 w-4" />
         </ToolbarButton>
       </div>
@@ -328,12 +368,17 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         <ToolbarButton
           onClick={setLink}
           isActive={editor.isActive("link")}
-          title="Link"
+          label="Link"
+          shortcut="⌘K"
           disabled={sourceMode}
         >
           <Link className="h-4 w-4" />
         </ToolbarButton>
-        <ToolbarButton onClick={insertImage} title="Image" disabled={sourceMode}>
+        <ToolbarButton
+          onClick={insertImage}
+          label="Image"
+          disabled={sourceMode}
+        >
           <Image className="h-4 w-4" />
         </ToolbarButton>
       </div>
@@ -342,17 +387,24 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
       {/* View Mode Toggle */}
       <div className="toolbar-group">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={toggleSourceMode}
-          title={sourceMode ? "Switch to WYSIWYG (⌘/)" : "Switch to Source (⌘/)"}
-          active={sourceMode}
-          data-testid="view-mode-toggle"
-        >
-          {sourceMode ? <AlignLeft className="size-3.5" /> : <Code className="size-3.5" />}
-          <span className="text-xs font-medium">{sourceMode ? "WYSIWYG" : "Source"}</span>
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={toggleSourceMode}
+              active={sourceMode}
+              data-testid="view-mode-toggle"
+            >
+              {sourceMode ? <AlignLeft className="size-3.5" /> : <Code className="size-3.5" />}
+              <span className="text-xs font-medium">{sourceMode ? "WYSIWYG" : "Source"}</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={8}>
+            <span>{sourceMode ? "Switch to WYSIWYG" : "Switch to Source"}</span>
+            <kbd className="ml-2 text-[10px] text-muted-foreground/70 font-mono">⌘/</kbd>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       <ToolbarDivider />
