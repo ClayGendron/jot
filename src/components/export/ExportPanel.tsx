@@ -14,6 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   exportAndDownloadPdf,
   type ExportOptions,
   type PageSize,
@@ -171,35 +178,19 @@ export function ExportPanel({
             {/* Page Size */}
             <div className="export-row">
               <label className="export-label">Size</label>
-              <div className="flex gap-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  active={pageSize === "letter"}
-                  onClick={() => setPageSize("letter")}
-                  className="flex-1"
-                >
-                  Letter
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  active={pageSize === "a4"}
-                  onClick={() => setPageSize("a4")}
-                  className="flex-1"
-                >
-                  A4
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  active={pageSize === "legal"}
-                  onClick={() => setPageSize("legal")}
-                  className="flex-1"
-                >
-                  Legal
-                </Button>
-              </div>
+              <Select
+                value={pageSize}
+                onValueChange={(value) => setPageSize(value as PageSize)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="letter">Letter (8.5" × 11")</SelectItem>
+                  <SelectItem value="a4">A4 (210 × 297 mm)</SelectItem>
+                  <SelectItem value="legal">Legal (8.5" × 14")</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Orientation (PDF only) */}

@@ -1,4 +1,19 @@
-import { useEffect, useRef } from "react";
+/**
+ * Tab Context Menu Component
+ *
+ * Right-click context menu for tabs with options to:
+ * - Pin/Unpin tab
+ * - Close tab
+ * - Close other tabs
+ * - Close all tabs
+ */
+
+import { usePositionedMenu } from "@/hooks/usePositionedMenu";
+import {
+  PositionedMenu,
+  PositionedMenuItem,
+  PositionedMenuSeparator,
+} from "@/components/ui/positioned-menu";
 
 interface TabContextMenuProps {
   position: { x: number; y: number };
@@ -19,96 +34,53 @@ export function TabContextMenu({
   onCloseAll,
   onDismiss,
 }: TabContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // Close on click outside
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onDismiss();
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onDismiss]);
-
-  // Close on Escape
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onDismiss();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onDismiss]);
-
-  // Calculate position to keep menu on screen
-  const adjustedPosition = {
-    x: Math.min(position.x, window.innerWidth - 180),
-    y: Math.min(position.y, window.innerHeight - 200),
-  };
+  const menuRef = usePositionedMenu({ onDismiss });
 
   return (
-    <div
+    <PositionedMenu
       ref={menuRef}
-      className="tab-context-menu"
-      style={{
-        left: adjustedPosition.x,
-        top: adjustedPosition.y,
-      }}
-      role="menu"
+      position={position}
+      menuWidth={180}
+      menuHeight={200}
       data-testid="tab-context-menu"
     >
-      <button
-        type="button"
-        className="tab-context-menu-item"
+      <PositionedMenuItem
         onClick={() => {
           onPin();
           onDismiss();
         }}
-        role="menuitem"
       >
         {isPinned ? "Unpin Tab" : "Pin Tab"}
-      </button>
+      </PositionedMenuItem>
 
-      <div className="tab-context-menu-divider" />
+      <PositionedMenuSeparator />
 
-      <button
-        type="button"
-        className="tab-context-menu-item"
+      <PositionedMenuItem
         onClick={() => {
           onClose();
           onDismiss();
         }}
-        role="menuitem"
       >
         Close
-      </button>
+      </PositionedMenuItem>
 
-      <button
-        type="button"
-        className="tab-context-menu-item"
+      <PositionedMenuItem
         onClick={() => {
           onCloseOthers();
           onDismiss();
         }}
-        role="menuitem"
       >
         Close Others
-      </button>
+      </PositionedMenuItem>
 
-      <button
-        type="button"
-        className="tab-context-menu-item"
+      <PositionedMenuItem
         onClick={() => {
           onCloseAll();
           onDismiss();
         }}
-        role="menuitem"
       >
         Close All
-      </button>
-    </div>
+      </PositionedMenuItem>
+    </PositionedMenu>
   );
 }

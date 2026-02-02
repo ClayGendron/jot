@@ -5,11 +5,17 @@
  * content in different formats (formatted/rich text or markdown).
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import type { Editor } from "@tiptap/react";
 import { copyAsFormatted, copyAsMarkdown } from "@/lib/clipboard/copyFormatted";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { FileText, FileCode, Check } from "lucide-react";
+import { usePositionedMenu } from "@/hooks/usePositionedMenu";
+import {
+  PositionedMenu,
+  PositionedMenuItem,
+  PositionedMenuSeparator,
+} from "@/components/ui/positioned-menu";
 
 interface EditorContextMenuProps {
   /** Position to show the menu */
@@ -30,40 +36,12 @@ export function EditorContextMenu({
   editor,
   onDismiss,
 }: EditorContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuRef = usePositionedMenu({ onDismiss });
   const [copyFeedback, setCopyFeedback] = useState<"formatted" | "markdown" | null>(null);
 
   // Get default copy format from settings
   const defaultCopyFormat = useSettingsStore((s) => s.appearance?.defaultCopyFormat ?? "formatted");
   const updateAppearance = useSettingsStore((s) => s.updateAppearance);
-
-  // Adjust position to keep menu on screen
-  const adjustedPosition = {
-    x: Math.min(position.x, window.innerWidth - 200),
-    y: Math.min(position.y, window.innerHeight - 180),
-  };
-
-  // Click outside handler
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onDismiss();
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onDismiss]);
-
-  // Escape key handler
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onDismiss();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onDismiss]);
 
   // Get selected content or full document
   const getContent = useCallback(() => {
@@ -133,73 +111,52 @@ export function EditorContextMenu({
   const copyLabel = hasSelection ? "Copy Selection" : "Copy All";
 
   return (
-    <div
+    <PositionedMenu
       ref={menuRef}
-      className="editor-context-menu"
-      style={{
-        left: adjustedPosition.x,
-        top: adjustedPosition.y,
-      }}
-      role="menu"
+      position={position}
+      menuWidth={200}
+      menuHeight={180}
       aria-label="Editor context menu"
     >
-      <button
-        className="editor-context-menu-item"
-        onClick={handleCopyFormatted}
-        role="menuitem"
-      >
-        <span className="editor-context-menu-icon">
-          <FileText className="h-4 w-4" />
-        </span>
-        <span className="editor-context-menu-label">
+      <PositionedMenuItem onClick={handleCopyFormatted}>
+        <FileText className="h-4 w-4" />
+        <span className="flex-1">
           {copyFeedback === "formatted" ? "Copied!" : `${copyLabel} as Formatted`}
         </span>
         {defaultCopyFormat === "formatted" && (
-          <span className="editor-context-menu-badge">Default</span>
+          <span className="text-xs text-muted-foreground">Default</span>
         )}
-      </button>
+      </PositionedMenuItem>
 
-      <button
-        className="editor-context-menu-item"
-        onClick={handleCopyMarkdown}
-        role="menuitem"
-      >
-        <span className="editor-context-menu-icon">
-          <FileCode className="h-4 w-4" />
-        </span>
-        <span className="editor-context-menu-label">
+      <PositionedMenuItem onClick={handleCopyMarkdown}>
+        <FileCode className="h-4 w-4" />
+        <span className="flex-1">
           {copyFeedback === "markdown" ? "Copied!" : `${copyLabel} as Markdown`}
         </span>
         {defaultCopyFormat === "markdown" && (
-          <span className="editor-context-menu-badge">Default</span>
+          <span className="text-xs text-muted-foreground">Default</span>
         )}
-      </button>
+      </PositionedMenuItem>
 
-      <div className="editor-context-menu-divider" />
+      <PositionedMenuSeparator />
 
-      <div className="editor-context-menu-section">
-        <span className="editor-context-menu-section-title">Set Default</span>
-        <button
-          className={`editor-context-menu-item editor-context-menu-item-small ${defaultCopyFormat === "formatted" ? "active" : ""}`}
-          onClick={handleSetDefaultFormatted}
-          role="menuitem"
-        >
-          <span className="editor-context-menu-icon">
-            {defaultCopyFormat === "formatted" ? <Check className="h-3.5 w-3.5" /> : null}
-          </span>
-          <span className="editor-context-menu-label">Formatted (Rich Text)</span>
-        </button>
-        <button
-          className={`editor-context-menu-item editor-context-menu-item-small ${defaultCopyFormat === "markdown" ? "active" : ""}`}
-          onClick={handleSetDefaultMarkdown}
-          role="menuitem"
-        >
-          <span className="editor-context-menu-icon">
-            {defaultCopyFormat === "markdown" ? <Check className="h-3.5 w-3.5" /> : null}
-          </span>
-          <span className="editor-context-menu-label">Markdown</span>
-        </button>
+      <div className="px-2 py-1.5">
+        <span className="text-xs font-medium text-muted-foreground">Set Default</span>
       </div>
-    </div>
+
+      <PositionedMenuItem onClick={handleSetDefaultFormatted}>
+        <span className="w-4 flex items-center justify-center">
+          {defaultCopyFormat === "formatted" && <Check className="h-3.5 w-3.5" />}
+        </span>
+        <span>Formatted (Rich Text)</span>
+      </PositionedMenuItem>
+
+      <PositionedMenuItem onClick={handleSetDefaultMarkdown}>
+        <span className="w-4 flex items-center justify-center">
+          {defaultCopyFormat === "markdown" && <Check className="h-3.5 w-3.5" />}
+        </span>
+        <span>Markdown</span>
+      </PositionedMenuItem>
+    </PositionedMenu>
   );
 }

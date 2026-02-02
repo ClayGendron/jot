@@ -8,9 +8,17 @@
  * - Always ignore this rule option
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import type { Editor } from "@tiptap/react";
 import { AlertCircle, Check, SkipForward, Ban } from "lucide-react";
+import { usePositionedMenu } from "@/hooks/usePositionedMenu";
+import {
+  PositionedMenu,
+  PositionedMenuItem,
+  PositionedMenuSeparator,
+  PositionedMenuHeader,
+  PositionedMenuFeedback,
+} from "@/components/ui/positioned-menu";
 import type { GrammarIssue } from "@/lib/grammarcheck";
 import { addIgnoredRule } from "@/lib/grammarcheck/ignoredRules";
 
@@ -36,36 +44,8 @@ export function GrammarCheckContextMenu({
   editor,
   onDismiss,
 }: GrammarCheckContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuRef = usePositionedMenu({ onDismiss });
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
-
-  // Adjust position to keep menu on screen
-  const adjustedPosition = {
-    x: Math.min(position.x, window.innerWidth - 320),
-    y: Math.min(position.y, window.innerHeight - 350),
-  };
-
-  // Click outside handler
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onDismiss();
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onDismiss]);
-
-  // Escape key handler
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onDismiss();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onDismiss]);
 
   // Handle suggestion click - replace text
   const handleSuggestionClick = useCallback(
@@ -100,80 +80,70 @@ export function GrammarCheckContextMenu({
   const suggestions = issue.suggestions.slice(0, MAX_SUGGESTIONS);
 
   return (
-    <div
+    <PositionedMenu
       ref={menuRef}
-      className="grammar-context-menu"
-      style={{
-        left: adjustedPosition.x,
-        top: adjustedPosition.y,
-      }}
-      role="menu"
+      position={position}
+      menuWidth={320}
+      menuHeight={350}
       aria-label="Grammar suggestions"
     >
       {feedbackMessage ? (
-        <div className="grammar-context-menu-feedback">{feedbackMessage}</div>
+        <PositionedMenuFeedback>
+          <Check className="h-4 w-4 text-green-500" />
+          {feedbackMessage}
+        </PositionedMenuFeedback>
       ) : (
         <>
           {/* Header */}
-          <div className="grammar-context-menu-header">
-            <AlertCircle className="h-4 w-4 grammar-context-menu-icon" />
-            <span className="grammar-context-menu-category">{issue.category}</span>
-          </div>
+          <PositionedMenuHeader>
+            <AlertCircle className="h-4 w-4 text-cyan-500" />
+            <span className="font-medium text-foreground">{issue.category}</span>
+          </PositionedMenuHeader>
 
           {/* Message */}
-          <div className="grammar-context-menu-message">
+          <div className="px-2 py-1.5 text-sm text-muted-foreground">
             {issue.message}
           </div>
 
           {/* Original text */}
-          <div className="grammar-context-menu-original">
-            <span className="grammar-context-menu-original-label">Original:</span>
-            <span className="grammar-context-menu-original-text">"{issue.text}"</span>
+          <div className="px-2 py-1 text-xs">
+            <span className="text-muted-foreground">Original: </span>
+            <span className="font-medium text-foreground">"{issue.text}"</span>
           </div>
 
           {/* Suggestions */}
           {suggestions.length > 0 && (
             <>
-              <div className="grammar-context-menu-divider" />
-              <div className="grammar-context-menu-suggestions">
+              <PositionedMenuSeparator />
+              <div className="py-1">
                 {suggestions.map((suggestion, index) => (
-                  <button
+                  <PositionedMenuItem
                     key={index}
-                    className="grammar-context-menu-item grammar-context-menu-suggestion"
                     onClick={() => handleSuggestionClick(suggestion)}
-                    role="menuitem"
                   >
-                    <Check className="h-4 w-4" />
+                    <Check className="h-4 w-4 text-green-500" />
                     <span>"{suggestion}"</span>
-                  </button>
+                  </PositionedMenuItem>
                 ))}
               </div>
             </>
           )}
 
-          <div className="grammar-context-menu-divider" />
+          <PositionedMenuSeparator />
 
           {/* Actions */}
-          <button
-            className="grammar-context-menu-item"
-            onClick={handleIgnore}
-            role="menuitem"
-          >
+          <PositionedMenuItem onClick={handleIgnore}>
             <SkipForward className="h-4 w-4" />
             <span>Ignore</span>
-          </button>
+          </PositionedMenuItem>
 
-          <button
-            className="grammar-context-menu-item"
-            onClick={handleAlwaysIgnore}
-            role="menuitem"
-          >
+          <PositionedMenuItem onClick={handleAlwaysIgnore}>
             <Ban className="h-4 w-4" />
             <span>Always ignore this rule</span>
-          </button>
+          </PositionedMenuItem>
         </>
       )}
-    </div>
+    </PositionedMenu>
   );
 }
 

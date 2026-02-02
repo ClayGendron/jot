@@ -15,7 +15,7 @@ Two-part migration:
 | --- | --- | --- |
 | Phase 1: Foundation Setup | ✅ Complete | `9797d17`, `f664687` |
 | Phase 2: Tier 1 Components | ✅ Complete | `38dcc5c` |
-| Phase 3: Tier 2 Components | ⏳ Pending | - |
+| Phase 3: Tier 2 Components | ✅ Complete | - |
 | Phase 4: Tier 3 Components | ⏳ Pending | - |
 | Phase 5: Final CSS Cleanup | ⏳ Pending | - |
 
@@ -592,7 +592,21 @@ bunx shadcn@latest add switch
 
 ---
 
-## Phase 3: Tier 2 Components (Medium Value)
+## Phase 3: Tier 2 Components (Medium Value) ✅ Complete
+
+**Completed (2026-02-02):**
+- All 930 tests pass
+- TypeScript compiles without errors
+- Created `usePositionedMenu` hook and `PositionedMenu` component primitives
+- Migrated 4 context menus to use new positioned menu system
+- Added shadcn Progress component
+- Deleted ~500 lines of legacy CSS
+
+**Key improvements:**
+- Shared hook eliminates boilerplate (click-outside, escape key handling)
+- Consistent Tailwind-based styling across all context menus
+- Proper ARIA roles and accessibility
+- Reusable PositionedMenu, PositionedMenuItem, PositionedMenuSeparator components
 
 ### 3.1 Select
 
@@ -604,13 +618,14 @@ bunx shadcn@latest add select
 **Migration targets:**
 
 -   Page size selection in ExportPanel (Letter, A4, Legal)
-    
+
 -   Format selection (PDF, Word)
-    
+
 -   Language/dialect selectors in SettingsPanel
-    
+
 -   Font family selector
-    
+
+**✅ Completed:** Migrated ExportPanel page size selection to shadcn Select component.
 
 ### 3.2 Positioned Menus (Custom Components)
 
@@ -763,6 +778,8 @@ export function SpellCheckContextMenu({ position, word, onDismiss, ... }: Props)
 
 **CSS to delete:** `.spell-context-menu-*`, `.tab-context-menu-*`, `.editor-context-menu-*`, `.grammar-context-menu-*` (~120 lines)
 
+**✅ Completed:** Created `usePositionedMenu` hook and `PositionedMenu` components. Migrated SpellCheckContextMenu, GrammarCheckContextMenu, EditorContextMenu, and TabContextMenu. Deleted ~500 lines of legacy CSS.
+
 ### 3.3 Progress
 
 ```bash
@@ -771,6 +788,8 @@ bunx shadcn@latest add progress
 ```
 
 **Migration target:** `src/components/semantic/IndexingProgress.tsx`
+
+**✅ Completed:** Added shadcn Progress component. Migrated IndexingProgress and IndexingIndicator to use Tailwind utilities and Progress primitives. Deleted legacy indexing-progress CSS.
 
 ---
 

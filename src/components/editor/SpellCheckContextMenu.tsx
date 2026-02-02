@@ -7,9 +7,18 @@
  * - Ignore (session only) option
  */
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import type { Editor } from "@tiptap/react";
-import { XCircle, BookPlus, SkipForward } from "lucide-react";
+import { XCircle, BookPlus, SkipForward, Check } from "lucide-react";
+import { usePositionedMenu } from "@/hooks/usePositionedMenu";
+import {
+  PositionedMenu,
+  PositionedMenuItem,
+  PositionedMenuSeparator,
+  PositionedMenuHeader,
+  PositionedMenuEmpty,
+  PositionedMenuFeedback,
+} from "@/components/ui/positioned-menu";
 import { getSpellSuggestions } from "./extensions/SpellCheck";
 import { addToPersonalDictionary } from "@/lib/spellcheck/personalDictionary";
 
@@ -41,7 +50,7 @@ export function SpellCheckContextMenu({
   editor,
   onDismiss,
 }: SpellCheckContextMenuProps) {
-  const menuRef = useRef<HTMLDivElement>(null);
+  const menuRef = usePositionedMenu({ onDismiss });
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
@@ -50,34 +59,6 @@ export function SpellCheckContextMenu({
     const sugs = getSpellSuggestions(word);
     setSuggestions(sugs.slice(0, MAX_SUGGESTIONS));
   }, [word]);
-
-  // Adjust position to keep menu on screen
-  const adjustedPosition = {
-    x: Math.min(position.x, window.innerWidth - 220),
-    y: Math.min(position.y, window.innerHeight - 280),
-  };
-
-  // Click outside handler
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onDismiss();
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onDismiss]);
-
-  // Escape key handler
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onDismiss();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onDismiss]);
 
   // Handle suggestion click - replace word
   const handleSuggestionClick = useCallback(
@@ -110,69 +91,57 @@ export function SpellCheckContextMenu({
   }, [word, editor, onDismiss]);
 
   return (
-    <div
+    <PositionedMenu
       ref={menuRef}
-      className="spell-context-menu"
-      style={{
-        left: adjustedPosition.x,
-        top: adjustedPosition.y,
-      }}
-      role="menu"
+      position={position}
+      menuWidth={220}
+      menuHeight={280}
       aria-label="Spelling suggestions"
     >
       {feedbackMessage ? (
-        <div className="spell-context-menu-feedback">{feedbackMessage}</div>
+        <PositionedMenuFeedback>
+          <Check className="h-4 w-4 text-green-500" />
+          {feedbackMessage}
+        </PositionedMenuFeedback>
       ) : (
         <>
           {/* Misspelled word header */}
-          <div className="spell-context-menu-header">
-            <XCircle className="h-4 w-4 spell-context-menu-icon-error" />
-            <span className="spell-context-menu-word">{word}</span>
-          </div>
+          <PositionedMenuHeader>
+            <XCircle className="h-4 w-4 text-destructive" />
+            <span className="font-medium text-foreground">{word}</span>
+          </PositionedMenuHeader>
 
           {/* Suggestions */}
           {suggestions.length > 0 ? (
-            <div className="spell-context-menu-suggestions">
+            <div className="py-1">
               {suggestions.map((suggestion, index) => (
-                <button
+                <PositionedMenuItem
                   key={index}
-                  className="spell-context-menu-item spell-context-menu-suggestion"
                   onClick={() => handleSuggestionClick(suggestion)}
-                  role="menuitem"
                 >
                   {suggestion}
-                </button>
+                </PositionedMenuItem>
               ))}
             </div>
           ) : (
-            <div className="spell-context-menu-no-suggestions">
-              No suggestions
-            </div>
+            <PositionedMenuEmpty>No suggestions</PositionedMenuEmpty>
           )}
 
-          <div className="spell-context-menu-divider" />
+          <PositionedMenuSeparator />
 
           {/* Actions */}
-          <button
-            className="spell-context-menu-item"
-            onClick={handleAddToDictionary}
-            role="menuitem"
-          >
+          <PositionedMenuItem onClick={handleAddToDictionary}>
             <BookPlus className="h-4 w-4" />
             <span>Add to Dictionary</span>
-          </button>
+          </PositionedMenuItem>
 
-          <button
-            className="spell-context-menu-item"
-            onClick={handleIgnore}
-            role="menuitem"
-          >
+          <PositionedMenuItem onClick={handleIgnore}>
             <SkipForward className="h-4 w-4" />
             <span>Ignore</span>
-          </button>
+          </PositionedMenuItem>
         </>
       )}
-    </div>
+    </PositionedMenu>
   );
 }
 
