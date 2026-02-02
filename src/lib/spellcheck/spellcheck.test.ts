@@ -5,51 +5,107 @@
  * - Word tokenization
  * - Spell checking with personal dictionary
  * - Suggestion generation
+ * - Dictionary hierarchy
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   tokenizeText,
   checkWord,
+  checkWordInContext,
   setPersonalDictionary,
   addToPersonalDictionaryMemory,
   clearCache,
   shouldSkipWord,
   splitIdentifier,
+  isLikelyProperNoun,
+  getSentenceContext,
+  hasMultipleCapitals,
 } from "./typoInstance";
+import { dictionaryHierarchy } from "./dictionaryHierarchy";
 
-// Mock Typo.js for unit tests (we don't want to load actual dictionaries)
-vi.mock("typo-js", () => {
+// Mock the symspellService module for unit tests
+vi.mock("./symspellService", () => {
+  const validWords = new Set([
+    "hello",
+    "world",
+    "the",
+    "test",
+    "word",
+    "correct",
+    "don't",
+    "it's",
+    "well-known",
+    "john's",
+    "get",
+    "user",
+    "name",
+    "is",
+    "enabled",
+    "handle",
+    "click",
+    "profile",
+    "component",
+    "parser",
+    "response",
+    "parse",
+    "first",
+    "saw",
+    "today",
+    "visiting",
+    "soon",
+    "works",
+    "now",
+    "end",
+    "start",
+    "new",
+    "really",
+    "what",
+    "happened",
+    "said",
+    "arrived",
+    "called",
+    "teaches",
+    "met",
+    // Additional words for camelCase identifier tests
+    "code",
+    "bear",
+    // Words for hyphenated compound tests
+    "well",
+    "known",
+    "high",
+    "quality",
+    "long",
+    "term",
+    "self",
+    "aware",
+    "real",
+    "time",
+  ]);
+
+  const suggestionMap: Record<string, string[]> = {
+    tset: ["test", "set", "seat", "best", "rest"],
+    wrold: ["world", "would", "wold"],
+  };
+
+  const mockService = {
+    init: vi.fn().mockResolvedValue(undefined),
+    isReady: vi.fn(() => true),
+    checkWord: vi.fn((word: string) => {
+      return validWords.has(word.toLowerCase());
+    }),
+    getSuggestions: vi.fn((word: string, limit = 5) => {
+      const suggestions = suggestionMap[word.toLowerCase()] || [];
+      return suggestions.slice(0, limit);
+    }),
+    addToValidCache: vi.fn(),
+    removeFromValidCache: vi.fn(),
+    clearCache: vi.fn(),
+  };
+
   return {
-    default: vi.fn().mockImplementation(() => ({
-      check: vi.fn((word: string) => {
-        // Simple mock: words with 'x' or 'z' are "misspelled"
-        const correctWords = new Set([
-          "hello",
-          "world",
-          "the",
-          "test",
-          "word",
-          "correct",
-          "don't",
-          "it's",
-          "well-known",
-          "John's",
-        ]);
-        return correctWords.has(word.toLowerCase());
-      }),
-      suggest: vi.fn((word: string) => {
-        // Return mock suggestions
-        if (word.toLowerCase() === "tset") {
-          return ["test", "set", "seat", "best", "rest"];
-        }
-        if (word.toLowerCase() === "wrold") {
-          return ["world", "would", "wold"];
-        }
-        return [];
-      }),
-      loaded: true,
-    })),
+    spellService: mockService,
+    SymSpellService: vi.fn(() => mockService),
   };
 });
 
@@ -128,17 +184,19 @@ describe("checkWord", () => {
     expect(checkWord("I")).toBe(true);
   });
 
-  it("returns true when spell checker is not initialized", () => {
-    // With no dictionary loaded, all words should be considered correct
-    clearCache();
-    expect(checkWord("anythingxyz")).toBe(true);
+  it("returns true for valid words", () => {
+    expect(checkWord("hello")).toBe(true);
+    expect(checkWord("world")).toBe(true);
   });
 });
 
 describe("personal dictionary", () => {
   beforeEach(() => {
     clearCache();
-    setPersonalDictionary([]);
+    // Reset dictionary hierarchy state
+    dictionaryHierarchy.clearSessionIgnores();
+    dictionaryHierarchy.setPersonalDictionary([]);
+    dictionaryHierarchy.clearWorkspaceDictionary();
   });
 
   it("accepts words in personal dictionary", () => {
@@ -174,19 +232,19 @@ describe("personal dictionary", () => {
 
 describe("tokenizeText handles accented characters", () => {
   it("extracts words with accents", () => {
-    const result = tokenizeText("caf\u00e9 na\u00efve");
+    const result = tokenizeText("café naïve");
 
     expect(result).toHaveLength(2);
-    expect(result[0].word).toBe("caf\u00e9");
-    expect(result[1].word).toBe("na\u00efve");
+    expect(result[0].word).toBe("café");
+    expect(result[1].word).toBe("naïve");
   });
 
   it("extracts Cyrillic words", () => {
-    const result = tokenizeText("\u041f\u0440\u0438\u0432\u0435\u0442 \u043c\u0438\u0440");
+    const result = tokenizeText("Привет мир");
 
     expect(result).toHaveLength(2);
-    expect(result[0].word).toBe("\u041f\u0440\u0438\u0432\u0435\u0442");
-    expect(result[1].word).toBe("\u043c\u0438\u0440");
+    expect(result[0].word).toBe("Привет");
+    expect(result[1].word).toBe("мир");
   });
 });
 
@@ -305,7 +363,9 @@ describe("tokenizeText filters out URLs and emails", () => {
 describe("checkWord with technical terms", () => {
   beforeEach(() => {
     clearCache();
-    setPersonalDictionary([]);
+    dictionaryHierarchy.clearSessionIgnores();
+    dictionaryHierarchy.setPersonalDictionary([]);
+    dictionaryHierarchy.clearWorkspaceDictionary();
   });
 
   it("accepts common programming terms", () => {
@@ -334,7 +394,9 @@ describe("checkWord with technical terms", () => {
 describe("checkWord with camelCase identifiers", () => {
   beforeEach(() => {
     clearCache();
-    setPersonalDictionary([]);
+    dictionaryHierarchy.clearSessionIgnores();
+    dictionaryHierarchy.setPersonalDictionary([]);
+    dictionaryHierarchy.clearWorkspaceDictionary();
   });
 
   it("accepts valid camelCase identifiers", () => {
@@ -344,5 +406,211 @@ describe("checkWord with camelCase identifiers", () => {
 
   it("accepts snake_case identifiers with valid parts", () => {
     expect(checkWord("hello_world")).toBe(true);
+  });
+
+  it("accepts identifiers with ALL CAPS acronym parts", () => {
+    // ALL CAPS parts like OSX, SSL, API are skipped as acronyms
+    expect(checkWord("CodeOSX")).toBe(true);
+    expect(checkWord("BearSSL")).toBe(true);
+    expect(checkWord("parseHTML")).toBe(true);
+    expect(checkWord("XMLParser")).toBe(true);
+    expect(checkWord("getHTTPResponse")).toBe(true);
+  });
+});
+
+describe("checkWord with hyphenated compound words", () => {
+  beforeEach(() => {
+    clearCache();
+    dictionaryHierarchy.clearSessionIgnores();
+    dictionaryHierarchy.setPersonalDictionary([]);
+    dictionaryHierarchy.clearWorkspaceDictionary();
+  });
+
+  it("accepts hyphenated words if whole word is in dictionary", () => {
+    // "well-known" is in the mock dictionary as a whole
+    expect(checkWord("well-known")).toBe(true);
+  });
+
+  it("accepts hyphenated words if all parts are valid", () => {
+    // "high-quality" is NOT in dictionary as whole word,
+    // but "high" and "quality" are both valid
+    expect(checkWord("high-quality")).toBe(true);
+  });
+
+  it("accepts multi-hyphen compound words with valid parts", () => {
+    // "long-term-self-aware" - all parts are valid words
+    expect(checkWord("long-term")).toBe(true);
+    expect(checkWord("self-aware")).toBe(true);
+    expect(checkWord("real-time")).toBe(true);
+  });
+
+  it("rejects hyphenated words if any part is invalid", () => {
+    // "xyzzy-known" - "xyzzy" is not a valid word
+    expect(checkWord("xyzzy-known")).toBe(false);
+    // "well-xyzzy" - "xyzzy" is not valid
+    expect(checkWord("well-xyzzy")).toBe(false);
+    // "xyzzy-plugh" - neither part is valid
+    expect(checkWord("xyzzy-plugh")).toBe(false);
+  });
+
+  it("handles hyphenated words with short parts", () => {
+    // Very short parts (< 2 chars) are considered valid
+    // This allows things like "X-ray" style constructions
+    expect(checkWord("a-quality")).toBe(true); // "a" is short, "quality" is valid
+  });
+
+  it("handles hyphenated words with ALL CAPS parts (acronyms)", () => {
+    // ALL CAPS parts are skipped as acronyms
+    // "API-known" -> "API" skipped (acronym), "known" is valid
+    expect(checkWord("API-known")).toBe(true);
+    expect(checkWord("HTTP-aware")).toBe(true);
+  });
+});
+
+describe("proper noun detection", () => {
+  describe("isLikelyProperNoun", () => {
+    it("returns false for lowercase words", () => {
+      expect(isLikelyProperNoun("hello", "say hello to")).toBe(false);
+      expect(isLikelyProperNoun("world", "the world is")).toBe(false);
+    });
+
+    it("returns true for capitalized words mid-sentence", () => {
+      // "John" appears mid-sentence, likely a proper noun
+      expect(isLikelyProperNoun("John", "I saw John yesterday")).toBe(true);
+      expect(isLikelyProperNoun("Paris", "visiting Paris soon")).toBe(true);
+      expect(isLikelyProperNoun("Microsoft", "works at Microsoft now")).toBe(true);
+    });
+
+    it("returns false for capitalized words at sentence start", () => {
+      // Word at start of sentence - could be proper noun OR regular word
+      expect(isLikelyProperNoun("Hello", "Hello world")).toBe(false);
+      expect(isLikelyProperNoun("The", "The cat sat")).toBe(false);
+    });
+
+    it("returns false for capitalized words after period", () => {
+      // Start of new sentence
+      expect(isLikelyProperNoun("This", "End. This is new")).toBe(false);
+      expect(isLikelyProperNoun("What", "Really? What happened")).toBe(false);
+    });
+
+    it("returns true for words after title prefixes", () => {
+      // "Dr." doesn't end a sentence, so "Smith" is a proper noun
+      expect(isLikelyProperNoun("Smith", "Dr. Smith said")).toBe(true);
+      expect(isLikelyProperNoun("Johnson", "Mr. Johnson arrived")).toBe(true);
+      expect(isLikelyProperNoun("Williams", "Mrs. Williams called")).toBe(true);
+      expect(isLikelyProperNoun("Brown", "Prof. Brown teaches")).toBe(true);
+    });
+  });
+
+  describe("getSentenceContext", () => {
+    it("detects word at start of text", () => {
+      const ctx = getSentenceContext("Hello world", 0, 5);
+      expect(ctx.isAtSentenceStart).toBe(true);
+    });
+
+    it("detects word after period", () => {
+      const ctx = getSentenceContext("End. Start again", 5, 10);
+      expect(ctx.isAtSentenceStart).toBe(true);
+    });
+
+    it("detects word after question mark", () => {
+      const ctx = getSentenceContext("What? This is", 6, 10);
+      expect(ctx.isAtSentenceStart).toBe(true);
+    });
+
+    it("detects word after exclamation", () => {
+      const ctx = getSentenceContext("Wow! Amazing", 5, 12);
+      expect(ctx.isAtSentenceStart).toBe(true);
+    });
+
+    it("detects mid-sentence word", () => {
+      const ctx = getSentenceContext("I saw John yesterday", 6, 10);
+      expect(ctx.isAtSentenceStart).toBe(false);
+    });
+
+    it("detects word after title prefix", () => {
+      const ctx = getSentenceContext("Dr. Smith said", 4, 9);
+      expect(ctx.isAfterTitlePrefix).toBe(true);
+      expect(ctx.isAtSentenceStart).toBe(false);
+    });
+
+    it("handles multiple spaces after punctuation", () => {
+      const ctx = getSentenceContext("End.   Start", 7, 12);
+      expect(ctx.isAtSentenceStart).toBe(true);
+    });
+  });
+
+  describe("checkWordInContext skips proper nouns", () => {
+    beforeEach(() => {
+      clearCache();
+      setPersonalDictionary([]);
+    });
+
+    it("skips capitalized mid-sentence words", () => {
+      // "Xyzzy" would be flagged as misspelled, but mid-sentence it's likely a name
+      expect(checkWordInContext("Xyzzy", "I met Xyzzy today")).toBe(true);
+    });
+
+    it("checks capitalized words at sentence start", () => {
+      // At sentence start, we should check spelling (lowercase version)
+      expect(checkWordInContext("Hello", "Hello world")).toBe(true); // "hello" is valid
+    });
+  });
+
+  describe("hasMultipleCapitals", () => {
+    it("returns true for words with internal capitals (camelCase pattern)", () => {
+      expect(hasMultipleCapitals("iPhone")).toBe(true);
+      expect(hasMultipleCapitals("MacBook")).toBe(true);
+      expect(hasMultipleCapitals("GitHub")).toBe(true);
+      expect(hasMultipleCapitals("getUserName")).toBe(true);
+    });
+
+    it("returns false for simple words without internal capitals", () => {
+      expect(hasMultipleCapitals("hello")).toBe(false);
+      expect(hasMultipleCapitals("Hello")).toBe(false);
+      expect(hasMultipleCapitals("HELLO")).toBe(false); // ALL CAPS, no lowercase-uppercase transition
+      expect(hasMultipleCapitals("Paris")).toBe(false);
+    });
+  });
+});
+
+describe("DictionaryHierarchy", () => {
+  beforeEach(() => {
+    // Reset the hierarchy state
+    dictionaryHierarchy.clearSessionIgnores();
+    dictionaryHierarchy.setPersonalDictionary([]);
+    dictionaryHierarchy.clearWorkspaceDictionary();
+  });
+
+  it("session ignores have highest priority", () => {
+    dictionaryHierarchy.ignoreForSession("xyzzy");
+    expect(dictionaryHierarchy.isWordValid("xyzzy")).toBe(true);
+    expect(dictionaryHierarchy.isSessionIgnored("xyzzy")).toBe(true);
+  });
+
+  it("personal dictionary words are valid", () => {
+    dictionaryHierarchy.setPersonalDictionary(["customterm"]);
+    expect(dictionaryHierarchy.isWordValid("customterm")).toBe(true);
+    expect(dictionaryHierarchy.isInPersonalDictionary("customterm")).toBe(true);
+  });
+
+  it("workspace dictionary words are valid", () => {
+    dictionaryHierarchy.setWorkspaceDictionary(["projectterm"]);
+    expect(dictionaryHierarchy.isWordValid("projectterm")).toBe(true);
+    expect(dictionaryHierarchy.isInWorkspaceDictionary("projectterm")).toBe(true);
+  });
+
+  it("tech terms are valid", () => {
+    // Tech terms are set on module load
+    expect(dictionaryHierarchy.isTechTerm("javascript")).toBe(true);
+    expect(dictionaryHierarchy.isTechTerm("typescript")).toBe(true);
+  });
+
+  it("clearing session ignores removes words", () => {
+    dictionaryHierarchy.ignoreForSession("tempword");
+    expect(dictionaryHierarchy.isSessionIgnored("tempword")).toBe(true);
+
+    dictionaryHierarchy.clearSessionIgnores();
+    expect(dictionaryHierarchy.isSessionIgnored("tempword")).toBe(false);
   });
 });

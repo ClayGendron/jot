@@ -4,7 +4,7 @@
  * Provides spell checking functionality with:
  * - Red wavy underline on misspelled words via ProseMirror decorations
  * - Code block exclusion (no spell checking inside code)
- * - Integration with Typo.js and personal dictionary
+ * - Integration with SymSpell (via spellchecker-wasm) and personal dictionary
  */
 
 import { Extension } from "@tiptap/core";
@@ -18,6 +18,7 @@ import {
   isSpellCheckerReady,
   getSuggestions,
   addToPersonalDictionaryMemory,
+  getSentenceContext,
 } from "@/lib/spellcheck";
 import type { SpellCheckLanguage, MisspelledWord } from "@/lib/spellcheck";
 import { getChangedRanges, type Range } from "@/lib/proofing";
@@ -120,6 +121,47 @@ function isInsideCode(doc: ProseMirrorNode, pos: number): boolean {
 }
 
 /**
+ * Check if a word is likely a proper noun based on capitalization and position.
+ * This is a simplified check that works within a single text node.
+ *
+ * Only applies to simple capitalized words (Paris, John, London).
+ * Words with internal capitals (iPhone, MacBook, getUserName) are handled
+ * by the identifier splitting logic in checkWord instead.
+ */
+function isLikelyProperNounInText(
+  word: string,
+  text: string,
+  wordStart: number
+): boolean {
+  // Must be capitalized (first letter uppercase)
+  if (!word || word[0] !== word[0].toUpperCase() || word[0] === word[0].toLowerCase()) {
+    return false;
+  }
+
+  // Words with internal capitals should be handled by identifier splitting, not proper noun detection
+  // e.g., iPhone → split to ["i", "Phone"], MacBook → split to ["Mac", "Book"]
+  if (/[a-z][A-Z]/.test(word)) {
+    return false;
+  }
+
+  // Get sentence context within this text node
+  const context = getSentenceContext(text, wordStart, wordStart + word.length);
+
+  // Words after title prefixes are proper nouns
+  if (context.isAfterTitlePrefix) {
+    return true;
+  }
+
+  // Words at sentence start are not assumed to be proper nouns
+  if (context.isAtSentenceStart) {
+    return false;
+  }
+
+  // Mid-sentence capitalized word = likely proper noun
+  return true;
+}
+
+/**
  * Find all misspelled words in the document
  */
 function findMisspelledWords(
@@ -154,7 +196,12 @@ function findMisspelledWords(
         continue;
       }
 
-      // Check spelling
+      // Skip likely proper nouns (capitalized mid-sentence)
+      if (isLikelyProperNounInText(word, text, token.start)) {
+        continue;
+      }
+
+      // Check spelling (includes camelCase/snake_case splitting)
       if (!checkWord(word)) {
         errors.push({
           word,

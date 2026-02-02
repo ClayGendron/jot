@@ -8,7 +8,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { PersonalDictionary } from "./types";
 import { DEFAULT_PERSONAL_DICTIONARY } from "./types";
-import { setPersonalDictionary as setInMemory, addToPersonalDictionaryMemory } from "./typoInstance";
+import { dictionaryHierarchy } from "./dictionaryHierarchy";
 
 /** Cached personal dictionary */
 let cachedDictionary: PersonalDictionary | null = null;
@@ -22,8 +22,8 @@ export async function loadPersonalDictionary(): Promise<PersonalDictionary> {
 
     if (result) {
       cachedDictionary = result;
-      // Update in-memory set
-      setInMemory(result.words.map((w) => w.word));
+      // Update dictionary hierarchy
+      dictionaryHierarchy.setPersonalDictionary(result.words.map((w) => w.word));
       return result;
     }
 
@@ -72,8 +72,8 @@ export async function addToPersonalDictionary(word: string): Promise<void> {
       }
     }
 
-    // Update in-memory set
-    addToPersonalDictionaryMemory(normalizedWord);
+    // Update dictionary hierarchy
+    dictionaryHierarchy.addToPersonalDictionary(normalizedWord);
   } catch (error) {
     console.error("Failed to add word to personal dictionary:", error);
     throw error;
@@ -99,9 +99,9 @@ export async function removeFromPersonalDictionary(word: string): Promise<void> 
       );
     }
 
-    // Reload in-memory set from cache
+    // Reload dictionary hierarchy from cache
     if (cachedDictionary) {
-      setInMemory(cachedDictionary.words.map((w) => w.word));
+      dictionaryHierarchy.setPersonalDictionary(cachedDictionary.words.map((w) => w.word));
     }
   } catch (error) {
     console.error("Failed to remove word from personal dictionary:", error);

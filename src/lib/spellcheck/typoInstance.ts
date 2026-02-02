@@ -1,17 +1,19 @@
 /**
- * Typo.js Spell Checker Instance
+ * Spell Checker Core
  *
- * Manages a singleton Typo.js instance with lazy dictionary loading.
- * Provides checkWord and getSuggestions functions.
+ * Provides spell checking functionality using SymSpell algorithm.
+ * Manages dictionary loading and provides checkWord/getSuggestions functions.
  *
  * Includes false positive reduction strategies:
  * - Word heuristics (ALL CAPS, numbers, short words)
  * - Pattern filtering (URLs, emails, file paths, hashes)
  * - Identifier splitting (camelCase, snake_case)
  * - Technical terms dictionary
+ * - Dictionary hierarchy (personal, workspace, built-in)
  */
 
-import Typo from "typo-js";
+import { spellService } from "./symspellService";
+import { dictionaryHierarchy } from "./dictionaryHierarchy";
 import type { SpellCheckLanguage, SpellCheckResult } from "./types";
 import { DEFAULT_LANGUAGE } from "./types";
 
@@ -19,8 +21,23 @@ import { DEFAULT_LANGUAGE } from "./types";
 const MAX_SUGGESTIONS = 8;
 
 /**
- * Common technical terms that Hunspell dictionaries don't include.
- * These are programming-related words that should not be flagged.
+ * Title prefixes that don't end a sentence.
+ * A capitalized word following these is likely a proper noun (e.g., "Dr. Smith").
+ * Stored lowercase for case-insensitive matching.
+ */
+const TITLE_PREFIXES = new Set([
+  "mr", "mrs", "ms", "miss", "dr", "prof", "sr", "jr",
+  "rev", "fr", "st", "hon", "pres", "gov", "sen", "rep",
+  "gen", "col", "maj", "capt", "lt", "sgt", "cpl",
+]);
+
+/**
+ * Common technical terms that should not be flagged.
+ * These are programming-related words that standard dictionaries don't include.
+ *
+ * Note: These are also included in data/dictionaries/tech-terms.txt for the
+ * build-time dictionary generation. This runtime set is kept for backwards
+ * compatibility and fast in-memory lookups.
  */
 const TECH_TERMS = new Set([
   // Languages & runtimes
@@ -73,7 +90,7 @@ const TECH_TERMS = new Set([
   "dev", "prod", "staging", "hotfix", "bugfix", "workaround",
   "whitelist", "blacklist", "allowlist", "blocklist", "denylist",
   "inline", "multiline", "readonly", "noop", "impl", "init",
-  "src", "dist", "lib", "libs", "pkg", "deps", "devDeps",
+  "src", "dist", "lib", "libs", "pkg", "deps", "devdeps",
   // Markdown specific
   "frontmatter", "codeblock", "codeblocks", "blockquote", "blockquotes",
   // Editor/Jot specific
@@ -81,23 +98,17 @@ const TECH_TERMS = new Set([
   "autosave", "autosaved", "autosaving", "undo", "redo", "keybinding",
 ]);
 
-/** Cache of loaded Typo instances by language */
-const typoCache = new Map<SpellCheckLanguage, Typo>();
+// Initialize the dictionary hierarchy with tech terms
+dictionaryHierarchy.setTechTerms(TECH_TERMS);
 
 /** Currently active language */
 let currentLanguage: SpellCheckLanguage = DEFAULT_LANGUAGE;
-
-/** Currently active Typo instance */
-let currentTypo: Typo | null = null;
 
 /** Loading state */
 let isLoading = false;
 
 /** Promise for current loading operation */
 let loadingPromise: Promise<void> | null = null;
-
-/** Personal dictionary words (loaded separately) */
-let personalDictionaryWords = new Set<string>();
 
 /**
  * Patterns to skip during spell checking.
@@ -200,7 +211,30 @@ function looksLikeIdentifier(word: string): boolean {
   if (/[a-z][A-Z]/.test(word)) {
     return true;
   }
+  // Has uppercase followed by uppercase then lowercase (e.g., XMLParser)
+  // This catches acronyms followed by words
+  if (/[A-Z]{2,}[a-z]/.test(word)) {
+    return true;
+  }
   return false;
+}
+
+/**
+ * Check if a word is hyphenated (compound word).
+ * Examples: "well-known", "high-quality", "self-aware"
+ */
+function isHyphenatedWord(word: string): boolean {
+  // Must contain at least one hyphen with letters on both sides
+  return /[a-zA-Z]-[a-zA-Z]/.test(word);
+}
+
+/**
+ * Split a hyphenated word into its component parts.
+ * Example: "well-known" -> ["well", "known"]
+ * Example: "high-quality-product" -> ["high", "quality", "product"]
+ */
+function splitHyphenatedWord(word: string): string[] {
+  return word.split("-").filter((part) => part.length > 0);
 }
 
 /**
@@ -214,59 +248,21 @@ function looksLikeIdentifier(word: string): boolean {
 const WORD_REGEX = /[a-zA-Z\u00C0-\u024F\u0400-\u04FF]+(?:[''][a-zA-Z]+)?(?:-[a-zA-Z]+)*/g;
 
 /**
- * Load a dictionary for the specified language
- */
-async function loadDictionary(language: SpellCheckLanguage): Promise<Typo> {
-  // Check cache first
-  const cached = typoCache.get(language);
-  if (cached) {
-    return cached;
-  }
-
-  // Fetch dictionary files from public directory
-  const basePath = `/dictionaries/${language}`;
-
-  try {
-    const [affResponse, dicResponse] = await Promise.all([
-      fetch(`${basePath}/${language}.aff`),
-      fetch(`${basePath}/${language}.dic`),
-    ]);
-
-    if (!affResponse.ok || !dicResponse.ok) {
-      throw new Error(`Failed to load dictionary for ${language}`);
-    }
-
-    const [affData, dicData] = await Promise.all([
-      affResponse.text(),
-      dicResponse.text(),
-    ]);
-
-    // Create Typo instance with loaded dictionary data
-    const typo = new Typo(language, affData, dicData);
-
-    // Cache for future use
-    typoCache.set(language, typo);
-
-    return typo;
-  } catch (error) {
-    console.error(`Failed to load spell check dictionary for ${language}:`, error);
-    throw error;
-  }
-}
-
-/**
- * Initialize or change the spell checker language
+ * Initialize or change the spell checker language.
+ *
+ * Note: Currently only English (en_US) is supported with the SymSpell backend.
+ * Other languages will fall back to English until additional dictionaries are added.
  */
 export async function initSpellChecker(
   language: SpellCheckLanguage = DEFAULT_LANGUAGE
 ): Promise<void> {
-  // If already loading this language, wait for it
-  if (isLoading && currentLanguage === language && loadingPromise) {
+  // If already loading, wait for it
+  if (isLoading && loadingPromise) {
     return loadingPromise;
   }
 
-  // If already loaded this language, nothing to do
-  if (currentTypo && currentLanguage === language) {
+  // If already loaded and same language, nothing to do
+  if (spellService.isReady() && currentLanguage === language) {
     return;
   }
 
@@ -275,7 +271,8 @@ export async function initSpellChecker(
 
   loadingPromise = (async () => {
     try {
-      currentTypo = await loadDictionary(language);
+      // Initialize the SymSpell service
+      await spellService.init();
     } finally {
       isLoading = false;
       loadingPromise = null;
@@ -296,24 +293,23 @@ export function getCurrentLanguage(): SpellCheckLanguage {
  * Check if the spell checker is ready
  */
 export function isSpellCheckerReady(): boolean {
-  const ready = currentTypo !== null && !isLoading;
-  return ready;
+  return spellService.isReady() && !isLoading;
 }
 
 /**
- * Set the personal dictionary words
- * These words will be considered correct in addition to dictionary words
+ * Set the personal dictionary words.
+ * These words will be considered correct in addition to dictionary words.
  */
 export function setPersonalDictionary(words: string[]): void {
-  personalDictionaryWords = new Set(words.map((w) => w.toLowerCase()));
+  dictionaryHierarchy.setPersonalDictionary(words);
 }
 
 /**
- * Add a word to the personal dictionary (in memory)
- * Note: This doesn't persist - use personalDictionary.ts for persistence
+ * Add a word to the personal dictionary (in memory).
+ * Note: This doesn't persist - use personalDictionary.ts for persistence.
  */
 export function addToPersonalDictionaryMemory(word: string): void {
-  personalDictionaryWords.add(word.toLowerCase());
+  dictionaryHierarchy.addToPersonalDictionary(word);
 }
 
 /**
@@ -326,23 +322,13 @@ function checkWordPart(word: string): boolean {
     return true;
   }
 
-  // Check personal dictionary first (case-insensitive)
-  if (personalDictionaryWords.has(word.toLowerCase())) {
+  // ALL CAPS parts are likely acronyms (API, HTTP, OSX) - skip them
+  if (word === word.toUpperCase() && /^[A-Z]+$/.test(word)) {
     return true;
   }
 
-  // Check technical terms dictionary (case-insensitive)
-  if (TECH_TERMS.has(word.toLowerCase())) {
-    return true;
-  }
-
-  // If spell checker not ready, assume correct
-  if (!currentTypo) {
-    return true;
-  }
-
-  // Check the dictionary
-  return currentTypo.check(word);
+  // Check through the dictionary hierarchy
+  return dictionaryHierarchy.isWordValid(word);
 }
 
 /**
@@ -351,6 +337,7 @@ function checkWordPart(word: string): boolean {
  * - Skips words matching heuristics (ALL CAPS, numbers, short words)
  * - Checks technical terms dictionary
  * - Splits camelCase/snake_case identifiers and checks each part
+ * - Splits hyphenated compound words and checks each part
  */
 export function checkWord(word: string): boolean {
   // Apply heuristics to skip technical content
@@ -358,13 +345,10 @@ export function checkWord(word: string): boolean {
     return true;
   }
 
-  // Check personal dictionary first (case-insensitive)
-  if (personalDictionaryWords.has(word.toLowerCase())) {
-    return true;
-  }
-
-  // Check technical terms dictionary (case-insensitive)
-  if (TECH_TERMS.has(word.toLowerCase())) {
+  // Check the dictionary hierarchy first (includes tech terms and personal dict)
+  // This catches words like "JavaScript" or compound words like "well-known"
+  // that might be in the dictionary as a whole
+  if (dictionaryHierarchy.isWordValid(word)) {
     return true;
   }
 
@@ -376,25 +360,28 @@ export function checkWord(word: string): boolean {
     return parts.every((part) => checkWordPart(part));
   }
 
-  // If spell checker not ready, assume correct
-  if (!currentTypo) {
-    return true;
+  // If word is hyphenated (compound word like "well-known", "high-quality"),
+  // split on hyphens and check each part individually
+  if (isHyphenatedWord(word)) {
+    const parts = splitHyphenatedWord(word);
+    // Word is correct if ALL parts are correct
+    return parts.every((part) => checkWordPart(part));
   }
 
-  // Check the dictionary
-  return currentTypo.check(word);
+  // Not valid and not an identifier or hyphenated compound
+  return false;
 }
 
 /**
  * Get spelling suggestions for a word
  */
 export function getSuggestions(word: string): string[] {
-  if (!currentTypo || !word) {
+  if (!word || !spellService.isReady()) {
     return [];
   }
 
-  const suggestions = currentTypo.suggest(word);
-  return suggestions.slice(0, MAX_SUGGESTIONS);
+  const suggestions = dictionaryHierarchy.getSuggestions(word, MAX_SUGGESTIONS);
+  return suggestions;
 }
 
 /**
@@ -482,8 +469,143 @@ export function checkText(
  * Clear the dictionary cache (useful for testing)
  */
 export function clearCache(): void {
-  typoCache.clear();
-  currentTypo = null;
+  spellService.clearCache();
   isLoading = false;
   loadingPromise = null;
+}
+
+/**
+ * Context about where a word appears in its sentence.
+ */
+export interface SentenceContext {
+  /** Whether the word appears at the start of a sentence */
+  isAtSentenceStart: boolean;
+  /** Whether the word follows a title prefix like "Dr." or "Mr." */
+  isAfterTitlePrefix: boolean;
+}
+
+/**
+ * Get context about where a word appears relative to sentence boundaries.
+ *
+ * @param text - The full text containing the word
+ * @param wordStart - Start position of the word in text
+ * @param wordEnd - End position of the word in text
+ * @returns Context about the word's position
+ */
+export function getSentenceContext(
+  text: string,
+  wordStart: number,
+  _wordEnd: number
+): SentenceContext {
+  // Get text before the word
+  const textBefore = text.slice(0, wordStart);
+
+  // Check if at start of text
+  const trimmedBefore = textBefore.trimEnd();
+  if (trimmedBefore.length === 0) {
+    return { isAtSentenceStart: true, isAfterTitlePrefix: false };
+  }
+
+  // Check what character precedes the word (ignoring whitespace)
+  const lastChar = trimmedBefore[trimmedBefore.length - 1];
+
+  // Check for title prefix (e.g., "Dr.", "Mr.")
+  // Look for pattern: word + period at end of trimmedBefore
+  const titleMatch = trimmedBefore.match(/\b([a-zA-Z]+)\.\s*$/);
+  if (titleMatch) {
+    const potentialTitle = titleMatch[1].toLowerCase();
+    if (TITLE_PREFIXES.has(potentialTitle)) {
+      return { isAtSentenceStart: false, isAfterTitlePrefix: true };
+    }
+  }
+
+  // Sentence-ending punctuation
+  if (lastChar === "." || lastChar === "!" || lastChar === "?") {
+    return { isAtSentenceStart: true, isAfterTitlePrefix: false };
+  }
+
+  // Mid-sentence
+  return { isAtSentenceStart: false, isAfterTitlePrefix: false };
+}
+
+/**
+ * Check if a word is likely a proper noun based on capitalization and context.
+ *
+ * Heuristics:
+ * 1. Lowercase words are never proper nouns
+ * 2. Words at sentence start are NOT assumed to be proper nouns (could be either)
+ * 3. Capitalized words mid-sentence are likely proper nouns
+ * 4. Words after title prefixes (Dr., Mr.) are likely proper nouns
+ *
+ * @param word - The word to check
+ * @param fullText - The full text containing the word (for context)
+ * @returns true if the word is likely a proper noun
+ */
+export function isLikelyProperNoun(word: string, fullText: string): boolean {
+  // Must be capitalized (first letter uppercase)
+  if (!word || word[0] !== word[0].toUpperCase() || word[0] === word[0].toLowerCase()) {
+    return false;
+  }
+
+  // Find word position in text
+  const wordIndex = fullText.indexOf(word);
+  if (wordIndex === -1) {
+    return false;
+  }
+
+  const context = getSentenceContext(fullText, wordIndex, wordIndex + word.length);
+
+  // Words after title prefixes are proper nouns
+  if (context.isAfterTitlePrefix) {
+    return true;
+  }
+
+  // Words at sentence start are not assumed to be proper nouns
+  if (context.isAtSentenceStart) {
+    return false;
+  }
+
+  // Mid-sentence capitalized word = likely proper noun
+  return true;
+}
+
+/**
+ * Check if a word has internal capitals (camelCase pattern).
+ * This detects words like: iPhone, MacBook, GitHub, getUserName
+ *
+ * These words should be handled by identifier splitting rather than
+ * proper noun detection.
+ */
+export function hasMultipleCapitals(word: string): boolean {
+  if (!word || word.length < 2) return false;
+  // Check for internal capitals (lowercase followed by uppercase)
+  return /[a-z][A-Z]/.test(word);
+}
+
+/**
+ * Check a word's spelling considering its context in the text.
+ * This is the context-aware version of checkWord that handles proper nouns.
+ *
+ * @param word - The word to check
+ * @param fullText - The full text containing the word (for context)
+ * @returns true if the word is spelled correctly or is a proper noun
+ */
+export function checkWordInContext(word: string, fullText: string): boolean {
+  // First apply all standard heuristics
+  if (shouldSkipWord(word)) {
+    return true;
+  }
+
+  // Skip words with multiple capitals (likely brand names: iPhone, MacBook, GitHub)
+  if (hasMultipleCapitals(word)) {
+    return true;
+  }
+
+  // Check if it's likely a proper noun based on context
+  if (isLikelyProperNoun(word, fullText)) {
+    return true;
+  }
+
+  // Standard spell check
+  return checkWord(word);
 }

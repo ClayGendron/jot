@@ -7,7 +7,7 @@
 
 import {
   WorkerLinter,
-  binary,
+  binaryInlined as binary,
   Dialect,
   type Lint,
   type Suggestion,
@@ -27,6 +27,9 @@ let isLoading = false;
 
 /** Promise for current initialization */
 let initPromise: Promise<void> | null = null;
+
+/** Whether initialization has permanently failed (don't retry) */
+let loadFailed = false;
 
 /** Set of ignored rule IDs (loaded separately) */
 let ignoredRuleIds = new Set<string>();
@@ -50,6 +53,11 @@ function getDialectEnum(dialect: GrammarDialect): Dialect {
 export async function initGrammarChecker(
   dialect: GrammarDialect = DEFAULT_DIALECT
 ): Promise<void> {
+  // Don't retry after permanent failure
+  if (loadFailed) {
+    return;
+  }
+
   // If already loading, wait for it
   if (isLoading && initPromise) {
     return initPromise;
@@ -74,9 +82,11 @@ export async function initGrammarChecker(
       // Run setup to ensure WASM is loaded
       await linterInstance.setup();
     } catch (error) {
-      console.error("Failed to initialize grammar checker:", error);
+      // Mark as permanently failed to prevent retry loops
+      loadFailed = true;
       linterInstance = null;
-      throw error;
+      console.error("Grammar checking disabled:", error);
+      // Don't throw - graceful degradation means spell check still works
     } finally {
       isLoading = false;
       initPromise = null;
@@ -233,4 +243,5 @@ export function clearCache(): void {
   isLoading = false;
   initPromise = null;
   ignoredRuleIds.clear();
+  loadFailed = false;
 }

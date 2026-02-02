@@ -2,6 +2,7 @@
  * Spell Check Module
  *
  * Exports all spell checking functionality for use in the editor.
+ * Uses SymSpell algorithm for sub-millisecond spell checking.
  */
 
 // Types
@@ -20,7 +21,7 @@ export {
   DEFAULT_PERSONAL_DICTIONARY,
 } from "./types";
 
-// Typo.js instance
+// Spell checker core (SymSpell-based)
 export {
   initSpellChecker,
   getCurrentLanguage,
@@ -28,12 +29,25 @@ export {
   setPersonalDictionary,
   addToPersonalDictionaryMemory,
   checkWord,
+  checkWordInContext,
   getSuggestions,
   checkWordWithSuggestions,
   tokenizeText,
   checkText,
   clearCache,
+  // Proper noun detection
+  getSentenceContext,
+  isLikelyProperNoun,
+  hasMultipleCapitals,
 } from "./typoInstance";
+
+export type { SentenceContext } from "./typoInstance";
+
+// SymSpell service (low-level access)
+export { spellService, SymSpellService } from "./symspellService";
+
+// Dictionary hierarchy
+export { dictionaryHierarchy, DictionaryHierarchy } from "./dictionaryHierarchy";
 
 // Personal dictionary (Tauri integration)
 export {

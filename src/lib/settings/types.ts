@@ -144,7 +144,7 @@ export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
   defaultCopyFormat: "formatted",
   spellCheckEnabled: true,
   spellCheckLanguage: "en_US",
-  grammarCheckEnabled: true,
+  grammarCheckEnabled: false, // Disabled until Harper.js WASM issues resolved
   grammarDialect: "american",
 };
 

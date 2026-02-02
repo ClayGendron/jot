@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:dictionary": "bun run scripts/build-dictionary.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -54,9 +55,9 @@
     "normalize-path": "^3.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "spellchecker-wasm": "^0.3.3",
     "tippy.js": "^6.3.7",
     "turndown": "^7.2.2",
-    "typo-js": "^1.3.1",
     "zustand": "^5.0.10"
   },
   "devDependencies": {
