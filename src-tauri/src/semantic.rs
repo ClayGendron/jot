@@ -1,12 +1,16 @@
 /**
  * Semantic Search Module
  *
- * Provides on-device semantic search using fastembed-rs embeddings.
- * Uses SQLite for embedding storage and cosine similarity for search.
+ * Provides on-device semantic search using Candle ML framework.
+ * Uses Metal GPU on macOS, CPU on other platforms.
+ * SQLite for embedding storage and cosine similarity for search.
  */
 
+use candle_core::{DType, Device, Tensor};
+use candle_nn::VarBuilder;
+use candle_transformers::models::bert::{BertModel, Config, DTYPE};
 use chrono::Utc;
-use fastembed::{TextEmbedding, TokenizerFiles, UserDefinedEmbeddingModel};
+use hf_hub::{api::sync::Api, Repo, RepoType};
 use once_cell::sync::OnceCell;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -14,6 +18,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
 use tauri::Manager;
+use tokenizers::Tokenizer;
 
 // ==========================================
 // Types
@@ -71,39 +76,193 @@ pub struct SemanticStatus {
     pub indexed_folders_count: i32,
     pub total_chunks: i32,
     pub total_files: i32,
+    pub device: String,
 }
 
 // ==========================================
-// Embedding Model
+// Embedding Model (Candle)
 // ==========================================
 
+/// Sentence embedding model using Candle
+struct SentenceEmbedder {
+    model: BertModel,
+    tokenizer: Tokenizer,
+    device: Device,
+}
+
+impl SentenceEmbedder {
+    fn new(device: Device) -> Result<Self, String> {
+        let model_id = "sentence-transformers/all-MiniLM-L6-v2";
+        let api = Api::new().map_err(|e| format!("Failed to create HF API: {}", e))?;
+        let repo = api.repo(Repo::new(model_id.to_string(), RepoType::Model));
+
+        let config_file = repo
+            .get("config.json")
+            .map_err(|e| format!("Failed to get config.json: {}", e))?;
+        let tokenizer_file = repo
+            .get("tokenizer.json")
+            .map_err(|e| format!("Failed to get tokenizer.json: {}", e))?;
+        let weights_file = repo
+            .get("model.safetensors")
+            .map_err(|e| format!("Failed to get model.safetensors: {}", e))?;
+
+        let config_str = std::fs::read_to_string(&config_file)
+            .map_err(|e| format!("Failed to read config: {}", e))?;
+        let config: Config =
+            serde_json::from_str(&config_str).map_err(|e| format!("Failed to parse config: {}", e))?;
+
+        let tokenizer = Tokenizer::from_file(&tokenizer_file)
+            .map_err(|e| format!("Failed to load tokenizer: {}", e))?;
+
+        let vb = unsafe {
+            VarBuilder::from_mmaped_safetensors(&[weights_file], DTYPE, &device)
+                .map_err(|e| format!("Failed to load weights: {}", e))?
+        };
+
+        let model =
+            BertModel::load(vb, &config).map_err(|e| format!("Failed to load BERT model: {}", e))?;
+
+        Ok(Self {
+            model,
+            tokenizer,
+            device,
+        })
+    }
+
+    fn encode_batch(&self, sentences: &[&str]) -> Result<Vec<Vec<f32>>, String> {
+        if sentences.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let encodings = self
+            .tokenizer
+            .encode_batch(sentences.to_vec(), true)
+            .map_err(|e| format!("Tokenization failed: {}", e))?;
+
+        let max_len = encodings
+            .iter()
+            .map(|e| e.get_ids().len())
+            .max()
+            .unwrap_or(0);
+
+        let mut all_ids = Vec::new();
+        let mut all_masks = Vec::new();
+        let mut all_type_ids = Vec::new();
+
+        for encoding in &encodings {
+            let ids = encoding.get_ids();
+            let mask = encoding.get_attention_mask();
+            let type_ids = encoding.get_type_ids();
+
+            let mut padded_ids = ids.to_vec();
+            let mut padded_mask = mask.to_vec();
+            let mut padded_type_ids = type_ids.to_vec();
+
+            padded_ids.resize(max_len, 0);
+            padded_mask.resize(max_len, 0);
+            padded_type_ids.resize(max_len, 0);
+
+            all_ids.extend(padded_ids);
+            all_masks.extend(padded_mask);
+            all_type_ids.extend(padded_type_ids);
+        }
+
+        let batch_size = sentences.len();
+
+        let input_ids = Tensor::from_vec(all_ids, (batch_size, max_len), &self.device)
+            .and_then(|t| t.to_dtype(DType::U32))
+            .map_err(|e| format!("Failed to create input_ids tensor: {}", e))?;
+
+        let attention_mask = Tensor::from_vec(all_masks.clone(), (batch_size, max_len), &self.device)
+            .and_then(|t| t.to_dtype(DType::U32))
+            .map_err(|e| format!("Failed to create attention_mask tensor: {}", e))?;
+
+        let token_type_ids = Tensor::from_vec(all_type_ids, (batch_size, max_len), &self.device)
+            .and_then(|t| t.to_dtype(DType::U32))
+            .map_err(|e| format!("Failed to create token_type_ids tensor: {}", e))?;
+
+        // Forward pass
+        let embeddings = self
+            .model
+            .forward(&input_ids, &token_type_ids, Some(&attention_mask))
+            .map_err(|e| format!("Model forward pass failed: {}", e))?;
+
+        // Mean pooling
+        let attention_mask_f = Tensor::from_vec(all_masks, (batch_size, max_len), &self.device)
+            .and_then(|t| t.to_dtype(embeddings.dtype()))
+            .map_err(|e| format!("Failed to convert attention mask: {}", e))?;
+
+        let mask_expanded = attention_mask_f
+            .unsqueeze(2)
+            .and_then(|m| m.broadcast_as(embeddings.shape()))
+            .map_err(|e| format!("Failed to expand mask: {}", e))?;
+
+        let masked = embeddings
+            .mul(&mask_expanded)
+            .map_err(|e| format!("Failed to apply mask: {}", e))?;
+
+        let sum = masked
+            .sum(1)
+            .map_err(|e| format!("Failed to sum embeddings: {}", e))?;
+
+        let count = mask_expanded
+            .sum(1)
+            .map_err(|e| format!("Failed to sum mask: {}", e))?;
+
+        let pooled = sum
+            .broadcast_div(&count)
+            .map_err(|e| format!("Failed to compute mean: {}", e))?;
+
+        // L2 normalize
+        let norm = pooled
+            .sqr()
+            .and_then(|t| t.sum_keepdim(1))
+            .and_then(|t| t.sqrt())
+            .map_err(|e| format!("Failed to compute norm: {}", e))?;
+
+        let normalized = pooled
+            .broadcast_div(&norm)
+            .map_err(|e| format!("Failed to normalize: {}", e))?;
+
+        // Convert to Vec<Vec<f32>>
+        let (batch, dim) = normalized.dims2().map_err(|e| format!("Invalid dims: {}", e))?;
+        let flat: Vec<f32> = normalized
+            .to_dtype(DType::F32)
+            .and_then(|t| t.to_vec1())
+            .map_err(|e| format!("Failed to extract embeddings: {}", e))?;
+
+        Ok(flat.chunks(dim).map(|c| c.to_vec()).collect())
+    }
+
+    fn device_name(&self) -> &'static str {
+        match &self.device {
+            Device::Cpu => "CPU",
+            Device::Cuda(_) => "CUDA",
+            Device::Metal(_) => "Metal GPU",
+        }
+    }
+}
+
 /// Global embedding model instance (lazy-initialized)
-static EMBEDDING_MODEL: OnceCell<Mutex<TextEmbedding>> = OnceCell::new();
+static EMBEDDING_MODEL: OnceCell<Mutex<SentenceEmbedder>> = OnceCell::new();
 
-/// Get bundled model files embedded at compile time
-fn get_bundled_model() -> UserDefinedEmbeddingModel {
-    let tokenizer_files = TokenizerFiles {
-        tokenizer_file: include_bytes!("../models/all-MiniLM-L6-v2/tokenizer.json").to_vec(),
-        config_file: include_bytes!("../models/all-MiniLM-L6-v2/config.json").to_vec(),
-        special_tokens_map_file: include_bytes!("../models/all-MiniLM-L6-v2/special_tokens_map.json").to_vec(),
-        tokenizer_config_file: include_bytes!("../models/all-MiniLM-L6-v2/tokenizer_config.json").to_vec(),
-    };
-
-    UserDefinedEmbeddingModel::new(
-        include_bytes!("../models/all-MiniLM-L6-v2/model.onnx").to_vec(),
-        tokenizer_files,
-    )
+/// Get the best available device (Metal on macOS, CPU otherwise)
+fn get_device() -> Device {
+    #[cfg(target_os = "macos")]
+    {
+        Device::new_metal(0).unwrap_or(Device::Cpu)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Device::Cpu
+    }
 }
 
 /// Initialize or get the embedding model
-fn get_model() -> Result<&'static Mutex<TextEmbedding>, String> {
+fn get_model() -> Result<&'static Mutex<SentenceEmbedder>, String> {
     EMBEDDING_MODEL.get_or_try_init(|| {
-        let model = TextEmbedding::try_new_from_user_defined(
-            get_bundled_model(),
-            Default::default(),
-        )
-        .map_err(|e| format!("Failed to initialize embedding model: {}", e))?;
-
+        let device = get_device();
+        let model = SentenceEmbedder::new(device)?;
         Ok(Mutex::new(model))
     })
 }
@@ -113,6 +272,16 @@ fn is_model_loaded() -> bool {
     EMBEDDING_MODEL.get().is_some()
 }
 
+/// Get the device name for status
+fn get_device_name() -> String {
+    if let Some(model) = EMBEDDING_MODEL.get() {
+        if let Ok(guard) = model.lock() {
+            return guard.device_name().to_string();
+        }
+    }
+    "Not loaded".to_string()
+}
+
 /// Generate embeddings for texts
 fn generate_embeddings(texts: Vec<String>) -> Result<Vec<Vec<f32>>, String> {
     if texts.is_empty() {
@@ -120,13 +289,12 @@ fn generate_embeddings(texts: Vec<String>) -> Result<Vec<Vec<f32>>, String> {
     }
 
     let model = get_model()?;
-    let model_guard = model.lock()
+    let model_guard = model
+        .lock()
         .map_err(|e| format!("Failed to lock embedding model: {}", e))?;
 
-    let embeddings = model_guard.embed(texts, None)
-        .map_err(|e| format!("Failed to generate embeddings: {}", e))?;
-
-    Ok(embeddings)
+    let text_refs: Vec<&str> = texts.iter().map(|s| s.as_str()).collect();
+    model_guard.encode_batch(&text_refs)
 }
 
 // ==========================================
@@ -162,7 +330,8 @@ fn init_database(app_data_dir: &str) -> Result<Connection, String> {
             last_indexed INTEGER
         )",
         [],
-    ).map_err(|e| format!("Failed to create indexed_folders table: {}", e))?;
+    )
+    .map_err(|e| format!("Failed to create indexed_folders table: {}", e))?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS embeddings (
@@ -178,18 +347,21 @@ fn init_database(app_data_dir: &str) -> Result<Connection, String> {
             UNIQUE(file_path, chunk_index)
         )",
         [],
-    ).map_err(|e| format!("Failed to create embeddings table: {}", e))?;
+    )
+    .map_err(|e| format!("Failed to create embeddings table: {}", e))?;
 
     // Create indexes for fast lookups
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_embeddings_file_path ON embeddings(file_path)",
         [],
-    ).map_err(|e| format!("Failed to create file_path index: {}", e))?;
+    )
+    .map_err(|e| format!("Failed to create file_path index: {}", e))?;
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_embeddings_content_hash ON embeddings(content_hash)",
         [],
-    ).map_err(|e| format!("Failed to create content_hash index: {}", e))?;
+    )
+    .map_err(|e| format!("Failed to create content_hash index: {}", e))?;
 
     // Create settings table
     conn.execute(
@@ -198,7 +370,8 @@ fn init_database(app_data_dir: &str) -> Result<Connection, String> {
             value TEXT NOT NULL
         )",
         [],
-    ).map_err(|e| format!("Failed to create settings table: {}", e))?;
+    )
+    .map_err(|e| format!("Failed to create settings table: {}", e))?;
 
     Ok(conn)
 }
@@ -220,14 +393,13 @@ fn compute_content_hash(content: &str) -> String {
 
 /// Serialize embedding to bytes
 fn embedding_to_bytes(embedding: &[f32]) -> Vec<u8> {
-    embedding.iter()
-        .flat_map(|f| f.to_le_bytes())
-        .collect()
+    embedding.iter().flat_map(|f| f.to_le_bytes()).collect()
 }
 
 /// Deserialize embedding from bytes
 fn bytes_to_embedding(bytes: &[u8]) -> Vec<f32> {
-    bytes.chunks(4)
+    bytes
+        .chunks(4)
         .map(|chunk| {
             let arr: [u8; 4] = chunk.try_into().unwrap_or([0, 0, 0, 0]);
             f32::from_le_bytes(arr)
@@ -236,7 +408,7 @@ fn bytes_to_embedding(bytes: &[u8]) -> Vec<f32> {
 }
 
 /// Compute cosine similarity between two embeddings
-/// Note: fastembed embeddings are L2-normalized, so dot product = cosine similarity
+/// Note: embeddings are L2-normalized, so dot product = cosine similarity
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
 }
@@ -251,42 +423,44 @@ pub async fn jot_semantic_init() -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(move || {
         get_model()?;
         Ok(true)
-    }).await.map_err(|e| e.to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Get semantic search status
 #[tauri::command]
 pub fn jot_semantic_get_status(app: tauri::AppHandle) -> Result<SemanticStatus, String> {
-    let app_data_dir = app.path()
+    let app_data_dir = app
+        .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
     let app_data_str = app_data_dir.to_string_lossy().to_string();
 
     let conn = get_connection(&app_data_str)?;
 
-    let indexed_folders_count: i32 = conn.query_row(
-        "SELECT COUNT(*) FROM indexed_folders",
-        [],
-        |row| row.get(0),
-    ).unwrap_or(0);
+    let indexed_folders_count: i32 = conn
+        .query_row("SELECT COUNT(*) FROM indexed_folders", [], |row| row.get(0))
+        .unwrap_or(0);
 
-    let total_chunks: i32 = conn.query_row(
-        "SELECT COUNT(*) FROM embeddings",
-        [],
-        |row| row.get(0),
-    ).unwrap_or(0);
+    let total_chunks: i32 = conn
+        .query_row("SELECT COUNT(*) FROM embeddings", [], |row| row.get(0))
+        .unwrap_or(0);
 
-    let total_files: i32 = conn.query_row(
-        "SELECT COUNT(DISTINCT file_path) FROM embeddings",
-        [],
-        |row| row.get(0),
-    ).unwrap_or(0);
+    let total_files: i32 = conn
+        .query_row(
+            "SELECT COUNT(DISTINCT file_path) FROM embeddings",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
 
     Ok(SemanticStatus {
         model_loaded: is_model_loaded(),
         indexed_folders_count,
         total_chunks,
         total_files,
+        device: get_device_name(),
     })
 }
 
@@ -297,7 +471,8 @@ pub fn jot_semantic_add_folder(
     path: String,
     name: String,
 ) -> Result<(), String> {
-    let app_data_dir = app.path()
+    let app_data_dir = app
+        .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
     let app_data_str = app_data_dir.to_string_lossy().to_string();
@@ -308,18 +483,17 @@ pub fn jot_semantic_add_folder(
     conn.execute(
         "INSERT OR REPLACE INTO indexed_folders (path, name, added_at, last_indexed) VALUES (?1, ?2, ?3, NULL)",
         params![path, name, now],
-    ).map_err(|e| format!("Failed to add indexed folder: {}", e))?;
+    )
+    .map_err(|e| format!("Failed to add indexed folder: {}", e))?;
 
     Ok(())
 }
 
 /// Remove a folder from indexed folders and delete its embeddings
 #[tauri::command]
-pub fn jot_semantic_remove_folder(
-    app: tauri::AppHandle,
-    path: String,
-) -> Result<i32, String> {
-    let app_data_dir = app.path()
+pub fn jot_semantic_remove_folder(app: tauri::AppHandle, path: String) -> Result<i32, String> {
+    let app_data_dir = app
+        .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
     let app_data_str = app_data_dir.to_string_lossy().to_string();
@@ -330,7 +504,8 @@ pub fn jot_semantic_remove_folder(
     conn.execute(
         "DELETE FROM indexed_folders WHERE path = ?1",
         params![path],
-    ).map_err(|e| format!("Failed to remove indexed folder: {}", e))?;
+    )
+    .map_err(|e| format!("Failed to remove indexed folder: {}", e))?;
 
     // Remove all embeddings for files in this folder
     // Use LIKE with folder path prefix
@@ -340,10 +515,12 @@ pub fn jot_semantic_remove_folder(
         format!("{}/", path)
     };
 
-    let deleted = conn.execute(
-        "DELETE FROM embeddings WHERE file_path LIKE ?1",
-        params![format!("{}%", folder_prefix)],
-    ).map_err(|e| format!("Failed to remove embeddings: {}", e))?;
+    let deleted = conn
+        .execute(
+            "DELETE FROM embeddings WHERE file_path LIKE ?1",
+            params![format!("{}%", folder_prefix)],
+        )
+        .map_err(|e| format!("Failed to remove embeddings: {}", e))?;
 
     Ok(deleted as i32)
 }
@@ -351,25 +528,28 @@ pub fn jot_semantic_remove_folder(
 /// Get list of indexed folders
 #[tauri::command]
 pub fn jot_semantic_get_folders(app: tauri::AppHandle) -> Result<Vec<IndexedFolder>, String> {
-    let app_data_dir = app.path()
+    let app_data_dir = app
+        .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
     let app_data_str = app_data_dir.to_string_lossy().to_string();
 
     let conn = get_connection(&app_data_str)?;
 
-    let mut stmt = conn.prepare(
-        "SELECT path, name, added_at, last_indexed FROM indexed_folders ORDER BY added_at DESC"
-    ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+    let mut stmt = conn
+        .prepare("SELECT path, name, added_at, last_indexed FROM indexed_folders ORDER BY added_at DESC")
+        .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
-    let folders = stmt.query_map([], |row| {
-        Ok(IndexedFolder {
-            path: row.get(0)?,
-            name: row.get(1)?,
-            added_at: row.get(2)?,
-            last_indexed: row.get(3)?,
+    let folders = stmt
+        .query_map([], |row| {
+            Ok(IndexedFolder {
+                path: row.get(0)?,
+                name: row.get(1)?,
+                added_at: row.get(2)?,
+                last_indexed: row.get(3)?,
+            })
         })
-    }).map_err(|e| format!("Failed to query folders: {}", e))?;
+        .map_err(|e| format!("Failed to query folders: {}", e))?;
 
     let mut result = Vec::new();
     for folder in folders {
@@ -389,7 +569,8 @@ pub async fn jot_semantic_embed_and_store(
         return Ok(0);
     }
 
-    let app_data_dir = app.path()
+    let app_data_dir = app
+        .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
     let app_data_str = app_data_dir.to_string_lossy().to_string();
@@ -416,7 +597,8 @@ pub async fn jot_semantic_embed_and_store(
             conn.execute(
                 "DELETE FROM embeddings WHERE file_path = ?1 AND chunk_index = ?2",
                 params![chunk.file_path, chunk.chunk_index],
-            ).ok();
+            )
+            .ok();
 
             // Insert new entry
             conn.execute(
@@ -432,32 +614,35 @@ pub async fn jot_semantic_embed_and_store(
                     content_hash,
                     now
                 ],
-            ).map_err(|e| format!("Failed to store embedding: {}", e))?;
+            )
+            .map_err(|e| format!("Failed to store embedding: {}", e))?;
 
             stored += 1;
         }
 
         Ok(stored)
-    }).await.map_err(|e| e.to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Delete embeddings for a file
 #[tauri::command]
-pub fn jot_semantic_delete_file(
-    app: tauri::AppHandle,
-    file_path: String,
-) -> Result<i32, String> {
-    let app_data_dir = app.path()
+pub fn jot_semantic_delete_file(app: tauri::AppHandle, file_path: String) -> Result<i32, String> {
+    let app_data_dir = app
+        .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
     let app_data_str = app_data_dir.to_string_lossy().to_string();
 
     let conn = get_connection(&app_data_str)?;
 
-    let deleted = conn.execute(
-        "DELETE FROM embeddings WHERE file_path = ?1",
-        params![file_path],
-    ).map_err(|e| format!("Failed to delete file embeddings: {}", e))?;
+    let deleted = conn
+        .execute(
+            "DELETE FROM embeddings WHERE file_path = ?1",
+            params![file_path],
+        )
+        .map_err(|e| format!("Failed to delete file embeddings: {}", e))?;
 
     Ok(deleted as i32)
 }
@@ -469,7 +654,8 @@ pub fn jot_semantic_file_needs_update(
     file_path: String,
     content_hash: String,
 ) -> Result<bool, String> {
-    let app_data_dir = app.path()
+    let app_data_dir = app
+        .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
     let app_data_str = app_data_dir.to_string_lossy().to_string();
@@ -477,11 +663,14 @@ pub fn jot_semantic_file_needs_update(
     let conn = get_connection(&app_data_str)?;
 
     // Get the content hash of the first chunk for this file
-    let existing_hash: Option<String> = conn.query_row(
-        "SELECT content_hash FROM embeddings WHERE file_path = ?1 AND chunk_index = 0",
-        params![file_path],
-        |row| row.get(0),
-    ).optional().map_err(|e| format!("Failed to query content hash: {}", e))?;
+    let existing_hash: Option<String> = conn
+        .query_row(
+            "SELECT content_hash FROM embeddings WHERE file_path = ?1 AND chunk_index = 0",
+            params![file_path],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|e| format!("Failed to query content hash: {}", e))?;
 
     match existing_hash {
         Some(hash) => Ok(hash != content_hash),
@@ -500,7 +689,8 @@ pub async fn jot_semantic_search(
         return Ok(vec![]);
     }
 
-    let app_data_dir = app.path()
+    let app_data_dir = app
+        .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
     let app_data_str = app_data_dir.to_string_lossy().to_string();
@@ -508,31 +698,33 @@ pub async fn jot_semantic_search(
     tauri::async_runtime::spawn_blocking(move || {
         // Generate query embedding
         let embeddings = generate_embeddings(vec![query])?;
-        let query_embedding = embeddings.first()
+        let query_embedding = embeddings
+            .first()
             .ok_or("Failed to generate query embedding")?;
 
         let conn = get_connection(&app_data_str)?;
 
         // Load all embeddings (brute force search - fast enough for <10K documents)
-        let mut stmt = conn.prepare(
-            "SELECT file_path, chunk_index, chunk_text, embedding FROM embeddings"
-        ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+        let mut stmt = conn
+            .prepare("SELECT file_path, chunk_index, chunk_text, embedding FROM embeddings")
+            .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
-        let mut results: Vec<(String, i32, String, f32)> = stmt.query_map([], |row| {
-            let file_path: String = row.get(0)?;
-            let chunk_index: i32 = row.get(1)?;
-            let chunk_text: String = row.get(2)?;
-            let embedding_bytes: Vec<u8> = row.get(3)?;
-            Ok((file_path, chunk_index, chunk_text, embedding_bytes))
-        })
-        .map_err(|e| format!("Failed to query embeddings: {}", e))?
-        .filter_map(|r| r.ok())
-        .map(|(file_path, chunk_index, chunk_text, embedding_bytes)| {
-            let embedding = bytes_to_embedding(&embedding_bytes);
-            let score = cosine_similarity(query_embedding, &embedding);
-            (file_path, chunk_index, chunk_text, score)
-        })
-        .collect();
+        let mut results: Vec<(String, i32, String, f32)> = stmt
+            .query_map([], |row| {
+                let file_path: String = row.get(0)?;
+                let chunk_index: i32 = row.get(1)?;
+                let chunk_text: String = row.get(2)?;
+                let embedding_bytes: Vec<u8> = row.get(3)?;
+                Ok((file_path, chunk_index, chunk_text, embedding_bytes))
+            })
+            .map_err(|e| format!("Failed to query embeddings: {}", e))?
+            .filter_map(|r| r.ok())
+            .map(|(file_path, chunk_index, chunk_text, embedding_bytes)| {
+                let embedding = bytes_to_embedding(&embedding_bytes);
+                let score = cosine_similarity(query_embedding, &embedding);
+                (file_path, chunk_index, chunk_text, score)
+            })
+            .collect();
 
         // Sort by score descending
         results.sort_by(|a, b| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal));
@@ -558,7 +750,9 @@ pub async fn jot_semantic_search(
             .collect();
 
         Ok(top_results)
-    }).await.map_err(|e| e.to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Get related documents for a file
@@ -568,7 +762,8 @@ pub async fn jot_semantic_get_related(
     file_path: String,
     limit: i32,
 ) -> Result<Vec<RelatedDocument>, String> {
-    let app_data_dir = app.path()
+    let app_data_dir = app
+        .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
     let app_data_str = app_data_dir.to_string_lossy().to_string();
@@ -577,17 +772,18 @@ pub async fn jot_semantic_get_related(
         let conn = get_connection(&app_data_str)?;
 
         // Get embeddings for the current file
-        let mut stmt = conn.prepare(
-            "SELECT embedding FROM embeddings WHERE file_path = ?1"
-        ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+        let mut stmt = conn
+            .prepare("SELECT embedding FROM embeddings WHERE file_path = ?1")
+            .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
-        let file_embeddings: Vec<Vec<f32>> = stmt.query_map(params![file_path], |row| {
-            let bytes: Vec<u8> = row.get(0)?;
-            Ok(bytes_to_embedding(&bytes))
-        })
-        .map_err(|e| format!("Failed to query file embeddings: {}", e))?
-        .filter_map(|r| r.ok())
-        .collect();
+        let file_embeddings: Vec<Vec<f32>> = stmt
+            .query_map(params![file_path], |row| {
+                let bytes: Vec<u8> = row.get(0)?;
+                Ok(bytes_to_embedding(&bytes))
+            })
+            .map_err(|e| format!("Failed to query file embeddings: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
 
         if file_embeddings.is_empty() {
             return Ok(vec![]);
@@ -615,32 +811,32 @@ pub async fn jot_semantic_get_related(
         }
 
         // Query all other embeddings
-        let mut stmt = conn.prepare(
-            "SELECT DISTINCT file_path FROM embeddings WHERE file_path != ?1"
-        ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+        let mut stmt = conn
+            .prepare("SELECT DISTINCT file_path FROM embeddings WHERE file_path != ?1")
+            .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
-        let other_files: Vec<String> = stmt.query_map(params![file_path], |row| {
-            row.get(0)
-        })
-        .map_err(|e| format!("Failed to query other files: {}", e))?
-        .filter_map(|r| r.ok())
-        .collect();
+        let other_files: Vec<String> = stmt
+            .query_map(params![file_path], |row| row.get(0))
+            .map_err(|e| format!("Failed to query other files: {}", e))?
+            .filter_map(|r| r.ok())
+            .collect();
 
         let mut results: Vec<(String, f32)> = Vec::new();
 
         for other_path in other_files {
             // Get embeddings for this file
-            let mut stmt = conn.prepare(
-                "SELECT embedding FROM embeddings WHERE file_path = ?1"
-            ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+            let mut stmt = conn
+                .prepare("SELECT embedding FROM embeddings WHERE file_path = ?1")
+                .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
-            let other_embeddings: Vec<Vec<f32>> = stmt.query_map(params![other_path], |row| {
-                let bytes: Vec<u8> = row.get(0)?;
-                Ok(bytes_to_embedding(&bytes))
-            })
-            .map_err(|e| format!("Failed to query other embeddings: {}", e))?
-            .filter_map(|r| r.ok())
-            .collect();
+            let other_embeddings: Vec<Vec<f32>> = stmt
+                .query_map(params![other_path], |row| {
+                    let bytes: Vec<u8> = row.get(0)?;
+                    Ok(bytes_to_embedding(&bytes))
+                })
+                .map_err(|e| format!("Failed to query other embeddings: {}", e))?
+                .filter_map(|r| r.ok())
+                .collect();
 
             if other_embeddings.is_empty() {
                 continue;
@@ -690,16 +886,16 @@ pub async fn jot_semantic_get_related(
             .collect();
 
         Ok(top_results)
-    }).await.map_err(|e| e.to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Update folder's last_indexed timestamp
 #[tauri::command]
-pub fn jot_semantic_update_folder_indexed(
-    app: tauri::AppHandle,
-    path: String,
-) -> Result<(), String> {
-    let app_data_dir = app.path()
+pub fn jot_semantic_update_folder_indexed(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    let app_data_dir = app
+        .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
     let app_data_str = app_data_dir.to_string_lossy().to_string();
@@ -710,7 +906,8 @@ pub fn jot_semantic_update_folder_indexed(
     conn.execute(
         "UPDATE indexed_folders SET last_indexed = ?1 WHERE path = ?2",
         params![now, path],
-    ).map_err(|e| format!("Failed to update folder indexed time: {}", e))?;
+    )
+    .map_err(|e| format!("Failed to update folder indexed time: {}", e))?;
 
     Ok(())
 }
@@ -718,7 +915,8 @@ pub fn jot_semantic_update_folder_indexed(
 /// Clear all semantic search data
 #[tauri::command]
 pub fn jot_semantic_clear_all(app: tauri::AppHandle) -> Result<(), String> {
-    let app_data_dir = app.path()
+    let app_data_dir = app
+        .path()
         .app_data_dir()
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
     let app_data_str = app_data_dir.to_string_lossy().to_string();

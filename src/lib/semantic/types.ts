@@ -89,6 +89,8 @@ export interface SemanticStatus {
   totalChunks: number;
   /** Total number of unique files in the index */
   totalFiles: number;
+  /** Device being used for embeddings (CPU, Metal GPU, CUDA) */
+  device: string;
 }
 
 /**

@@ -43,6 +43,7 @@ interface RawSemanticStatus {
   indexed_folders_count: number;
   total_chunks: number;
   total_files: number;
+  device: string;
 }
 
 interface RawDocumentChunk {
@@ -86,6 +87,7 @@ function convertStatus(raw: RawSemanticStatus): SemanticStatus {
     indexedFoldersCount: raw.indexed_folders_count,
     totalChunks: raw.total_chunks,
     totalFiles: raw.total_files,
+    device: raw.device,
   };
 }
 
