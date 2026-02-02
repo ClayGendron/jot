@@ -17,7 +17,7 @@ Two-part migration:
 | Phase 2: Tier 1 Components | ✅ Complete | `38dcc5c` |
 | Phase 3: Tier 2 Components | ✅ Complete | `129eed2` |
 | Phase 4: Tier 3 Components | ✅ Complete | `126d8a0`, `63957b5` |
-| Phase 5: Final CSS Cleanup | 🔶 Partial | `0e76e2e` |
+| Phase 5: Final CSS Cleanup | ✅ Complete | `0e76e2e`, `554c5fe` |
 
 ## Current State
 
@@ -27,9 +27,9 @@ Two-part migration:
 | Tailwind | v4 with `@tailwindcss/vite` (CSS-first, `@theme` directive) |
 | Path alias | `@/` already configured |
 | Theme system | 5 presets (Paper, Midnight, Sepia, High Contrast, Olive) + custom accent colors |
-| Component library | shadcn/ui with Base UI primitives (Phase 1 complete) |
+| Component library | shadcn/ui with Base UI primitives |
 | Icons | Lucide React (consolidated from ~100 inline SVGs) |
-| CSS structure | Modular (theme: 230, editor: 396, legacy: 4,576 lines) |
+| CSS structure | Modular (theme: 230, editor: 396, legacy: ~4,500 lines remaining) |
 
 ## Why Base UI over Radix
 
