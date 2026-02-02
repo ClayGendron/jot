@@ -17,7 +17,7 @@ Two-part migration:
 | Phase 2: Tier 1 Components | ✅ Complete | `38dcc5c` |
 | Phase 3: Tier 2 Components | ✅ Complete | `129eed2` |
 | Phase 4: Tier 3 Components | ✅ Complete | `126d8a0`, `63957b5` |
-| Phase 5: Final CSS Cleanup | ⏳ Pending | - |
+| Phase 5: Final CSS Cleanup | 🔶 Partial | `0e76e2e` |
 
 ## Current State
 
@@ -29,7 +29,7 @@ Two-part migration:
 | Theme system | 5 presets (Paper, Midnight, Sepia, High Contrast, Olive) + custom accent colors |
 | Component library | shadcn/ui with Base UI primitives (Phase 1 complete) |
 | Icons | Lucide React (consolidated from ~100 inline SVGs) |
-| CSS structure | Modular (theme.css, editor.css, legacy-components.css) |
+| CSS structure | Modular (theme: 230, editor: 396, legacy: 4,576 lines) |
 
 ## Why Base UI over Radix
 
@@ -866,54 +866,64 @@ bunx shadcn@latest add radio-group
 
 ---
 
-## Phase 5: Final CSS Cleanup
+## Phase 5: Final CSS Cleanup 🔶 Partial
 
-### 5.1 Verify CSS File Sizes
+**Completed (2026-02-02):**
+- Audited 439 CSS classes for usage in components
+- Deleted ~700 lines of orphaned CSS from migrated components:
+  - Semantic Setup Dialog styles (migrated to shadcn Dialog)
+  - Recent Workspaces Menu styles (migrated to shadcn DropdownMenu)
+  - Toolbar button styles (migrated to shadcn Button)
+  - Theme dropdown styles (migrated to shadcn DropdownMenu)
+  - Settings select styles (migrated to shadcn Select)
+- All 930 tests pass
+- TypeScript compiles without errors
+- Production build succeeds
 
-Target state:
+**Current CSS File Sizes:**
+- `src/styles/theme.css` - 230 lines ✓
+- `src/styles/editor.css` - 396 lines ✓
+- `src/styles/legacy-components.css` - 4,576 lines (components still need migration)
+- Total: ~5,200 lines (down from ~7,100)
 
--   `src/styles/theme.css` - ~200 lines
-    
--   `src/styles/editor.css` - ~1,500 lines
-    
--   `src/styles/legacy-components.css` - **0 lines** (delete file)
-    
--   Total: ~1,700 lines (down from 7,115)
-    
+### Components Still Using Legacy CSS
 
-### 5.2 Audit for Orphaned Styles
+The following components still need Tailwind migration before `legacy-components.css` can be deleted:
 
-```bash
-# Find remaining classes in legacy-components.css
-grep -oE '\.[a-z][a-z0-9-]+' src/styles/legacy-components.css | sort -u > /tmp/css-classes.txt
+| Component | Classes Used | Priority |
+| --- | --- | --- |
+| GlobalSearch | 34 classes | High |
+| SemanticSearchPanel | 25 classes | Medium |
+| VersionHistory | 18 classes | Medium |
+| FindReplaceBar | 13 classes | High |
+| WelcomeScreen | 12 classes | Low |
+| SaveIndicator | 11 classes | Low |
+| ThemePicker | 10 classes | Low |
+| RelatedDocsPanel | 10 classes | Medium |
+| FileTree | 10 classes | High |
+| DiffViewer | 9 classes | Low |
+| AccentColorPicker | 3 classes | Low |
 
-# Check each against codebase
-while read class; do
-  if ! rg -q "${class#.}" src/components/; then
-    echo "ORPHANED: $class"
-  fi
-done < /tmp/css-classes.txt
+### 5.1 Future Work: Migrate Remaining Components
 
-```
+Each component above should be migrated to use Tailwind utilities:
+1. Replace CSS class usage with Tailwind classes
+2. Delete corresponding CSS from `legacy-components.css`
+3. Verify all 5 themes display correctly
 
-### 5.3 Delete Legacy File
-
-1.  Remove `@import "./legacy-components.css"` from `index.css`
-    
-2.  Delete `src/styles/legacy-components.css`
-    
-
-### 5.4 Final Verification
+### 5.2 Final Verification (When Complete)
 
 -   `bun run build` - Compare bundle size to Phase 1 baseline
-    
+
 -   All 5 themes render correctly
-    
+
 -   All components accessible via keyboard
-    
+
 -   All tests pass
-    
+
 -   No console warnings about missing styles
+
+-   Delete `legacy-components.css` and its import
     
 
 ---
