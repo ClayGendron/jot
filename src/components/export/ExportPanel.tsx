@@ -10,6 +10,9 @@
 
 import { useState, useCallback } from "react";
 import { X, Download, AlertCircle, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   exportAndDownloadPdf,
   type ExportOptions,
@@ -125,34 +128,39 @@ export function ExportPanel({
       >
         <header className="export-panel-header">
           <h2 className="export-panel-title">Export</h2>
-          <button
-            className="export-panel-close"
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onClose}
             aria-label="Close export panel"
           >
-            <X className="h-5 w-5" />
-          </button>
+            <X className="size-5" />
+          </Button>
         </header>
 
         <div className="export-panel-content">
           {/* Format Selection */}
           <section className="export-section">
             <h3 className="export-section-title">Format</h3>
-            <div className="export-format-buttons">
-              <button
-                className={`export-format-btn ${format === "pdf" ? "active" : ""}`}
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                active={format === "pdf"}
                 onClick={() => setFormat("pdf")}
+                className="flex-col h-auto py-4 gap-2"
               >
                 <PdfIcon />
                 <span>PDF</span>
-              </button>
-              <button
-                className={`export-format-btn ${format === "docx" ? "active" : ""}`}
+              </Button>
+              <Button
+                variant="outline"
+                active={format === "docx"}
                 onClick={() => setFormat("docx")}
+                className="flex-col h-auto py-4 gap-2"
               >
                 <DocxIcon />
                 <span>Word</span>
-              </button>
+              </Button>
             </div>
           </section>
 
@@ -163,25 +171,34 @@ export function ExportPanel({
             {/* Page Size */}
             <div className="export-row">
               <label className="export-label">Size</label>
-              <div className="export-select-group">
-                <button
-                  className={`export-select-btn ${pageSize === "letter" ? "active" : ""}`}
+              <div className="flex gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  active={pageSize === "letter"}
                   onClick={() => setPageSize("letter")}
+                  className="flex-1"
                 >
                   Letter
-                </button>
-                <button
-                  className={`export-select-btn ${pageSize === "a4" ? "active" : ""}`}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  active={pageSize === "a4"}
                   onClick={() => setPageSize("a4")}
+                  className="flex-1"
                 >
                   A4
-                </button>
-                <button
-                  className={`export-select-btn ${pageSize === "legal" ? "active" : ""}`}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  active={pageSize === "legal"}
                   onClick={() => setPageSize("legal")}
+                  className="flex-1"
                 >
                   Legal
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -189,21 +206,27 @@ export function ExportPanel({
             {format === "pdf" && (
               <div className="export-row">
                 <label className="export-label">Orientation</label>
-                <div className="export-select-group">
-                  <button
-                    className={`export-select-btn ${orientation === "portrait" ? "active" : ""}`}
+                <div className="flex gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    active={orientation === "portrait"}
                     onClick={() => setOrientation("portrait")}
+                    className="flex-1"
                   >
                     <OrientationPortraitIcon />
                     <span>Portrait</span>
-                  </button>
-                  <button
-                    className={`export-select-btn ${orientation === "landscape" ? "active" : ""}`}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    active={orientation === "landscape"}
                     onClick={() => setOrientation("landscape")}
+                    className="flex-1"
                   >
                     <OrientationLandscapeIcon />
                     <span>Landscape</span>
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -212,10 +235,10 @@ export function ExportPanel({
           {/* Margins */}
           <section className="export-section">
             <h3 className="export-section-title">Margins</h3>
-            <div className="export-margins-grid">
-              <div className="export-margin-input">
-                <label>Top</label>
-                <input
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground w-12">Top</label>
+                <Input
                   type="number"
                   value={margins.top}
                   onChange={(e) =>
@@ -224,12 +247,13 @@ export function ExportPanel({
                   min="0.25"
                   max="2"
                   step="0.25"
+                  className="w-16 text-right font-mono"
                 />
-                <span className="export-margin-unit">in</span>
+                <span className="text-xs text-muted-foreground">in</span>
               </div>
-              <div className="export-margin-input">
-                <label>Bottom</label>
-                <input
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground w-12">Bottom</label>
+                <Input
                   type="number"
                   value={margins.bottom}
                   onChange={(e) =>
@@ -241,12 +265,13 @@ export function ExportPanel({
                   min="0.25"
                   max="2"
                   step="0.25"
+                  className="w-16 text-right font-mono"
                 />
-                <span className="export-margin-unit">in</span>
+                <span className="text-xs text-muted-foreground">in</span>
               </div>
-              <div className="export-margin-input">
-                <label>Left</label>
-                <input
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground w-12">Left</label>
+                <Input
                   type="number"
                   value={margins.left}
                   onChange={(e) =>
@@ -255,12 +280,13 @@ export function ExportPanel({
                   min="0.25"
                   max="2"
                   step="0.25"
+                  className="w-16 text-right font-mono"
                 />
-                <span className="export-margin-unit">in</span>
+                <span className="text-xs text-muted-foreground">in</span>
               </div>
-              <div className="export-margin-input">
-                <label>Right</label>
-                <input
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-muted-foreground w-12">Right</label>
+                <Input
                   type="number"
                   value={margins.right}
                   onChange={(e) =>
@@ -272,8 +298,9 @@ export function ExportPanel({
                   min="0.25"
                   max="2"
                   step="0.25"
+                  className="w-16 text-right font-mono"
                 />
-                <span className="export-margin-unit">in</span>
+                <span className="text-xs text-muted-foreground">in</span>
               </div>
             </div>
           </section>
@@ -289,14 +316,10 @@ export function ExportPanel({
                     Create outline from headings
                   </span>
                 </div>
-                <button
-                  className={`export-toggle ${includeBookmarks ? "active" : ""}`}
-                  onClick={() => setIncludeBookmarks(!includeBookmarks)}
-                  role="switch"
-                  aria-checked={includeBookmarks}
-                >
-                  <span className="export-toggle-knob" />
-                </button>
+                <Switch
+                  checked={includeBookmarks}
+                  onCheckedChange={setIncludeBookmarks}
+                />
               </div>
             </section>
           )}
@@ -312,23 +335,24 @@ export function ExportPanel({
 
         {/* Export Button */}
         <footer className="export-panel-footer">
-          <button
-            className="export-btn-primary"
+          <Button
+            size="lg"
+            className="w-full"
             onClick={handleExport}
             disabled={isExporting}
           >
             {isExporting ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="size-4 animate-spin" />
                 <span>Exporting...</span>
               </>
             ) : (
               <>
-                <Download className="h-4 w-4" />
+                <Download className="size-4" />
                 <span>Export {format.toUpperCase()}</span>
               </>
             )}
-          </button>
+          </Button>
         </footer>
       </aside>
     </div>

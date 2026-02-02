@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { useEditorStore } from "@/stores/editorStore";
 import { ThemeStyleDropdown } from "./ThemeStyleDropdown";
+import { Button } from "@/components/ui/button";
 
 interface EditorToolbarProps {
   editor: Editor;
@@ -40,21 +41,22 @@ function ToolbarButton({
   children,
 }: ToolbarButtonProps) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="ghost"
+      size="icon"
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`toolbar-button ${isActive ? "is-active" : ""}`}
+      active={isActive}
       data-testid={`toolbar-${title.toLowerCase().replace(/\s+/g, "-")}`}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
 function ToolbarDivider() {
-  return <div className="toolbar-divider" />;
+  return <div className="h-6 w-px mx-2 bg-border" />;
 }
 
 /**
@@ -340,16 +342,17 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
 
       {/* View Mode Toggle */}
       <div className="toolbar-group">
-        <button
-          type="button"
+        <Button
+          variant="outline"
+          size="sm"
           onClick={toggleSourceMode}
           title={sourceMode ? "Switch to WYSIWYG (⌘/)" : "Switch to Source (⌘/)"}
-          className={`view-toggle-btn ${sourceMode ? "is-active" : ""}`}
+          active={sourceMode}
           data-testid="view-mode-toggle"
         >
-          {sourceMode ? <AlignLeft className="h-3.5 w-3.5" /> : <Code className="h-3.5 w-3.5" />}
-          <span>{sourceMode ? "WYSIWYG" : "Source"}</span>
-        </button>
+          {sourceMode ? <AlignLeft className="size-3.5" /> : <Code className="size-3.5" />}
+          <span className="text-xs font-medium">{sourceMode ? "WYSIWYG" : "Source"}</span>
+        </Button>
       </div>
 
       <ToolbarDivider />

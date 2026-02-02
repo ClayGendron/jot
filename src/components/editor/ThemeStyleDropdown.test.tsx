@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { ThemeStyleDropdown } from "./ThemeStyleDropdown";
 import { useEditorStore } from "@/stores/editorStore";
 
@@ -39,20 +39,24 @@ describe("ThemeStyleDropdown", () => {
       // Trigger button should be visible
       expect(screen.getByTitle("Appearance settings")).toBeInTheDocument();
 
-      // Menu should not be visible
-      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+      // Menu should not be visible (Base UI uses role="menu")
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     });
 
-    it("opens dropdown on click", () => {
+    it("opens dropdown on click", async () => {
       render(<ThemeStyleDropdown />);
 
       const trigger = screen.getByTitle("Appearance settings");
-      fireEvent.click(trigger);
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
 
-      expect(screen.getByRole("listbox")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByRole("menu")).toBeInTheDocument();
+      });
     });
 
-    it("closes dropdown when clicking outside", () => {
+    it("closes dropdown when clicking outside", async () => {
       render(
         <div>
           <div data-testid="outside">Outside</div>
@@ -62,142 +66,239 @@ describe("ThemeStyleDropdown", () => {
 
       // Open dropdown
       const trigger = screen.getByTitle("Appearance settings");
-      fireEvent.click(trigger);
-      expect(screen.getByRole("listbox")).toBeInTheDocument();
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
+      await waitFor(() => {
+        expect(screen.getByRole("menu")).toBeInTheDocument();
+      });
 
       // Click outside
-      fireEvent.mouseDown(screen.getByTestId("outside"));
-      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+      await act(async () => {
+        fireEvent.mouseDown(screen.getByTestId("outside"));
+      });
+      await waitFor(() => {
+        expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      });
     });
 
-    it("closes dropdown on Escape key", () => {
+    it("closes dropdown on Escape key", async () => {
       render(<ThemeStyleDropdown />);
 
       // Open dropdown
       const trigger = screen.getByTitle("Appearance settings");
-      fireEvent.click(trigger);
-      expect(screen.getByRole("listbox")).toBeInTheDocument();
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
+      await waitFor(() => {
+        expect(screen.getByRole("menu")).toBeInTheDocument();
+      });
 
       // Press Escape
-      fireEvent.keyDown(document, { key: "Escape" });
-      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+      await act(async () => {
+        fireEvent.keyDown(document, { key: "Escape" });
+      });
+      await waitFor(() => {
+        expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      });
     });
 
-    it("sets aria-expanded correctly", () => {
+    it("sets aria-expanded correctly", async () => {
       render(<ThemeStyleDropdown />);
 
       const trigger = screen.getByTitle("Appearance settings");
       expect(trigger).toHaveAttribute("aria-expanded", "false");
 
-      fireEvent.click(trigger);
-      expect(trigger).toHaveAttribute("aria-expanded", "true");
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
+      await waitFor(() => {
+        expect(trigger).toHaveAttribute("aria-expanded", "true");
+      });
     });
   });
 
   describe("Theme Selection", () => {
-    it("displays current theme selection", () => {
+    it("displays current theme selection", async () => {
       useEditorStore.setState({ theme: "dark" });
       render(<ThemeStyleDropdown />);
 
       const trigger = screen.getByTitle("Appearance settings");
-      fireEvent.click(trigger);
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
 
-      // Dark option should be marked as selected
-      const darkOption = screen.getByRole("option", { name: /dark/i });
-      expect(darkOption).toHaveAttribute("aria-selected", "true");
+      await waitFor(() => {
+        // Dark option should be marked as checked (menuitemradio)
+        const darkOption = screen.getByRole("menuitemradio", { name: /dark/i });
+        expect(darkOption).toHaveAttribute("aria-checked", "true");
+      });
     });
 
-    it("updates theme when selecting light", () => {
+    it("updates theme when selecting light", async () => {
       render(<ThemeStyleDropdown />);
 
       const trigger = screen.getByTitle("Appearance settings");
-      fireEvent.click(trigger);
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
 
-      const lightOption = screen.getByRole("option", { name: /light/i });
-      fireEvent.click(lightOption);
+      await waitFor(() => {
+        expect(screen.getByRole("menu")).toBeInTheDocument();
+      });
 
-      expect(useEditorStore.getState().theme).toBe("light");
-      expect(mockUpdateAppearance).toHaveBeenCalledWith({ theme: "light" });
+      const lightOption = screen.getByRole("menuitemradio", { name: /light/i });
+      await act(async () => {
+        fireEvent.click(lightOption);
+      });
+
+      await waitFor(() => {
+        expect(useEditorStore.getState().theme).toBe("light");
+        expect(mockUpdateAppearance).toHaveBeenCalledWith({ theme: "light" });
+      });
     });
 
-    it("updates theme when selecting dark", () => {
+    it("updates theme when selecting dark", async () => {
       render(<ThemeStyleDropdown />);
 
       const trigger = screen.getByTitle("Appearance settings");
-      fireEvent.click(trigger);
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
 
-      const darkOption = screen.getByRole("option", { name: /dark/i });
-      fireEvent.click(darkOption);
+      await waitFor(() => {
+        expect(screen.getByRole("menu")).toBeInTheDocument();
+      });
 
-      expect(useEditorStore.getState().theme).toBe("dark");
-      expect(mockUpdateAppearance).toHaveBeenCalledWith({ theme: "dark" });
+      const darkOption = screen.getByRole("menuitemradio", { name: /dark/i });
+      await act(async () => {
+        fireEvent.click(darkOption);
+      });
+
+      await waitFor(() => {
+        expect(useEditorStore.getState().theme).toBe("dark");
+        expect(mockUpdateAppearance).toHaveBeenCalledWith({ theme: "dark" });
+      });
     });
 
-    it("updates theme when selecting system", () => {
+    it("updates theme when selecting system", async () => {
       useEditorStore.setState({ theme: "light" });
       render(<ThemeStyleDropdown />);
 
       const trigger = screen.getByTitle("Appearance settings");
-      fireEvent.click(trigger);
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
 
-      const systemOption = screen.getByRole("option", { name: /system/i });
-      fireEvent.click(systemOption);
+      await waitFor(() => {
+        expect(screen.getByRole("menu")).toBeInTheDocument();
+      });
 
-      expect(useEditorStore.getState().theme).toBe("system");
-      expect(mockUpdateAppearance).toHaveBeenCalledWith({ theme: "system" });
+      const systemOption = screen.getByRole("menuitemradio", { name: /system/i });
+      await act(async () => {
+        fireEvent.click(systemOption);
+      });
+
+      await waitFor(() => {
+        expect(useEditorStore.getState().theme).toBe("system");
+        expect(mockUpdateAppearance).toHaveBeenCalledWith({ theme: "system" });
+      });
     });
   });
 
   describe("Font Family Selection", () => {
-    it("displays current font family selection", () => {
+    it("displays current font family selection", async () => {
       useEditorStore.setState({ fontFamily: "sans" });
       render(<ThemeStyleDropdown />);
 
       const trigger = screen.getByTitle("Appearance settings");
-      fireEvent.click(trigger);
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
 
-      const sansOption = screen.getByRole("option", { name: /sans/i });
-      expect(sansOption).toHaveAttribute("aria-selected", "true");
+      await waitFor(() => {
+        // Get the Sans option - it may include description text
+        const sansOptions = screen.getAllByRole("menuitemradio");
+        const sansOption = sansOptions.find(opt => opt.textContent?.includes("Sans") && opt.textContent?.includes("Open Sans"));
+        expect(sansOption).toHaveAttribute("aria-checked", "true");
+      });
     });
 
-    it("updates font family when selecting serif", () => {
+    it("updates font family when selecting serif", async () => {
       useEditorStore.setState({ fontFamily: "sans" });
       render(<ThemeStyleDropdown />);
 
       const trigger = screen.getByTitle("Appearance settings");
-      fireEvent.click(trigger);
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
 
-      const serifOption = screen.getByRole("option", { name: /serif/i });
-      fireEvent.click(serifOption);
+      await waitFor(() => {
+        expect(screen.getByRole("menu")).toBeInTheDocument();
+      });
 
-      expect(useEditorStore.getState().fontFamily).toBe("serif");
-      expect(mockUpdateAppearance).toHaveBeenCalledWith({ fontFamily: "serif" });
+      // Get all menuitemradio elements and find the one with "Serif"
+      const menuItems = screen.getAllByRole("menuitemradio");
+      const serifOption = menuItems.find(item => item.textContent?.includes("Serif") && item.textContent?.includes("Crimson"));
+      expect(serifOption).toBeTruthy();
+      await act(async () => {
+        fireEvent.click(serifOption!);
+      });
+
+      await waitFor(() => {
+        expect(useEditorStore.getState().fontFamily).toBe("serif");
+        expect(mockUpdateAppearance).toHaveBeenCalledWith({ fontFamily: "serif" });
+      });
     });
 
-    it("updates font family when selecting sans", () => {
+    it("updates font family when selecting sans", async () => {
       render(<ThemeStyleDropdown />);
 
       const trigger = screen.getByTitle("Appearance settings");
-      fireEvent.click(trigger);
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
 
-      const sansOption = screen.getByRole("option", { name: /sans/i });
-      fireEvent.click(sansOption);
+      await waitFor(() => {
+        expect(screen.getByRole("menu")).toBeInTheDocument();
+      });
 
-      expect(useEditorStore.getState().fontFamily).toBe("sans");
-      expect(mockUpdateAppearance).toHaveBeenCalledWith({ fontFamily: "sans" });
+      const menuItems = screen.getAllByRole("menuitemradio");
+      const sansOption = menuItems.find(item => item.textContent?.includes("Sans") && item.textContent?.includes("Open Sans"));
+      expect(sansOption).toBeTruthy();
+      await act(async () => {
+        fireEvent.click(sansOption!);
+      });
+
+      await waitFor(() => {
+        expect(useEditorStore.getState().fontFamily).toBe("sans");
+        expect(mockUpdateAppearance).toHaveBeenCalledWith({ fontFamily: "sans" });
+      });
     });
 
-    it("updates font family when selecting mono", () => {
+    it("updates font family when selecting mono", async () => {
       render(<ThemeStyleDropdown />);
 
       const trigger = screen.getByTitle("Appearance settings");
-      fireEvent.click(trigger);
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
 
-      const monoOption = screen.getByRole("option", { name: /mono/i });
-      fireEvent.click(monoOption);
+      await waitFor(() => {
+        expect(screen.getByRole("menu")).toBeInTheDocument();
+      });
 
-      expect(useEditorStore.getState().fontFamily).toBe("mono");
-      expect(mockUpdateAppearance).toHaveBeenCalledWith({ fontFamily: "mono" });
+      const menuItems = screen.getAllByRole("menuitemradio");
+      const monoOption = menuItems.find(item => item.textContent?.includes("Mono") && item.textContent?.includes("JetBrains"));
+      expect(monoOption).toBeTruthy();
+      await act(async () => {
+        fireEvent.click(monoOption!);
+      });
+
+      await waitFor(() => {
+        expect(useEditorStore.getState().fontFamily).toBe("mono");
+        expect(mockUpdateAppearance).toHaveBeenCalledWith({ fontFamily: "mono" });
+      });
     });
   });
 
@@ -210,14 +311,18 @@ describe("ThemeStyleDropdown", () => {
       expect(trigger.querySelector("svg")).toBeInTheDocument();
     });
 
-    it("shows section labels in dropdown", () => {
+    it("shows section labels in dropdown", async () => {
       render(<ThemeStyleDropdown />);
 
       const trigger = screen.getByTitle("Appearance settings");
-      fireEvent.click(trigger);
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
 
-      expect(screen.getByText("Theme")).toBeInTheDocument();
-      expect(screen.getByText("Font")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText("Theme")).toBeInTheDocument();
+        expect(screen.getByText("Font")).toBeInTheDocument();
+      });
     });
   });
 });

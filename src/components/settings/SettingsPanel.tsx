@@ -1,5 +1,7 @@
 import { useCallback, useState } from "react";
 import { X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useEditorStore, type FontFamily } from "@/stores/editorStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useSemanticSearchStore } from "@/stores/semanticSearchStore";
@@ -227,13 +229,14 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
       >
         <header className="settings-panel-header">
           <h2 className="settings-panel-title">Settings</h2>
-          <button
-            className="settings-panel-close"
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onClose}
             aria-label="Close settings"
           >
-            <X className="h-5 w-5" />
-          </button>
+            <X className="size-5" />
+          </Button>
         </header>
 
         <div className="settings-panel-content">
@@ -268,14 +271,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   Automatically switch themes based on system preference
                 </span>
               </div>
-              <button
-                className={`settings-toggle ${theme === "system" ? "active" : ""}`}
-                onClick={() => handleThemeChange(theme === "system" ? "light" : "system")}
-                role="switch"
-                aria-checked={theme === "system"}
-              >
-                <span className="settings-toggle-knob" />
-              </button>
+              <Switch
+                checked={theme === "system"}
+                onCheckedChange={(checked) => handleThemeChange(checked ? "system" : "light")}
+              />
             </div>
           </section>
 
@@ -286,28 +285,34 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             {/* Font Family */}
             <div className="settings-row">
               <label className="settings-label">Font</label>
-              <div className="settings-button-group font-group">
-                <button
-                  className={`settings-button font-button ${fontFamily === "serif" ? "active" : ""}`}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  active={fontFamily === "serif"}
                   onClick={() => handleFontFamilyChange("serif")}
+                  className="flex-1"
                   style={{ fontFamily: "var(--font-serif)" }}
                 >
                   Serif
-                </button>
-                <button
-                  className={`settings-button font-button ${fontFamily === "sans" ? "active" : ""}`}
+                </Button>
+                <Button
+                  variant="outline"
+                  active={fontFamily === "sans"}
                   onClick={() => handleFontFamilyChange("sans")}
+                  className="flex-1"
                   style={{ fontFamily: "var(--font-sans)" }}
                 >
                   Sans
-                </button>
-                <button
-                  className={`settings-button font-button ${fontFamily === "mono" ? "active" : ""}`}
+                </Button>
+                <Button
+                  variant="outline"
+                  active={fontFamily === "mono"}
                   onClick={() => handleFontFamilyChange("mono")}
+                  className="flex-1"
                   style={{ fontFamily: "var(--font-mono)" }}
                 >
                   Mono
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -393,14 +398,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   Dim text except the current paragraph
                 </span>
               </div>
-              <button
-                className={`settings-toggle ${focusMode ? "active" : ""}`}
-                onClick={handleFocusModeToggle}
-                role="switch"
-                aria-checked={focusMode}
-              >
-                <span className="settings-toggle-knob" />
-              </button>
+              <Switch
+                checked={focusMode}
+                onCheckedChange={handleFocusModeToggle}
+              />
             </div>
 
             {/* Typewriter Mode */}
@@ -411,14 +412,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   Keep current line centered vertically
                 </span>
               </div>
-              <button
-                className={`settings-toggle ${typewriterMode ? "active" : ""}`}
-                onClick={handleTypewriterModeToggle}
-                role="switch"
-                aria-checked={typewriterMode}
-              >
-                <span className="settings-toggle-knob" />
-              </button>
+              <Switch
+                checked={typewriterMode}
+                onCheckedChange={handleTypewriterModeToggle}
+              />
             </div>
 
             {/* Spell Check */}
@@ -429,14 +426,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   Highlight misspelled words as you type
                 </span>
               </div>
-              <button
-                className={`settings-toggle ${spellCheckEnabled ? "active" : ""}`}
-                onClick={handleSpellCheckToggle}
-                role="switch"
-                aria-checked={spellCheckEnabled}
-              >
-                <span className="settings-toggle-knob" />
-              </button>
+              <Switch
+                checked={spellCheckEnabled}
+                onCheckedChange={handleSpellCheckToggle}
+              />
             </div>
 
             {/* Grammar Check - disabled, see docs/GRAMMAR_CHECK_IMPLEMENTATION.md */}
@@ -454,14 +447,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   Search by meaning across indexed folders
                 </span>
               </div>
-              <button
-                className={`settings-toggle ${semanticEnabled ? "active" : ""}`}
-                onClick={handleSemanticToggle}
-                role="switch"
-                aria-checked={semanticEnabled}
-              >
-                <span className="settings-toggle-knob" />
-              </button>
+              <Switch
+                checked={semanticEnabled}
+                onCheckedChange={handleSemanticToggle}
+              />
             </div>
 
             {semanticEnabled && (
@@ -487,13 +476,15 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                         <div key={folder.path} className="settings-folder-item">
                           <span className="settings-folder-name">{folder.name}</span>
                           <span className="settings-folder-path">{folder.path}</span>
-                          <button
-                            className="settings-folder-remove"
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
                             onClick={() => handleRemoveFolder(folder.path)}
                             title="Remove from index"
+                            className="opacity-50 hover:opacity-100"
                           >
-                            <X className="h-5 w-5" />
-                          </button>
+                            <X className="size-4" />
+                          </Button>
                         </div>
                       ))}
                     </div>
@@ -502,22 +493,22 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
 
                 {/* Add Folder Button */}
                 <div className="settings-row">
-                  <button
-                    className="settings-button-secondary"
+                  <Button
+                    variant="outline"
                     onClick={() => {
                       showSetup();
                       onClose();
                     }}
                   >
                     Add folder...
-                  </button>
+                  </Button>
                 </div>
 
                 {/* Rebuild Index */}
                 <div className="settings-row">
                   <label className="settings-label">Index</label>
-                  <button
-                    className="settings-button-secondary"
+                  <Button
+                    variant="outline"
                     onClick={handleRebuildIndex}
                     disabled={isRebuilding || isIndexing || indexedFolders.length === 0}
                   >
@@ -525,7 +516,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                       <>
                         Rebuilding...
                         {indexingProgress && (
-                          <span className="settings-progress">
+                          <span className="text-muted-foreground">
                             {" "}({indexingProgress.current}/{indexingProgress.total})
                           </span>
                         )}
@@ -533,7 +524,7 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                     ) : (
                       "Rebuild index"
                     )}
-                  </button>
+                  </Button>
                 </div>
 
                 {/* Shortcut Info */}

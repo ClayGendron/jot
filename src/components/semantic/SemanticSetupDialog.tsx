@@ -9,6 +9,15 @@ import { useState, useCallback } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { homeDir } from "@tauri-apps/api/path";
 import { Brain, Check, Folder, X, Plus, Shield } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface SemanticSetupDialogProps {
   onComplete: (enabled: boolean, folders: { path: string; name: string }[]) => void;
@@ -85,127 +94,130 @@ export function SemanticSetupDialog({
     onComplete(true, folders);
   }, [folders, onComplete]);
 
-  // Skip setup
-  const handleSkip = useCallback(() => {
-    onCancel();
-  }, [onCancel]);
-
   return (
-    <div className="semantic-setup-overlay" onClick={handleSkip}>
-      <div
-        className="semantic-setup-dialog"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-labelledby="semantic-setup-title"
-        aria-describedby="semantic-setup-description"
+    <Dialog open onOpenChange={(open) => !open && onCancel()}>
+      <DialogContent
+        className="max-w-md"
+        showCloseButton={false}
       >
-        {/* Header */}
-        <div className="semantic-setup-header">
-          <div className="semantic-setup-icon">
-            <Brain className="h-8 w-8" />
+        {/* Header with icon */}
+        <DialogHeader className="items-center text-center">
+          <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Brain className="size-8" />
           </div>
-          <h2 id="semantic-setup-title" className="semantic-setup-title">
-            Semantic Search
-          </h2>
-          <p id="semantic-setup-description" className="semantic-setup-description">
+          <DialogTitle className="text-lg">Semantic Search</DialogTitle>
+          <DialogDescription>
             Find documents by meaning, not just keywords. Search across all your
             markdown files using AI-powered understanding.
-          </p>
-        </div>
+          </DialogDescription>
+        </DialogHeader>
 
         {/* Features */}
-        <div className="semantic-setup-features">
-          <div className="semantic-setup-feature">
-            <Check className="h-4 w-4" />
+        <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+          <div className="flex items-center gap-2 text-sm">
+            <Check className="size-4 text-primary" />
             <span>Search by concepts and ideas</span>
           </div>
-          <div className="semantic-setup-feature">
-            <Check className="h-4 w-4" />
+          <div className="flex items-center gap-2 text-sm">
+            <Check className="size-4 text-primary" />
             <span>Find related documents automatically</span>
           </div>
-          <div className="semantic-setup-feature">
-            <Check className="h-4 w-4" />
+          <div className="flex items-center gap-2 text-sm">
+            <Check className="size-4 text-primary" />
             <span>Works completely offline</span>
           </div>
         </div>
 
         {/* Folder Selection */}
-        <div className="semantic-setup-section">
-          <h3 className="semantic-setup-section-title">Select folders to index</h3>
-          <p className="semantic-setup-section-hint">
-            Choose which folders contain your markdown files.
-          </p>
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-sm font-medium">Select folders to index</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Choose which folders contain your markdown files.
+            </p>
+          </div>
 
           {/* Folder List */}
-          <div className="semantic-setup-folders">
+          <div className="min-h-[100px] max-h-[200px] overflow-y-auto rounded-lg border bg-background">
             {folders.length === 0 ? (
-              <div className="semantic-setup-folders-empty">
-                <Folder className="h-4 w-4" />
-                <span>No folders selected</span>
+              <div className="flex flex-col items-center justify-center gap-1 py-8 text-muted-foreground">
+                <Folder className="size-5" />
+                <span className="text-sm">No folders selected</span>
               </div>
             ) : (
-              folders.map((folder) => (
-                <div key={folder.path} className="semantic-setup-folder">
-                  <Folder className="h-4 w-4" />
-                  <div className="semantic-setup-folder-info">
-                    <span className="semantic-setup-folder-name">{folder.name}</span>
-                    <span className="semantic-setup-folder-path">{folder.path}</span>
-                  </div>
-                  <button
-                    className="semantic-setup-folder-remove"
-                    onClick={() => handleRemoveFolder(folder.path)}
-                    title="Remove folder"
+              <div className="divide-y">
+                {folders.map((folder) => (
+                  <div
+                    key={folder.path}
+                    className="flex items-center gap-3 px-3 py-2 group"
                   >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))
+                    <Folder className="size-4 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">
+                        {folder.name}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {folder.path}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => handleRemoveFolder(folder.path)}
+                      title="Remove folder"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
           {/* Add Folder Buttons */}
-          <div className="semantic-setup-folder-actions">
-            <button
-              className="semantic-setup-btn-secondary"
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleAddDocuments}
+              className="flex-1"
             >
-              <Folder className="h-4 w-4" />
+              <Folder className="size-4" />
               Add Documents
-            </button>
-            <button
-              className="semantic-setup-btn-secondary"
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleAddFolder}
               disabled={isSelecting}
+              className="flex-1"
             >
-              <Plus className="h-4 w-4" />
+              <Plus className="size-4" />
               Add Folder...
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Privacy Notice */}
-        <div className="semantic-setup-privacy">
-          <Shield className="h-3.5 w-3.5" />
+        <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <Shield className="size-3.5 shrink-0" />
           <span>
             All processing happens on your device. Your files never leave your computer.
           </span>
         </div>
 
         {/* Actions */}
-        <div className="semantic-setup-actions">
-          <button className="semantic-setup-btn-ghost" onClick={handleSkip}>
+        <DialogFooter className="gap-2 sm:gap-2">
+          <Button variant="ghost" onClick={onCancel}>
             Maybe Later
-          </button>
-          <button
-            className="semantic-setup-btn-primary"
-            onClick={handleEnable}
-            disabled={folders.length === 0}
-          >
+          </Button>
+          <Button onClick={handleEnable} disabled={folders.length === 0}>
             Enable Semantic Search
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
