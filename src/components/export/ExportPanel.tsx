@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { X, Download, AlertCircle, Loader2 } from "lucide-react";
+import { Download, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -20,6 +20,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet";
 import {
   exportAndDownloadPdf,
   type ExportOptions,
@@ -33,6 +40,8 @@ import {
 } from "@/lib/export/docxExport";
 
 interface ExportPanelProps {
+  /** Whether the panel is open */
+  isOpen: boolean;
   /** Content element to export */
   contentRef: React.RefObject<HTMLElement | null>;
   /** Source filename for generating export filename */
@@ -47,6 +56,7 @@ type ExportFormat = "pdf" | "docx";
  * Export Panel - provides document export functionality
  */
 export function ExportPanel({
+  isOpen,
   contentRef,
   filename,
   onClose,
@@ -126,29 +136,23 @@ export function ExportPanel({
   );
 
   return (
-    <div className="export-panel-overlay" onClick={onClose}>
-      <aside
-        className="export-panel"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Export document"
+    <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent
+        side="right"
+        showCloseButton={true}
+        className="w-[380px] max-w-full p-0 flex flex-col"
       >
-        <header className="export-panel-header">
-          <h2 className="export-panel-title">Export</h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            aria-label="Close export panel"
-          >
-            <X className="size-5" />
-          </Button>
-        </header>
+        {/* Header */}
+        <SheetHeader className="px-6 py-5 border-b border-border">
+          <SheetTitle className="font-serif text-xl font-semibold tracking-tight">
+            Export
+          </SheetTitle>
+        </SheetHeader>
 
-        <div className="export-panel-content">
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto py-2">
           {/* Format Selection */}
-          <section className="export-section">
-            <h3 className="export-section-title">Format</h3>
+          <Section title="Format">
             <div className="grid grid-cols-2 gap-3">
               <Button
                 variant="outline"
@@ -169,15 +173,13 @@ export function ExportPanel({
                 <span>Word</span>
               </Button>
             </div>
-          </section>
+          </Section>
 
           {/* Page Settings */}
-          <section className="export-section">
-            <h3 className="export-section-title">Page</h3>
-
+          <Section title="Page">
             {/* Page Size */}
-            <div className="export-row">
-              <label className="export-label">Size</label>
+            <Row>
+              <Label>Size</Label>
               <Select
                 value={pageSize}
                 onValueChange={(value) => setPageSize(value as PageSize)}
@@ -191,19 +193,19 @@ export function ExportPanel({
                   <SelectItem value="legal">Legal (8.5" × 14")</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </Row>
 
             {/* Orientation (PDF only) */}
             {format === "pdf" && (
-              <div className="export-row">
-                <label className="export-label">Orientation</label>
+              <Row>
+                <Label>Orientation</Label>
                 <div className="flex gap-1.5">
                   <Button
                     variant="outline"
                     size="sm"
                     active={orientation === "portrait"}
                     onClick={() => setOrientation("portrait")}
-                    className="flex-1"
+                    className="flex-1 gap-1.5"
                   >
                     <OrientationPortraitIcon />
                     <span>Portrait</span>
@@ -213,119 +215,73 @@ export function ExportPanel({
                     size="sm"
                     active={orientation === "landscape"}
                     onClick={() => setOrientation("landscape")}
-                    className="flex-1"
+                    className="flex-1 gap-1.5"
                   >
                     <OrientationLandscapeIcon />
                     <span>Landscape</span>
                   </Button>
                 </div>
-              </div>
+              </Row>
             )}
-          </section>
+          </Section>
 
           {/* Margins */}
-          <section className="export-section">
-            <h3 className="export-section-title">Margins</h3>
+          <Section title="Margins">
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground w-12">Top</label>
-                <Input
-                  type="number"
-                  value={margins.top}
-                  onChange={(e) =>
-                    handleMarginChange("top", parseFloat(e.target.value) || 0.5)
-                  }
-                  min="0.25"
-                  max="2"
-                  step="0.25"
-                  className="w-16 text-right font-mono"
-                />
-                <span className="text-xs text-muted-foreground">in</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground w-12">Bottom</label>
-                <Input
-                  type="number"
-                  value={margins.bottom}
-                  onChange={(e) =>
-                    handleMarginChange(
-                      "bottom",
-                      parseFloat(e.target.value) || 0.5
-                    )
-                  }
-                  min="0.25"
-                  max="2"
-                  step="0.25"
-                  className="w-16 text-right font-mono"
-                />
-                <span className="text-xs text-muted-foreground">in</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground w-12">Left</label>
-                <Input
-                  type="number"
-                  value={margins.left}
-                  onChange={(e) =>
-                    handleMarginChange("left", parseFloat(e.target.value) || 0.5)
-                  }
-                  min="0.25"
-                  max="2"
-                  step="0.25"
-                  className="w-16 text-right font-mono"
-                />
-                <span className="text-xs text-muted-foreground">in</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-muted-foreground w-12">Right</label>
-                <Input
-                  type="number"
-                  value={margins.right}
-                  onChange={(e) =>
-                    handleMarginChange(
-                      "right",
-                      parseFloat(e.target.value) || 0.5
-                    )
-                  }
-                  min="0.25"
-                  max="2"
-                  step="0.25"
-                  className="w-16 text-right font-mono"
-                />
-                <span className="text-xs text-muted-foreground">in</span>
-              </div>
+              <MarginInput
+                label="Top"
+                value={margins.top}
+                onChange={(v) => handleMarginChange("top", v)}
+              />
+              <MarginInput
+                label="Bottom"
+                value={margins.bottom}
+                onChange={(v) => handleMarginChange("bottom", v)}
+              />
+              <MarginInput
+                label="Left"
+                value={margins.left}
+                onChange={(v) => handleMarginChange("left", v)}
+              />
+              <MarginInput
+                label="Right"
+                value={margins.right}
+                onChange={(v) => handleMarginChange("right", v)}
+              />
             </div>
-          </section>
+          </Section>
 
           {/* PDF Options */}
           {format === "pdf" && (
-            <section className="export-section">
-              <h3 className="export-section-title">Options</h3>
-              <div className="export-row export-toggle-row">
-                <div className="export-toggle-info">
-                  <label className="export-label">Bookmarks</label>
-                  <span className="export-description">
+            <Section title="Options">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <label className="text-sm font-medium text-foreground">
+                    Bookmarks
+                  </label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Create outline from headings
-                  </span>
+                  </p>
                 </div>
                 <Switch
                   checked={includeBookmarks}
                   onCheckedChange={setIncludeBookmarks}
                 />
               </div>
-            </section>
+            </Section>
           )}
 
           {/* Error Message */}
           {error && (
-            <div className="export-error">
-              <AlertCircle className="h-4 w-4" />
+            <div className="mx-6 mb-4 p-3 rounded-md bg-destructive/10 text-destructive flex items-center gap-2 text-sm">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
             </div>
           )}
         </div>
 
-        {/* Export Button */}
-        <footer className="export-panel-footer">
+        {/* Footer with Export Button */}
+        <SheetFooter className="border-t border-border">
           <Button
             size="lg"
             className="w-full"
@@ -344,8 +300,65 @@ export function ExportPanel({
               </>
             )}
           </Button>
-        </footer>
-      </aside>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// Helper Components
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="px-6 py-3 border-t border-border first:border-t-0">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+function Row({ children }: { children: React.ReactNode }) {
+  return <div className="mb-3.5 last:mb-0">{children}</div>;
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="block text-[13px] font-medium text-foreground mb-2">
+      {children}
+    </label>
+  );
+}
+
+function MarginInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <label className="text-sm text-muted-foreground w-12">{label}</label>
+      <Input
+        type="number"
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value) || 0.5)}
+        min="0.25"
+        max="2"
+        step="0.25"
+        className="w-16 text-right font-mono"
+      />
+      <span className="text-xs text-muted-foreground">in</span>
     </div>
   );
 }
@@ -426,4 +439,3 @@ function OrientationLandscapeIcon() {
     </svg>
   );
 }
-

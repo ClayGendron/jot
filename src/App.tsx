@@ -1624,18 +1624,15 @@ function App() {
       )}
 
       {/* Settings Panel */}
-      {showSettings && (
-        <SettingsPanel onClose={() => setShowSettings(false)} />
-      )}
+      <SettingsPanel isOpen={showSettings} onClose={() => setShowSettings(false)} />
 
       {/* Export Panel */}
-      {showExport && filePath && (
-        <ExportPanel
-          contentRef={editorContentRef}
-          filename={getFileName(filePath)}
-          onClose={() => setShowExport(false)}
-        />
-      )}
+      <ExportPanel
+        isOpen={showExport && !!filePath}
+        contentRef={editorContentRef}
+        filename={filePath ? getFileName(filePath) : ""}
+        onClose={() => setShowExport(false)}
+      />
 
       {/* Semantic Search Setup Dialog */}
       {showSemanticSetup && (

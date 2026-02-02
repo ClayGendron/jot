@@ -2,6 +2,12 @@ import { useCallback, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { useEditorStore, type FontFamily } from "@/stores/editorStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useSemanticSearchStore } from "@/stores/semanticSearchStore";
@@ -23,6 +29,7 @@ import type { ThemeName } from "@/lib/settings/themes";
 import { getTheme } from "@/lib/settings/themes";
 
 interface SettingsPanelProps {
+  isOpen: boolean;
   onClose: () => void;
 }
 
@@ -34,7 +41,7 @@ type Theme = "light" | "dark" | "system";
  * Design: Editorial minimalism - clean, refined controls that feel
  * appropriate for a writing app. Slide-out panel with organized sections.
  */
-export function SettingsPanel({ onClose }: SettingsPanelProps) {
+export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
   // Editor store - current values
   const theme = useEditorStore((s) => s.theme);
   const setTheme = useEditorStore((s) => s.setTheme);
@@ -60,13 +67,6 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   const spellCheckEnabled = useSettingsStore(
     (s) => s.appearance?.spellCheckEnabled ?? true
   );
-  // Grammar check disabled - see docs/GRAMMAR_CHECK_IMPLEMENTATION.md
-  // const grammarCheckEnabled = useSettingsStore(
-  //   (s) => s.appearance?.grammarCheckEnabled ?? true
-  // );
-  // const grammarDialect = useSettingsStore(
-  //   (s) => s.appearance?.grammarDialect ?? "american"
-  // );
 
   // Theme change handler (legacy light/dark/system)
   const handleThemeChange = useCallback(
@@ -154,17 +154,6 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
     updateAppearance({ spellCheckEnabled: !spellCheckEnabled });
   }, [spellCheckEnabled, updateAppearance]);
 
-  // Grammar check disabled - see docs/GRAMMAR_CHECK_IMPLEMENTATION.md
-  // const handleGrammarCheckToggle = useCallback(() => {
-  //   updateAppearance({ grammarCheckEnabled: !grammarCheckEnabled });
-  // }, [grammarCheckEnabled, updateAppearance]);
-  // const handleGrammarDialectChange = useCallback(
-  //   (dialect: "american" | "british" | "canadian" | "australian") => {
-  //     updateAppearance({ grammarDialect: dialect });
-  //   },
-  //   [updateAppearance]
-  // );
-
   // Semantic search store
   const semanticEnabled = useSemanticSearchStore((s) => s.enabled);
   const semanticModelLoaded = useSemanticSearchStore((s) => s.modelLoaded);
@@ -220,15 +209,17 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   }, [isRebuilding, isIndexing, indexedFolders]);
 
   return (
-    <div className="settings-panel-overlay" onClick={onClose}>
-      <aside
-        className="settings-panel"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Settings"
+    <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="w-[360px] max-w-full p-0 flex flex-col"
       >
-        <header className="settings-panel-header">
-          <h2 className="settings-panel-title">Settings</h2>
+        {/* Header */}
+        <SheetHeader className="flex-row items-center justify-between px-6 py-5 border-b border-border">
+          <SheetTitle className="font-serif text-xl font-semibold tracking-tight">
+            Settings
+          </SheetTitle>
           <Button
             variant="ghost"
             size="icon"
@@ -237,54 +228,45 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
           >
             <X className="size-5" />
           </Button>
-        </header>
+        </SheetHeader>
 
-        <div className="settings-panel-content">
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto py-4">
           {/* Appearance Section */}
-          <section className="settings-section">
-            <h3 className="settings-section-title">Appearance</h3>
-
+          <Section title="Appearance">
             {/* Theme Picker */}
-            <div className="settings-row settings-row-vertical">
-              <label className="settings-label">Theme</label>
+            <Row vertical>
+              <Label>Theme</Label>
               <ThemePicker
                 selectedTheme={themeName}
                 onSelectTheme={handleThemeNameChange}
               />
-            </div>
+            </Row>
 
             {/* Accent Color */}
-            <div className="settings-row settings-row-vertical">
-              <label className="settings-label">Accent color</label>
+            <Row vertical>
+              <Label>Accent color</Label>
               <AccentColorPicker
                 themeName={themeName}
                 selectedAccentId={accentColorId}
                 onSelectAccent={handleAccentColorChange}
               />
-            </div>
+            </Row>
 
             {/* System preference toggle */}
-            <div className="settings-row toggle-row">
-              <div className="settings-toggle-info">
-                <label className="settings-label">Follow system</label>
-                <span className="settings-description">
-                  Automatically switch themes based on system preference
-                </span>
-              </div>
-              <Switch
-                checked={theme === "system"}
-                onCheckedChange={(checked) => handleThemeChange(checked ? "system" : "light")}
-              />
-            </div>
-          </section>
+            <ToggleRow
+              label="Follow system"
+              description="Automatically switch themes based on system preference"
+              checked={theme === "system"}
+              onCheckedChange={(checked) => handleThemeChange(checked ? "system" : "light")}
+            />
+          </Section>
 
           {/* Typography Section */}
-          <section className="settings-section">
-            <h3 className="settings-section-title">Typography</h3>
-
+          <Section title="Typography">
             {/* Font Family */}
-            <div className="settings-row">
-              <label className="settings-label">Font</label>
+            <Row>
+              <Label>Font</Label>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -314,168 +296,135 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   Mono
                 </Button>
               </div>
-            </div>
+            </Row>
 
             {/* Font Size */}
-            <div className="settings-row">
-              <label className="settings-label">
+            <Row>
+              <Label>
                 Size
-                <span className="settings-value">{fontSize}px</span>
-              </label>
-              <div className="settings-slider-container">
-                <input
-                  type="range"
-                  className="settings-slider"
-                  min={FONT_SIZE_MIN}
-                  max={FONT_SIZE_MAX}
-                  step={1}
-                  value={fontSize}
-                  onChange={(e) => handleFontSizeChange(Number(e.target.value))}
-                />
-                <div className="settings-slider-labels">
-                  <span>A</span>
-                  <span style={{ fontSize: "1.25em" }}>A</span>
-                </div>
-              </div>
-            </div>
+                <span className="font-normal text-xs text-muted-foreground font-mono">
+                  {fontSize}px
+                </span>
+              </Label>
+              <SliderRow
+                min={FONT_SIZE_MIN}
+                max={FONT_SIZE_MAX}
+                step={1}
+                value={fontSize}
+                onChange={handleFontSizeChange}
+                leftIcon={<span className="text-xs">A</span>}
+                rightIcon={<span className="text-sm">A</span>}
+              />
+            </Row>
 
             {/* Line Height */}
-            <div className="settings-row">
-              <label className="settings-label">
+            <Row>
+              <Label>
                 Line spacing
-                <span className="settings-value">{lineHeight.toFixed(1)}</span>
-              </label>
-              <div className="settings-slider-container">
-                <input
-                  type="range"
-                  className="settings-slider"
-                  min={LINE_HEIGHT_MIN}
-                  max={LINE_HEIGHT_MAX}
-                  step={0.1}
-                  value={lineHeight}
-                  onChange={(e) => handleLineHeightChange(Number(e.target.value))}
-                />
-                <div className="settings-slider-labels">
-                  <LineSpacingIcon tight />
-                  <LineSpacingIcon />
-                </div>
-              </div>
-            </div>
+                <span className="font-normal text-xs text-muted-foreground font-mono">
+                  {lineHeight.toFixed(1)}
+                </span>
+              </Label>
+              <SliderRow
+                min={LINE_HEIGHT_MIN}
+                max={LINE_HEIGHT_MAX}
+                step={0.1}
+                value={lineHeight}
+                onChange={handleLineHeightChange}
+                leftIcon={<LineSpacingIcon tight />}
+                rightIcon={<LineSpacingIcon />}
+              />
+            </Row>
 
             {/* Max Line Width */}
-            <div className="settings-row">
-              <label className="settings-label">
+            <Row>
+              <Label>
                 Line width
-                <span className="settings-value">{maxLineWidth} ch</span>
-              </label>
-              <div className="settings-slider-container">
-                <input
-                  type="range"
-                  className="settings-slider"
-                  min={MAX_LINE_WIDTH_MIN}
-                  max={MAX_LINE_WIDTH_MAX}
-                  step={4}
-                  value={maxLineWidth}
-                  onChange={(e) => handleMaxLineWidthChange(Number(e.target.value))}
-                />
-                <div className="settings-slider-labels">
-                  <LineWidthIcon narrow />
-                  <LineWidthIcon />
-                </div>
-              </div>
-            </div>
-          </section>
+                <span className="font-normal text-xs text-muted-foreground font-mono">
+                  {maxLineWidth} ch
+                </span>
+              </Label>
+              <SliderRow
+                min={MAX_LINE_WIDTH_MIN}
+                max={MAX_LINE_WIDTH_MAX}
+                step={4}
+                value={maxLineWidth}
+                onChange={handleMaxLineWidthChange}
+                leftIcon={<LineWidthIcon narrow />}
+                rightIcon={<LineWidthIcon />}
+              />
+            </Row>
+          </Section>
 
           {/* Editor Section */}
-          <section className="settings-section">
-            <h3 className="settings-section-title">Editor</h3>
+          <Section title="Editor">
+            <ToggleRow
+              label="Focus mode"
+              description="Dim text except the current paragraph"
+              checked={focusMode}
+              onCheckedChange={handleFocusModeToggle}
+            />
 
-            {/* Focus Mode */}
-            <div className="settings-row toggle-row">
-              <div className="settings-toggle-info">
-                <label className="settings-label">Focus mode</label>
-                <span className="settings-description">
-                  Dim text except the current paragraph
-                </span>
-              </div>
-              <Switch
-                checked={focusMode}
-                onCheckedChange={handleFocusModeToggle}
-              />
-            </div>
+            <ToggleRow
+              label="Typewriter mode"
+              description="Keep current line centered vertically"
+              checked={typewriterMode}
+              onCheckedChange={handleTypewriterModeToggle}
+            />
 
-            {/* Typewriter Mode */}
-            <div className="settings-row toggle-row">
-              <div className="settings-toggle-info">
-                <label className="settings-label">Typewriter mode</label>
-                <span className="settings-description">
-                  Keep current line centered vertically
-                </span>
-              </div>
-              <Switch
-                checked={typewriterMode}
-                onCheckedChange={handleTypewriterModeToggle}
-              />
-            </div>
-
-            {/* Spell Check */}
-            <div className="settings-row toggle-row">
-              <div className="settings-toggle-info">
-                <label className="settings-label">Spell check</label>
-                <span className="settings-description">
-                  Highlight misspelled words as you type
-                </span>
-              </div>
-              <Switch
-                checked={spellCheckEnabled}
-                onCheckedChange={handleSpellCheckToggle}
-              />
-            </div>
-
-            {/* Grammar Check - disabled, see docs/GRAMMAR_CHECK_IMPLEMENTATION.md */}
-          </section>
+            <ToggleRow
+              label="Spell check"
+              description="Highlight misspelled words as you type"
+              checked={spellCheckEnabled}
+              onCheckedChange={handleSpellCheckToggle}
+            />
+          </Section>
 
           {/* Semantic Search Section */}
-          <section className="settings-section">
-            <h3 className="settings-section-title">Semantic Search</h3>
-
-            {/* Enable/Disable Toggle */}
-            <div className="settings-row toggle-row">
-              <div className="settings-toggle-info">
-                <label className="settings-label">Enable semantic search</label>
-                <span className="settings-description">
-                  Search by meaning across indexed folders
-                </span>
-              </div>
-              <Switch
-                checked={semanticEnabled}
-                onCheckedChange={handleSemanticToggle}
-              />
-            </div>
+          <Section title="Semantic Search">
+            <ToggleRow
+              label="Enable semantic search"
+              description="Search by meaning across indexed folders"
+              checked={semanticEnabled}
+              onCheckedChange={handleSemanticToggle}
+            />
 
             {semanticEnabled && (
               <>
                 {/* Model Status */}
-                <div className="settings-row">
-                  <label className="settings-label">Model status</label>
-                  <span className={`settings-status ${semanticModelLoaded ? "success" : "pending"}`}>
+                <Row>
+                  <Label>Model status</Label>
+                  <span
+                    className={`text-sm font-medium ${
+                      semanticModelLoaded ? "text-green-600" : "text-amber-600"
+                    }`}
+                  >
                     {semanticModelLoaded ? "Ready" : "Loading..."}
                   </span>
-                </div>
+                </Row>
 
                 {/* Indexed Folders */}
-                <div className="settings-row settings-row-vertical">
-                  <label className="settings-label">Indexed folders</label>
+                <Row vertical>
+                  <Label>Indexed folders</Label>
                   {indexedFolders.length === 0 ? (
-                    <span className="settings-description">
+                    <span className="text-xs text-muted-foreground">
                       No folders indexed yet
                     </span>
                   ) : (
-                    <div className="settings-folder-list">
+                    <div className="space-y-2">
                       {indexedFolders.map((folder) => (
-                        <div key={folder.path} className="settings-folder-item">
-                          <span className="settings-folder-name">{folder.name}</span>
-                          <span className="settings-folder-path">{folder.path}</span>
+                        <div
+                          key={folder.path}
+                          className="flex items-center gap-2 p-2 rounded-md bg-muted/50"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">
+                              {folder.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {folder.path}
+                            </div>
+                          </div>
                           <Button
                             variant="ghost"
                             size="icon-xs"
@@ -489,10 +438,10 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                       ))}
                     </div>
                   )}
-                </div>
+                </Row>
 
                 {/* Add Folder Button */}
-                <div className="settings-row">
+                <Row>
                   <Button
                     variant="outline"
                     onClick={() => {
@@ -502,11 +451,11 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                   >
                     Add folder...
                   </Button>
-                </div>
+                </Row>
 
                 {/* Rebuild Index */}
-                <div className="settings-row">
-                  <label className="settings-label">Index</label>
+                <Row>
+                  <Label>Index</Label>
                   <Button
                     variant="outline"
                     onClick={handleRebuildIndex}
@@ -525,44 +474,149 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
                       "Rebuild index"
                     )}
                   </Button>
-                </div>
+                </Row>
 
                 {/* Shortcut Info */}
-                <div className="settings-row">
-                  <span className="settings-description">
-                    Press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Space</kbd> to open semantic search
+                <Row>
+                  <span className="text-xs text-muted-foreground">
+                    Press <kbd className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono">⌘</kbd>
+                    <kbd className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono">⇧</kbd>
+                    <kbd className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono">Space</kbd> to open semantic search
                   </span>
-                </div>
+                </Row>
               </>
             )}
-          </section>
+          </Section>
 
           {/* Keyboard Shortcuts Info */}
-          <section className="settings-section settings-shortcuts">
-            <h3 className="settings-section-title">Shortcuts</h3>
-            <div className="settings-shortcut-list">
-              <div className="settings-shortcut">
-                <span className="settings-shortcut-keys">
-                  <kbd>⌘</kbd><kbd>+</kbd>
-                </span>
-                <span>Increase font size</span>
-              </div>
-              <div className="settings-shortcut">
-                <span className="settings-shortcut-keys">
-                  <kbd>⌘</kbd><kbd>-</kbd>
-                </span>
-                <span>Decrease font size</span>
-              </div>
-              <div className="settings-shortcut">
-                <span className="settings-shortcut-keys">
-                  <kbd>⌘</kbd><kbd>0</kbd>
-                </span>
-                <span>Reset font size</span>
-              </div>
+          <Section title="Shortcuts" className="border-t-0">
+            <div className="space-y-2">
+              <ShortcutRow keys={["⌘", "+"]} label="Increase font size" />
+              <ShortcutRow keys={["⌘", "-"]} label="Decrease font size" />
+              <ShortcutRow keys={["⌘", "0"]} label="Reset font size" />
             </div>
-          </section>
+          </Section>
         </div>
-      </aside>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// Helper Components
+
+function Section({
+  title,
+  children,
+  className,
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`px-6 py-3 border-t border-border first:border-t-0 ${className || ""}`}>
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+function Row({
+  children,
+  vertical,
+}: {
+  children: React.ReactNode;
+  vertical?: boolean;
+}) {
+  return (
+    <div className={`mb-4 last:mb-0 ${vertical ? "space-y-2" : ""}`}>
+      {children}
+    </div>
+  );
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <label className="flex items-baseline justify-between text-sm font-medium text-foreground mb-2">
+      {children}
+    </label>
+  );
+}
+
+function ToggleRow({
+  label,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4 mb-4 last:mb-0">
+      <div className="flex-1">
+        <label className="text-sm font-medium text-foreground">{label}</label>
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  );
+}
+
+function SliderRow({
+  min,
+  max,
+  step,
+  value,
+  onChange,
+  leftIcon,
+  rightIcon,
+}: {
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  onChange: (value: number) => void;
+  leftIcon: React.ReactNode;
+  rightIcon: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <input
+        type="range"
+        className="w-full h-1 rounded bg-border appearance-none cursor-pointer accent-accent [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-background [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-accent [&::-webkit-slider-thumb]:shadow-sm [&::-webkit-slider-thumb]:cursor-pointer"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+      <div className="flex justify-between mt-1 text-muted-foreground">
+        {leftIcon}
+        {rightIcon}
+      </div>
+    </div>
+  );
+}
+
+function ShortcutRow({ keys, label }: { keys: string[]; label: string }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="flex gap-1">
+        {keys.map((key, i) => (
+          <kbd
+            key={i}
+            className="px-1.5 py-0.5 rounded bg-muted text-xs font-mono"
+          >
+            {key}
+          </kbd>
+        ))}
+      </span>
+      <span className="text-muted-foreground">{label}</span>
     </div>
   );
 }
