@@ -7,7 +7,7 @@
  * - Manages indexing queue and progress
  */
 
-import { readFile, type FileEntry } from "@/lib/tauri/files";
+import { readFile, readDirectory, type FileEntry } from "@/lib/tauri/files";
 import { chunkMarkdown, computeContentHash } from "@/lib/semantic";
 import {
   embedAndStore,
@@ -211,8 +211,6 @@ async function collectMarkdownFiles(folderPath: string): Promise<string[]> {
   // In a full implementation, we'd add a dedicated Tauri command
 
   try {
-    // Import dynamically to avoid circular deps
-    const { readDirectory } = await import("@/lib/tauri/files");
     const entries = await readDirectory(folderPath);
 
     const collectFromEntries = (entries: FileEntry[]) => {

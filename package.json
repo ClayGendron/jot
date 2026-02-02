@@ -45,7 +45,6 @@
     "harper.js": "^1.5.1",
     "he": "^1.2.0",
     "html2canvas": "^1.4.1",
-    "is-path-inside": "^4.0.0",
     "jspdf": "^4.0.0",
     "lowlight": "^3.3.0",
     "lucide-react": "^0.563.0",

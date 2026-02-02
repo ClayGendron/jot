@@ -8,9 +8,7 @@
 import { readFile, writeFile, renamePath, getFileName } from "@/lib/tauri/files";
 import { buildDisplayPath } from "./linkService";
 import { updateLinksInContent } from "./linkUpdater";
-import { getParentPathSync, joinFsPaths, normalizeForComparison } from "@/lib/path/pathUtils";
-import normalizePathLib from "normalize-path";
-import isPathInside from "is-path-inside";
+import { getParentPathSync, joinFsPaths, normalizeForComparison, isPathWithin, normalizeForDisplay } from "@/lib/path/pathUtils";
 
 /**
  * Result of move validation
@@ -27,15 +25,10 @@ export interface MoveValidation {
  */
 function isAbsolutePathWithinWorkspace(
   absolutePath: string,
-  workspacePath: string
+  workspacePath: string,
+  caseSensitive: boolean
 ): boolean {
-  const normalizedPath = normalizePathLib(absolutePath);
-  const normalizedWorkspace = normalizePathLib(workspacePath);
-
-  return (
-    normalizedPath === normalizedWorkspace ||
-    isPathInside(normalizedPath, normalizedWorkspace)
-  );
+  return isPathWithin(absolutePath, workspacePath, caseSensitive);
 }
 
 /**
@@ -59,23 +52,23 @@ export function validateMove(
   caseSensitiveFs: boolean
 ): MoveValidation {
   // Check source is within workspace (must be an absolute path inside workspace)
-  if (!isAbsolutePathWithinWorkspace(sourcePath, workspacePath)) {
+  if (!isAbsolutePathWithinWorkspace(sourcePath, workspacePath, caseSensitiveFs)) {
     return { valid: false, error: "Source is outside workspace" };
   }
 
   // Check target is within workspace
-  if (!isAbsolutePathWithinWorkspace(targetFolderPath, workspacePath)) {
+  if (!isAbsolutePathWithinWorkspace(targetFolderPath, workspacePath, caseSensitiveFs)) {
     return { valid: false, error: "Target is outside workspace" };
   }
 
   // Check not moving folder into itself or descendant
   // Use normalizeForComparison for case-aware path matching
   const normalizedSource = normalizeForComparison(
-    normalizePathLib(sourcePath).replace(/\/+$/, ""),
+    normalizeForDisplay(sourcePath).replace(/\/+$/, ""),
     caseSensitiveFs
   );
   const normalizedTarget = normalizeForComparison(
-    normalizePathLib(targetFolderPath).replace(/\/+$/, ""),
+    normalizeForDisplay(targetFolderPath).replace(/\/+$/, ""),
     caseSensitiveFs
   );
 
