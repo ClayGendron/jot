@@ -61,7 +61,8 @@ pub struct IndexedFolder {
     pub last_indexed: Option<i64>,
 }
 
-/// Indexing progress update
+/// Indexing progress update (reserved for future progress reporting)
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IndexingProgress {
     pub current: i32,
@@ -225,7 +226,7 @@ impl SentenceEmbedder {
             .map_err(|e| format!("Failed to normalize: {}", e))?;
 
         // Convert to Vec<Vec<f32>>
-        let (batch, dim) = normalized.dims2().map_err(|e| format!("Invalid dims: {}", e))?;
+        let (_, dim) = normalized.dims2().map_err(|e| format!("Invalid dims: {}", e))?;
         let flat: Vec<f32> = normalized
             .to_dtype(DType::F32)
             .and_then(|t| t.to_vec1())
