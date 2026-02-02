@@ -9,6 +9,8 @@ use tempfile::NamedTempFile;
 mod version_history;
 use version_history::{Version, VersionDiff, VersionMeta};
 
+mod semantic;
+
 // ==========================================
 // Security Helpers
 // ==========================================
@@ -1431,6 +1433,19 @@ pub fn run() {
             jot_read_ignored_grammar_rules,
             jot_add_ignored_grammar_rule,
             jot_remove_ignored_grammar_rule,
+            // Semantic search commands
+            semantic::jot_semantic_init,
+            semantic::jot_semantic_get_status,
+            semantic::jot_semantic_add_folder,
+            semantic::jot_semantic_remove_folder,
+            semantic::jot_semantic_get_folders,
+            semantic::jot_semantic_embed_and_store,
+            semantic::jot_semantic_delete_file,
+            semantic::jot_semantic_file_needs_update,
+            semantic::jot_semantic_search,
+            semantic::jot_semantic_get_related,
+            semantic::jot_semantic_update_folder_indexed,
+            semantic::jot_semantic_clear_all,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

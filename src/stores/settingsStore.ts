@@ -5,6 +5,7 @@ import type {
   LayoutPreferences,
   AppearancePreferences,
   PersistedTabState,
+  SemanticSearchSettings,
 } from "@/lib/settings/types";
 import {
   DEFAULT_GLOBAL_SETTINGS,
@@ -12,6 +13,7 @@ import {
   DEFAULT_APPEARANCE_PREFERENCES,
   MAX_RECENT_WORKSPACES,
 } from "@/lib/settings/types";
+import { DEFAULT_SEMANTIC_SETTINGS } from "@/lib/semantic/types";
 import {
   readGlobalSettings,
   writeGlobalSettings,
@@ -36,6 +38,8 @@ export interface SettingsState {
   appearance: AppearancePreferences;
   /** Open tabs for session restore */
   openTabs: PersistedTabState | null;
+  /** Semantic search settings */
+  semanticSearch: SemanticSearchSettings;
   /** Whether settings have been loaded from disk */
   isLoaded: boolean;
   /** Loading state during async operations */
@@ -59,6 +63,8 @@ export interface SettingsActions {
   updateLayout: (layout: Partial<LayoutPreferences>) => Promise<void>;
   /** Update appearance preferences */
   updateAppearance: (appearance: Partial<AppearancePreferences>) => Promise<void>;
+  /** Update semantic search settings */
+  updateSemanticSearch: (settings: Partial<SemanticSearchSettings>) => Promise<void>;
   /** Validate and clean up stale entries */
   cleanupStaleWorkspaces: () => Promise<void>;
   /** Save open tabs state */
@@ -73,6 +79,7 @@ const initialState: SettingsState = {
   layout: DEFAULT_LAYOUT_PREFERENCES,
   appearance: DEFAULT_APPEARANCE_PREFERENCES,
   openTabs: null,
+  semanticSearch: DEFAULT_SEMANTIC_SETTINGS,
   isLoaded: false,
   isLoading: false,
   error: null,
@@ -93,6 +100,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
             layout: settings.layout ?? DEFAULT_LAYOUT_PREFERENCES,
             appearance: settings.appearance ?? DEFAULT_APPEARANCE_PREFERENCES,
             openTabs: settings.openTabs ?? null,
+            semanticSearch: settings.semanticSearch ?? DEFAULT_SEMANTIC_SETTINGS,
             isLoaded: true,
             isLoading: false,
           });
@@ -104,6 +112,7 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
           set({
             ...DEFAULT_GLOBAL_SETTINGS,
             openTabs: null,
+            semanticSearch: DEFAULT_SEMANTIC_SETTINGS,
             isLoaded: true,
             isLoading: false,
           });
@@ -191,6 +200,15 @@ export const useSettingsStore = create<SettingsState & SettingsActions>(
       await persistSettings(get());
     },
 
+    updateSemanticSearch: async (settingsUpdate: Partial<SemanticSearchSettings>) => {
+      const { semanticSearch } = get();
+      const newSettings = { ...semanticSearch, ...settingsUpdate };
+      set({ semanticSearch: newSettings });
+
+      // Persist to disk
+      await persistSettings(get());
+    },
+
     cleanupStaleWorkspaces: async () => {
       const { recentWorkspaces, defaultWorkspacePath } = get();
 
@@ -257,6 +275,7 @@ async function persistSettings(state: SettingsState): Promise<void> {
       layout: state.layout,
       appearance: state.appearance,
       openTabs: state.openTabs ?? undefined,
+      semanticSearch: state.semanticSearch,
       version: 1,
     };
     await writeGlobalSettings(settings);

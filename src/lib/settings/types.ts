@@ -8,6 +8,9 @@ import type { ThemeName } from "./themes";
 export type { ThemeName } from "./themes";
 import type { CopyFormat } from "../clipboard/copyFormatted";
 export type { CopyFormat } from "../clipboard/copyFormatted";
+import type { SemanticSearchSettings } from "../semantic/types";
+export type { SemanticSearchSettings } from "../semantic/types";
+import { DEFAULT_SEMANTIC_SETTINGS } from "../semantic/types";
 
 /**
  * A recent workspace entry
@@ -105,6 +108,8 @@ export interface GlobalAppSettings {
   appearance?: AppearancePreferences;
   /** Open tabs state for session restore */
   openTabs?: PersistedTabState;
+  /** Semantic search settings */
+  semanticSearch?: SemanticSearchSettings;
   /** Schema version for migrations */
   version: number;
 }
@@ -156,6 +161,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalAppSettings = {
   defaultWorkspacePath: null,
   layout: DEFAULT_LAYOUT_PREFERENCES,
   appearance: DEFAULT_APPEARANCE_PREFERENCES,
+  semanticSearch: DEFAULT_SEMANTIC_SETTINGS,
   version: 1,
 };
 

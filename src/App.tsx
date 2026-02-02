@@ -8,6 +8,11 @@ import {
   SortDropdown,
 } from "@/components/sidebar";
 import { FindReplaceBar, GlobalSearchPanel } from "@/components/search";
+import {
+  SemanticSearchPanel,
+  RelatedDocumentsPanel,
+  SemanticSetupDialog,
+} from "@/components/semantic";
 import { SaveIndicator } from "@/components/ui/SaveIndicator";
 import { VersionHistoryPanel, DiffViewer } from "@/components/history";
 import { WelcomeScreen, RecentWorkspacesMenu } from "@/components/workspace";
@@ -25,6 +30,7 @@ import { useLinksStore } from "@/stores/linksStore";
 import { useSearchStore } from "@/stores/searchStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useTabsStore } from "@/stores/tabsStore";
+import { useSemanticSearchStore } from "@/stores/semanticSearchStore";
 import { getBacklinksForFile } from "@/lib/links/backlinks";
 import { useAutosave } from "@/hooks/useAutosave";
 import { useDocumentOutline } from "@/hooks/useDocumentOutline";
@@ -50,9 +56,10 @@ import { getEffectiveAccent, resolveSystemTheme } from "@/lib/settings/themes";
 import type { ThemeName } from "@/lib/settings/themes";
 import { getRelativePath, joinFsPaths, getParentPath } from "@/lib/path/pathUtils";
 import { saveDocumentPipeline, saveAllDirtyTabs } from "@/services/saveService";
+import { indexFolder } from "@/services/semanticIndexingService";
 import "./index.css";
 
-type SidebarTab = "files" | "outline" | "backlinks";
+type SidebarTab = "files" | "outline" | "backlinks" | "related";
 
 /**
  * Main application component
@@ -142,6 +149,11 @@ function App() {
   const openGlobalSearch = useSearchStore((s) => s.openGlobalSearch);
   const closeGlobalSearch = useSearchStore((s) => s.closeGlobalSearch);
 
+  // Semantic search store
+  const semanticEnabled = useSemanticSearchStore((s) => s.enabled);
+  const showSemanticSetup = useSemanticSearchStore((s) => s.showSetupDialog);
+  const hideSemanticSetup = useSemanticSearchStore((s) => s.hideSetup);
+
   // Settings store - for workspace management
   const recentWorkspaces = useSettingsStore((s) => s.recentWorkspaces);
   const defaultWorkspacePath = useSettingsStore((s) => s.defaultWorkspacePath);
@@ -186,6 +198,9 @@ function App() {
 
   // Settings panel state
   const [showSettings, setShowSettings] = useState(false);
+
+  // Semantic search panel state
+  const [semanticSearchOpen, setSemanticSearchOpen] = useState(false);
 
   // Export panel state
   const [showExport, setShowExport] = useState(false);
@@ -910,9 +925,20 @@ function App() {
         }
       }
 
+      // Cmd/Ctrl + Shift + Space: Semantic search
+      if (isMod && e.key === " " && e.shiftKey) {
+        e.preventDefault();
+        if (semanticEnabled) {
+          setSemanticSearchOpen((prev) => !prev);
+        }
+      }
+
       // Escape: Close search panels
       if (e.key === "Escape") {
-        if (documentSearchOpen) {
+        if (semanticSearchOpen) {
+          e.preventDefault();
+          setSemanticSearchOpen(false);
+        } else if (documentSearchOpen) {
           e.preventDefault();
           closeDocumentSearch();
           editorRef.current?.editor?.commands.clearSearch();
@@ -960,6 +986,8 @@ function App() {
     globalSearchOpen,
     openGlobalSearch,
     closeGlobalSearch,
+    semanticSearchOpen,
+    semanticEnabled,
     zenMode,
     toggleZenMode,
     fontSize,
@@ -1341,6 +1369,17 @@ function App() {
             <BacklinksTabIcon />
             <span>Links</span>
           </button>
+          {semanticEnabled && (
+            <button
+              className={`sidebar-tab ${activeSidebarTab === "related" ? "active" : ""}`}
+              onClick={() => setActiveSidebarTab("related")}
+              disabled={!filePath}
+              title={!filePath ? "Open a file to see related documents" : undefined}
+            >
+              <RelatedDocsTabIcon />
+              <span>Related</span>
+            </button>
+          )}
         </div>
 
         {/* Tab Content */}
@@ -1383,6 +1422,12 @@ function App() {
           <BacklinksPanel
             backlinks={backlinks}
             onBacklinkClick={handleFileSelect}
+          />
+        )}
+        {activeSidebarTab === "related" && semanticEnabled && (
+          <RelatedDocumentsPanel
+            filePath={filePath}
+            onDocumentClick={handleFileSelect}
           />
         )}
         </aside>
@@ -1508,6 +1553,17 @@ function App() {
         />
       )}
 
+      {/* Semantic Search Panel */}
+      {semanticSearchOpen && semanticEnabled && (
+        <SemanticSearchPanel
+          onResultClick={(resultPath) => {
+            handleFileSelect(resultPath);
+            setSemanticSearchOpen(false);
+          }}
+          onClose={() => setSemanticSearchOpen(false)}
+        />
+      )}
+
       {/* Version History Panel */}
       {showHistory && filePath && workspacePath && (
         <VersionHistoryPanel
@@ -1566,6 +1622,29 @@ function App() {
           contentRef={editorContentRef}
           filename={getFileName(filePath)}
           onClose={() => setShowExport(false)}
+        />
+      )}
+
+      {/* Semantic Search Setup Dialog */}
+      {showSemanticSetup && (
+        <SemanticSetupDialog
+          onComplete={async (enabled, folders) => {
+            if (enabled && folders.length > 0) {
+              // Add folders and enable semantic search
+              const store = useSemanticSearchStore.getState();
+              for (const folder of folders) {
+                await store.addFolder(folder.path, folder.name);
+              }
+              // Initialize the model
+              await store.initializeModel();
+              // Index the folders
+              for (const folder of folders) {
+                await indexFolder(folder.path);
+              }
+            }
+            hideSemanticSetup();
+          }}
+          onCancel={hideSemanticSetup}
         />
       )}
     </div>
@@ -1683,6 +1762,24 @@ function BacklinksTabIcon() {
     >
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
+function RelatedDocsTabIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" />
+      <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" />
     </svg>
   );
 }

@@ -1,6 +1,8 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useEditorStore, type FontFamily } from "@/stores/editorStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { useSemanticSearchStore } from "@/stores/semanticSearchStore";
+import { indexFolder } from "@/services/semanticIndexingService";
 import {
   clampFontSize,
   clampLineHeight,
@@ -159,6 +161,60 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
   //   },
   //   [updateAppearance]
   // );
+
+  // Semantic search store
+  const semanticEnabled = useSemanticSearchStore((s) => s.enabled);
+  const semanticModelLoaded = useSemanticSearchStore((s) => s.modelLoaded);
+  const indexedFolders = useSemanticSearchStore((s) => s.indexedFolders);
+  const isIndexing = useSemanticSearchStore((s) => s.isIndexing);
+  const indexingProgress = useSemanticSearchStore((s) => s.indexingProgress);
+  const showSetup = useSemanticSearchStore((s) => s.showSetup);
+  const disableSemanticSearch = useSemanticSearchStore((s) => s.disableSemanticSearch);
+  const removeFolder = useSemanticSearchStore((s) => s.removeFolder);
+
+  // Local state for rebuild confirmation
+  const [isRebuilding, setIsRebuilding] = useState(false);
+
+  // Handle semantic search toggle
+  const handleSemanticToggle = useCallback(() => {
+    if (semanticEnabled) {
+      // Disable semantic search
+      disableSemanticSearch();
+    } else {
+      // Show setup dialog
+      showSetup();
+      onClose();
+    }
+  }, [semanticEnabled, disableSemanticSearch, showSetup, onClose]);
+
+  // Handle folder removal
+  const handleRemoveFolder = useCallback(
+    async (path: string) => {
+      const confirmed = window.confirm(
+        "Remove this folder from semantic search? Embeddings for this folder will be deleted."
+      );
+      if (confirmed) {
+        await removeFolder(path);
+      }
+    },
+    [removeFolder]
+  );
+
+  // Handle rebuild index
+  const handleRebuildIndex = useCallback(async () => {
+    if (isRebuilding || isIndexing) return;
+
+    setIsRebuilding(true);
+    try {
+      for (const folder of indexedFolders) {
+        await indexFolder(folder.path);
+      }
+    } catch (err) {
+      console.error("Failed to rebuild index:", err);
+    } finally {
+      setIsRebuilding(false);
+    }
+  }, [isRebuilding, isIndexing, indexedFolders]);
 
   return (
     <div className="settings-panel-overlay" onClick={onClose}>
@@ -383,6 +439,110 @@ export function SettingsPanel({ onClose }: SettingsPanelProps) {
             </div>
 
             {/* Grammar Check - disabled, see docs/GRAMMAR_CHECK_IMPLEMENTATION.md */}
+          </section>
+
+          {/* Semantic Search Section */}
+          <section className="settings-section">
+            <h3 className="settings-section-title">Semantic Search</h3>
+
+            {/* Enable/Disable Toggle */}
+            <div className="settings-row toggle-row">
+              <div className="settings-toggle-info">
+                <label className="settings-label">Enable semantic search</label>
+                <span className="settings-description">
+                  Search by meaning across indexed folders
+                </span>
+              </div>
+              <button
+                className={`settings-toggle ${semanticEnabled ? "active" : ""}`}
+                onClick={handleSemanticToggle}
+                role="switch"
+                aria-checked={semanticEnabled}
+              >
+                <span className="settings-toggle-knob" />
+              </button>
+            </div>
+
+            {semanticEnabled && (
+              <>
+                {/* Model Status */}
+                <div className="settings-row">
+                  <label className="settings-label">Model status</label>
+                  <span className={`settings-status ${semanticModelLoaded ? "success" : "pending"}`}>
+                    {semanticModelLoaded ? "Ready" : "Loading..."}
+                  </span>
+                </div>
+
+                {/* Indexed Folders */}
+                <div className="settings-row settings-row-vertical">
+                  <label className="settings-label">Indexed folders</label>
+                  {indexedFolders.length === 0 ? (
+                    <span className="settings-description">
+                      No folders indexed yet
+                    </span>
+                  ) : (
+                    <div className="settings-folder-list">
+                      {indexedFolders.map((folder) => (
+                        <div key={folder.path} className="settings-folder-item">
+                          <span className="settings-folder-name">{folder.name}</span>
+                          <span className="settings-folder-path">{folder.path}</span>
+                          <button
+                            className="settings-folder-remove"
+                            onClick={() => handleRemoveFolder(folder.path)}
+                            title="Remove from index"
+                          >
+                            <CloseIcon />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Add Folder Button */}
+                <div className="settings-row">
+                  <button
+                    className="settings-button-secondary"
+                    onClick={() => {
+                      showSetup();
+                      onClose();
+                    }}
+                  >
+                    Add folder...
+                  </button>
+                </div>
+
+                {/* Rebuild Index */}
+                <div className="settings-row">
+                  <label className="settings-label">Index</label>
+                  <button
+                    className="settings-button-secondary"
+                    onClick={handleRebuildIndex}
+                    disabled={isRebuilding || isIndexing || indexedFolders.length === 0}
+                  >
+                    {isRebuilding || isIndexing ? (
+                      <>
+                        Rebuilding...
+                        {indexingProgress && (
+                          <span className="settings-progress">
+                            {" "}({indexingProgress.current}/{indexingProgress.total})
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      "Rebuild index"
+                    )}
+                  </button>
+                </div>
+
+                {/* Shortcut Info */}
+                <div className="settings-row">
+                  <span className="settings-description">
+                    Press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>Space</kbd> to open semantic search
+                  </span>
+                </div>
+              </>
+            )}
           </section>
 
           {/* Keyboard Shortcuts Info */}

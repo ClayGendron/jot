@@ -26,6 +26,7 @@ import { useTabsStore } from "@/stores/tabsStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useLinksStore } from "@/stores/linksStore";
+import { queueFileForIndexing } from "./semanticIndexingService";
 
 /**
  * Compute a simple hash for change detection.
@@ -146,6 +147,9 @@ export async function saveDocumentPipeline(
         caseSensitiveFs
       );
     }
+
+    // 10. Queue for semantic search indexing (debounced, non-blocking)
+    queueFileForIndexing(tab.filePath);
 
     return { saved: true, isClean: contentUnchanged };
   } catch (error) {
