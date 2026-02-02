@@ -15,8 +15,8 @@ Two-part migration:
 | --- | --- | --- |
 | Phase 1: Foundation Setup | ✅ Complete | `9797d17`, `f664687` |
 | Phase 2: Tier 1 Components | ✅ Complete | `38dcc5c` |
-| Phase 3: Tier 2 Components | ✅ Complete | - |
-| Phase 4: Tier 3 Components | ⏳ Pending | - |
+| Phase 3: Tier 2 Components | ✅ Complete | `129eed2` |
+| Phase 4: Tier 3 Components | ✅ Complete | `126d8a0`, `63957b5` |
 | Phase 5: Final CSS Cleanup | ⏳ Pending | - |
 
 ## Current State
@@ -793,9 +793,15 @@ bunx shadcn@latest add progress
 
 ---
 
-## Phase 4: Tier 3 Components (Nice to Have)
+## Phase 4: Tier 3 Components (Nice to Have) ✅ Complete
 
-### 4.1 Sheet
+**Completed (2026-02-02):**
+- All 930 tests pass
+- TypeScript compiles without errors
+- Production build succeeds
+- Deleted ~800 lines of legacy CSS for settings-panel and export-panel styles
+
+### 4.1 Sheet ✅
 
 ```bash
 bunx shadcn@latest add sheet
@@ -805,11 +811,12 @@ bunx shadcn@latest add sheet
 **Migration targets:**
 
 -   `src/components/settings/SettingsPanel.tsx` (slide-out panel)
-    
--   `src/components/export/ExportPanel.tsx` (slide-out panel)
-    
 
-### 4.2 Tooltip
+-   `src/components/export/ExportPanel.tsx` (slide-out panel)
+
+**✅ Completed:** Added shadcn Sheet component. Rewrote SettingsPanel and ExportPanel using SheetContent, SheetHeader, SheetTitle, and SheetFooter. Created reusable helper components (Section, Row, Label, ToggleRow, SliderRow, etc.). Updated parent components to use controlled `isOpen` prop pattern. Deleted legacy CSS for both panels.
+
+### 4.2 Tooltip ✅
 
 ```bash
 bunx shadcn@latest add tooltip
@@ -839,7 +846,9 @@ Replace `title` attributes with proper accessible tooltips:
 
 ```
 
-### 4.3 RadioGroup
+**✅ Completed:** Added shadcn Tooltip component. Updated TooltipTrigger to support asChild pattern. Migrated EditorToolbar ToolbarButton component to use Tooltip instead of title attribute. Added keyboard shortcuts display (⌘B, ⌘I, etc.).
+
+### 4.3 RadioGroup (Skipped)
 
 ```bash
 bunx shadcn@latest add radio-group
@@ -849,8 +858,10 @@ bunx shadcn@latest add radio-group
 **Migration targets:**
 
 -   Theme picker cards in SettingsPanel
-    
+
 -   Export format selection
+
+**Skipped:** The theme picker and export format selection work well with the existing Button `active` prop pattern. RadioGroup would add complexity without significant benefit for these use cases.
     
 
 ---
