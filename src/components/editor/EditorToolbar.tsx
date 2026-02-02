@@ -74,7 +74,7 @@ function ToolbarButton({
 }
 
 function ToolbarDivider() {
-  return <div className="h-6 w-px mx-2 bg-border" />;
+  return <div className="h-6 w-px mx-2 bg-[var(--color-border)]" />;
 }
 
 /**
@@ -198,9 +198,12 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
   }, [editor]);
 
   return (
-    <div className="toolbar" data-testid="editor-toolbar">
+    <div
+      className="sticky top-0 z-[100] flex items-center gap-1 px-4 py-2 bg-[var(--color-paper)] border-b border-[var(--color-border)] transition-all duration-200"
+      data-testid="editor-toolbar"
+    >
       {/* Text Formatting */}
-      <div className="toolbar-group">
+      <div className="flex items-center gap-0.5">
         <ToolbarButton
           onClick={toggleBold}
           isActive={editor.isActive("bold")}
@@ -251,7 +254,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       <ToolbarDivider />
 
       {/* Headings */}
-      <div className="toolbar-group">
+      <div className="flex items-center gap-0.5">
         <ToolbarButton
           onClick={setParagraph}
           isActive={editor.isActive("paragraph")}
@@ -293,7 +296,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       <ToolbarDivider />
 
       {/* Lists */}
-      <div className="toolbar-group">
+      <div className="flex items-center gap-0.5">
         <ToolbarButton
           onClick={toggleBulletList}
           isActive={editor.isActive("bulletList")}
@@ -326,7 +329,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       <ToolbarDivider />
 
       {/* Blocks */}
-      <div className="toolbar-group">
+      <div className="flex items-center gap-0.5">
         <ToolbarButton
           onClick={toggleBlockquote}
           isActive={editor.isActive("blockquote")}
@@ -364,7 +367,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       <ToolbarDivider />
 
       {/* Insert */}
-      <div className="toolbar-group">
+      <div className="flex items-center gap-0.5">
         <ToolbarButton
           onClick={setLink}
           isActive={editor.isActive("link")}
@@ -386,7 +389,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       <ToolbarDivider />
 
       {/* View Mode Toggle */}
-      <div className="toolbar-group">
+      <div className="flex items-center gap-0.5">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -410,7 +413,7 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
       <ToolbarDivider />
 
       {/* Theme & Style */}
-      <div className="toolbar-group">
+      <div className="flex items-center gap-0.5">
         <ThemeStyleDropdown />
       </div>
     </div>

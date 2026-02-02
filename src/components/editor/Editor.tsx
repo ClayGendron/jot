@@ -42,6 +42,7 @@ import { SpellCheckContextMenu } from "./SpellCheckContextMenu";
 import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
 import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { useInternalLinkNavigation } from "@/hooks/useInternalLinkNavigation";
+import { cn } from "@/lib/utils";
 import { readFile } from "@/lib/tauri/files";
 import { getRelativePath } from "@/lib/path/pathUtils";
 import { loadPersonalDictionary } from "@/lib/spellcheck/personalDictionary";
@@ -468,7 +469,11 @@ export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
   return (
     <div
       ref={containerRef}
-      className={`editor-container ${focusMode ? "focus-mode" : ""} ${sourceMode ? "source-mode-active" : ""}`}
+      className={cn(
+        "flex flex-col h-screen bg-[var(--color-paper)]",
+        focusMode && "focus-mode",
+        sourceMode && "source-mode-active"
+      )}
       data-testid="editor-container"
       onContextMenu={handleContextMenu}
     >

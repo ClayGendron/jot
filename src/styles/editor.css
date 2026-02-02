@@ -394,3 +394,200 @@ body {
   border-left: 2px solid var(--color-accent);
   animation: cursor-blink 1.2s ease-in-out infinite;
 }
+
+/* ==========================================
+   Focus Mode - Editor-specific styles
+   ========================================== */
+
+.focus-mode .tiptap-editor {
+  padding-top: 4rem;
+}
+
+.focus-mode .tiptap-editor p,
+.focus-mode .tiptap-editor li,
+.focus-mode .tiptap-editor blockquote {
+  opacity: 0.3;
+  transition: opacity var(--transition-smooth);
+}
+
+.focus-mode .tiptap-editor p:focus-within,
+.focus-mode .tiptap-editor li:focus-within,
+.focus-mode .tiptap-editor blockquote:focus-within,
+.focus-mode .tiptap-editor p.is-editor-empty,
+.focus-mode .tiptap-editor .ProseMirror-selectednode {
+  opacity: 1;
+}
+
+/* ==========================================
+   Zen Mode - Editor-specific styles
+   ========================================== */
+
+.zen-mode .tiptap-editor {
+  max-width: 720px;
+  width: 100%;
+  padding: 3rem var(--spacing-page);
+}
+
+/* ==========================================
+   Resize Handle - Global cursor override
+   ========================================== */
+
+body.resize-dragging {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+body.resize-dragging * {
+  cursor: col-resize !important;
+}
+
+/* ==========================================
+   Collapsed Sidebar - Hide resize handle
+   ========================================== */
+
+.sidebar-collapsed .resize-handle {
+  display: none;
+}
+
+/* ==========================================
+   Code Block Line Numbers
+   ========================================== */
+
+.code-block-wrapper pre[data-show-line-numbers="true"] code {
+  counter-reset: line-number;
+}
+
+.code-block-wrapper pre[data-show-line-numbers="true"] code .line {
+  display: block;
+}
+
+.code-block-wrapper pre[data-show-line-numbers="true"] code .line::before {
+  counter-increment: line-number;
+  content: counter(line-number);
+  display: inline-block;
+  width: 2.5em;
+  margin-right: 1em;
+  text-align: right;
+  color: var(--color-ink-muted);
+  opacity: 0.5;
+  user-select: none;
+}
+
+/* ==========================================
+   Tippy.js Theme - Internal Link Suggestions
+   ========================================== */
+
+.tippy-box[data-theme~='internal-link'] {
+  background: transparent;
+  padding: 0;
+}
+
+.tippy-box[data-theme~='internal-link'] .tippy-content {
+  padding: 0;
+}
+
+.tippy-box[data-theme~='internal-link'] .tippy-arrow {
+  display: none;
+}
+
+/* ==========================================
+   Component Animations
+   ========================================== */
+
+/* Dropdown / Menu animations */
+@keyframes sort-dropdown-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes context-menu-appear {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Save indicator animations */
+@keyframes save-dot-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes save-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes save-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes save-error-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-2px); }
+  40%, 80% { transform: translateX(2px); }
+}
+
+/* Outline pulse animation */
+@keyframes outline-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+/* Code block check animation */
+@keyframes code-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Mermaid diagram animations */
+@keyframes mermaid-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes mermaid-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Shared spinner animation */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

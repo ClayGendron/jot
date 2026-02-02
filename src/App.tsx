@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { cn } from "@/lib/utils";
 import { Editor, type EditorRef } from "@/components/editor/Editor";
 import {
   FileTree,
@@ -1312,16 +1313,25 @@ function App() {
   }, [updateLayout]);
 
   return (
-    <div className={`app-layout ${zenMode ? "zen-mode" : ""}`}>
+    <div className={cn(
+      "flex h-screen overflow-hidden bg-[var(--color-paper)]",
+      zenMode && "zen-mode"
+    )}>
       {/* Sidebar Container with Resize Handle */}
       <div
-        className={`sidebar-container ${sidebarOpen && !zenMode ? "" : "collapsed"}`}
+        className={cn(
+          "flex flex-shrink-0 relative",
+          (!sidebarOpen || zenMode) && "sidebar-collapsed"
+        )}
         style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
       >
-        <aside className="sidebar">
-        <div className="sidebar-header">
-          <div className="sidebar-title-row">
-            <h2 className="sidebar-title">
+        <aside className={cn(
+          "flex flex-col flex-shrink-0 bg-[var(--color-paper-warm)] border-r border-[var(--color-border)] overflow-y-auto overflow-x-hidden",
+          sidebarOpen && !zenMode ? "w-[var(--sidebar-width,260px)]" : "w-0"
+        )}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <h2 className="font-sans text-xs font-semibold uppercase tracking-wider text-[var(--color-ink-muted)] m-0 whitespace-nowrap overflow-hidden text-ellipsis">
               {workspacePath ? getFileName(workspacePath) : "Jot"}
             </h2>
             {workspacePath && recentWorkspaces.length > 0 && (
@@ -1335,9 +1345,9 @@ function App() {
               />
             )}
           </div>
-          <div className="sidebar-actions">
+          <div className="flex gap-1">
             <button
-              className="sidebar-action-btn"
+              className="flex items-center justify-center w-7 h-7 p-0 border-none rounded bg-transparent text-[var(--color-ink-muted)] cursor-pointer transition-all duration-150 hover:bg-[var(--color-border)] hover:text-[var(--color-ink)]"
               onClick={() => workspacePath && handleCreateFile(workspacePath)}
               title="New file"
               disabled={!workspacePath}
@@ -1345,7 +1355,7 @@ function App() {
               <FilePlus className="h-4 w-4" />
             </button>
             <button
-              className="sidebar-action-btn"
+              className="flex items-center justify-center w-7 h-7 p-0 border-none rounded bg-transparent text-[var(--color-ink-muted)] cursor-pointer transition-all duration-150 hover:bg-[var(--color-border)] hover:text-[var(--color-ink)]"
               onClick={handleOpenFolder}
               title="Open folder"
             >
@@ -1355,16 +1365,22 @@ function App() {
         </div>
 
         {/* Sidebar Tabs */}
-        <div className="sidebar-tabs">
+        <div className="flex gap-0 px-3 border-b border-[var(--color-border)] bg-[var(--color-paper-warm)]">
           <button
-            className={`sidebar-tab ${activeSidebarTab === "files" ? "active" : ""}`}
+            className={cn(
+              "sidebar-tab relative flex items-center gap-1.5 px-3 py-2.5 border-none bg-transparent text-[var(--color-ink-muted)] font-sans text-[0.6875rem] font-semibold uppercase tracking-wider cursor-pointer transition-colors duration-150 hover:text-[var(--color-ink-light)]",
+              activeSidebarTab === "files" && "text-[var(--color-ink)] after:content-[''] after:absolute after:bottom-[-1px] after:left-3 after:right-3 after:h-0.5 after:bg-[var(--color-accent)] after:rounded-t-sm"
+            )}
             onClick={() => setActiveSidebarTab("files")}
           >
             <Folder className="h-3.5 w-3.5" />
             <span>Files</span>
           </button>
           <button
-            className={`sidebar-tab ${activeSidebarTab === "outline" ? "active" : ""}`}
+            className={cn(
+              "sidebar-tab relative flex items-center gap-1.5 px-3 py-2.5 border-none bg-transparent text-[var(--color-ink-muted)] font-sans text-[0.6875rem] font-semibold uppercase tracking-wider cursor-pointer transition-colors duration-150 hover:text-[var(--color-ink-light)]",
+              activeSidebarTab === "outline" && "text-[var(--color-ink)] after:content-[''] after:absolute after:bottom-[-1px] after:left-3 after:right-3 after:h-0.5 after:bg-[var(--color-accent)] after:rounded-t-sm"
+            )}
             onClick={() => setActiveSidebarTab("outline")}
             disabled={!filePath}
             title={!filePath ? "Open a file to see outline" : undefined}
@@ -1373,7 +1389,10 @@ function App() {
             <span>Outline</span>
           </button>
           <button
-            className={`sidebar-tab ${activeSidebarTab === "backlinks" ? "active" : ""}`}
+            className={cn(
+              "sidebar-tab relative flex items-center gap-1.5 px-3 py-2.5 border-none bg-transparent text-[var(--color-ink-muted)] font-sans text-[0.6875rem] font-semibold uppercase tracking-wider cursor-pointer transition-colors duration-150 hover:text-[var(--color-ink-light)]",
+              activeSidebarTab === "backlinks" && "text-[var(--color-ink)] after:content-[''] after:absolute after:bottom-[-1px] after:left-3 after:right-3 after:h-0.5 after:bg-[var(--color-accent)] after:rounded-t-sm"
+            )}
             onClick={() => setActiveSidebarTab("backlinks")}
             disabled={!filePath}
             title={!filePath ? "Open a file to see backlinks" : undefined}
@@ -1383,7 +1402,10 @@ function App() {
           </button>
           {semanticEnabled && (
             <button
-              className={`sidebar-tab ${activeSidebarTab === "related" ? "active" : ""}`}
+              className={cn(
+                "sidebar-tab relative flex items-center gap-1.5 px-3 py-2.5 border-none bg-transparent text-[var(--color-ink-muted)] font-sans text-[0.6875rem] font-semibold uppercase tracking-wider cursor-pointer transition-colors duration-150 hover:text-[var(--color-ink-light)]",
+                activeSidebarTab === "related" && "text-[var(--color-ink)] after:content-[''] after:absolute after:bottom-[-1px] after:left-3 after:right-3 after:h-0.5 after:bg-[var(--color-accent)] after:rounded-t-sm"
+              )}
               onClick={() => setActiveSidebarTab("related")}
               disabled={!filePath}
               title={!filePath ? "Open a file to see related documents" : undefined}
@@ -1398,17 +1420,20 @@ function App() {
         {activeSidebarTab === "files" && (
           <>
             {!workspacePath ? (
-              <button className="open-folder-btn" onClick={handleOpenFolder}>
+              <button
+                className="flex items-center justify-center gap-2 w-[calc(100%-2rem)] mx-4 my-4 px-4 py-3 border border-dashed border-[var(--color-border-strong)] rounded-lg bg-transparent text-[var(--color-ink-muted)] font-sans text-[0.8125rem] cursor-pointer transition-all duration-150 hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] hover:bg-[rgba(196,93,62,0.05)]"
+                onClick={handleOpenFolder}
+              >
                 <FolderOpen className="h-4 w-4" />
                 <span>Open Folder</span>
               </button>
             ) : isLoading ? (
-              <div className="file-tree-empty-state">
+              <div className="flex flex-col items-center justify-center p-8 text-center text-[var(--color-ink-muted)] font-sans">
                 <p>Loading...</p>
               </div>
             ) : (
               <>
-                <div className="file-tree-controls">
+                <div className="flex justify-end px-3 py-2 border-b border-[var(--color-border)]">
                   <SortDropdown />
                 </div>
                 <FileTree
@@ -1456,27 +1481,33 @@ function App() {
       </div>
 
       {/* Main Content */}
-      <main className="main-content" ref={mainContentRef}>
+      <main className={cn(
+        "flex-1 overflow-y-auto min-w-0",
+        zenMode && "flex flex-col"
+      )} ref={mainContentRef}>
         {/* Title bar */}
-        <div className="title-bar">
-          <div className="title-bar-left">
+        <div className={cn(
+          "flex items-center justify-between px-4 py-2 border-b border-[var(--color-border)] bg-[var(--color-paper)]",
+          zenMode && "title-bar-zen opacity-0 transition-opacity duration-200 absolute top-0 left-0 right-0 z-[100] hover:opacity-100 focus-within:opacity-100"
+        )} style={zenMode ? { background: 'linear-gradient(to bottom, var(--color-paper) 0%, var(--color-paper) 60%, transparent 100%)', paddingBottom: '1rem' } : undefined}>
+          <div className="flex items-center gap-3">
             <button
-              className="sidebar-toggle-btn"
+              className="flex items-center justify-center w-8 h-8 p-0 border-none rounded bg-transparent text-[var(--color-ink-muted)] cursor-pointer transition-all duration-150 hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]"
               onClick={handleToggleSidebar}
               title={sidebarOpen ? "Hide sidebar (⌘B)" : "Show sidebar (⌘B)"}
             >
               <PanelLeft className="h-5 w-5" />
             </button>
-            <span className="document-title">
+            <span className="font-sans text-sm text-[var(--color-ink-light)]">
               {filePath ? getFileName(filePath) : "Untitled"}
-              {isDirty && <span className="unsaved-dot">•</span>}
+              {isDirty && <span className="text-[var(--color-accent)] ml-1">•</span>}
             </span>
             <SaveIndicator />
           </div>
-          <div className="title-bar-right">
+          <div className="flex items-center gap-1">
             {filePath && (
               <button
-                className="title-bar-btn"
+                className="flex items-center justify-center w-8 h-8 p-0 border-none rounded bg-transparent text-[var(--color-ink-muted)] cursor-pointer transition-all duration-150 hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]"
                 onClick={() => setShowExport(true)}
                 title="Export"
               >
@@ -1484,14 +1515,17 @@ function App() {
               </button>
             )}
             <button
-              className="title-bar-btn"
+              className="flex items-center justify-center w-8 h-8 p-0 border-none rounded bg-transparent text-[var(--color-ink-muted)] cursor-pointer transition-all duration-150 hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]"
               onClick={() => setShowSettings(true)}
               title="Settings"
             >
               <Settings className="h-4 w-4" />
             </button>
             <button
-              className={`title-bar-btn ${zenMode ? "active" : ""}`}
+              className={cn(
+                "flex items-center justify-center w-8 h-8 p-0 border-none rounded bg-transparent text-[var(--color-ink-muted)] cursor-pointer transition-all duration-150 hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]",
+                zenMode && "text-[var(--color-accent)] bg-[var(--color-accent-soft)]"
+              )}
               onClick={toggleZenMode}
               title={zenMode ? "Exit zen mode (Esc)" : "Zen mode"}
             >
@@ -1499,7 +1533,7 @@ function App() {
             </button>
             {filePath && workspacePath && (
               <button
-                className="title-bar-btn"
+                className="flex items-center justify-center w-8 h-8 p-0 border-none rounded bg-transparent text-[var(--color-ink-muted)] cursor-pointer transition-all duration-150 hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]"
                 onClick={() => setShowHistory(!showHistory)}
                 title="Version history"
               >
@@ -1523,7 +1557,10 @@ function App() {
 
         {/* Editor */}
         {filePath ? (
-          <div className="editor-wrapper" ref={editorContentRef}>
+          <div className={cn(
+            "editor-wrapper",
+            zenMode && "flex-1 flex justify-center pt-8"
+          )} ref={editorContentRef}>
             {/* Find/Replace Bar */}
             {documentSearchOpen && (
               <FindReplaceBar

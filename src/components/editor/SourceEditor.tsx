@@ -64,10 +64,13 @@ export function SourceEditor({
   );
 
   return (
-    <div className="source-editor-container" data-testid="source-editor">
+    <div
+      className="flex flex-col h-full bg-[var(--color-paper)] overflow-hidden"
+      data-testid="source-editor"
+    >
       <textarea
         ref={textareaRef}
-        className="source-editor"
+        className="flex-1 w-full max-w-[72ch] mx-auto p-[var(--spacing-page)] min-h-screen font-mono text-[0.9375rem] leading-[1.7] text-[var(--color-ink)] tracking-tight border-none outline-none resize-none bg-transparent overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words placeholder:text-[var(--color-ink-muted)] placeholder:italic"
         value={value}
         onChange={handleChange}
         onKeyDown={handleKeyDown}

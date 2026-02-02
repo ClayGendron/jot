@@ -12,6 +12,3 @@
 
 /* TipTap/ProseMirror editor styles */
 @import "./editor.css";
-
-/* Legacy component styles - delete sections as components migrate */
-@import "./legacy-components.css";

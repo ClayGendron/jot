@@ -94,7 +94,7 @@ describe("DocumentOutline", () => {
     );
 
     const methodsItem = screen.getByTestId("outline-item-methods");
-    expect(methodsItem).toHaveClass("active");
+    expect(methodsItem.getAttribute("data-active")).toBe("true");
   });
 
   it("filters headings based on search input", () => {

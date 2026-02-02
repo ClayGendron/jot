@@ -13,6 +13,7 @@ import {
   useCallback,
 } from "react";
 import { FileText, Hash, Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { SuggestionFile } from "@/stores/workspaceStore";
 
 export interface FileSuggestionItem extends SuggestionFile {
@@ -98,9 +99,9 @@ export const InternalLinkSuggestion = forwardRef<
 
   if (props.items.length === 0) {
     return (
-      <div className="internal-link-suggestions">
-        <div className="suggestion-empty">
-          <Search className="suggestion-empty-icon" size={16} />
+      <div className="bg-[var(--color-paper)] border border-[var(--color-border)] rounded-lg shadow-lg overflow-hidden min-w-[200px] max-w-[320px]">
+        <div className="flex items-center justify-center gap-2 p-4 text-[var(--color-ink-muted)] font-sans text-[0.8125rem] italic">
+          <Search className="text-[var(--color-ink-muted)] opacity-50" size={16} />
           <span>No matching files</span>
         </div>
       </div>
@@ -108,30 +109,46 @@ export const InternalLinkSuggestion = forwardRef<
   }
 
   return (
-    <div className="internal-link-suggestions">
+    <div className="bg-[var(--color-paper)] border border-[var(--color-border)] rounded-lg shadow-lg overflow-hidden min-w-[200px] max-w-[320px]">
       {props.items.map((item, index) => (
         <button
           key={item.type === "heading" ? `${item.path}#${item.headingId}` : item.path}
-          className={`suggestion-item ${index === selectedIndex ? "active" : ""}`}
+          className={cn(
+            "flex items-center gap-2.5 w-full px-3.5 py-2.5 border-none bg-transparent text-left cursor-pointer transition-colors duration-150",
+            "hover:bg-[var(--color-paper-warm)]",
+            index === selectedIndex && "bg-[var(--color-paper-warm)]"
+          )}
           onClick={() => selectItem(index)}
           onMouseEnter={() => setSelectedIndex(index)}
           type="button"
         >
           {item.type === "heading" ? (
-            <Hash className="suggestion-item-icon" size={14} />
+            <Hash
+              className={cn(
+                "flex-shrink-0 text-[var(--color-ink-muted)]",
+                index === selectedIndex && "text-[var(--color-accent)]"
+              )}
+              size={14}
+            />
           ) : (
-            <FileText className="suggestion-item-icon" size={14} />
+            <FileText
+              className={cn(
+                "flex-shrink-0 text-[var(--color-ink-muted)]",
+                index === selectedIndex && "text-[var(--color-accent)]"
+              )}
+              size={14}
+            />
           )}
-          <div className="suggestion-item-content">
-            <span className="suggestion-item-name">
+          <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+            <span className="font-sans text-sm font-medium text-[var(--color-ink)] whitespace-nowrap overflow-hidden text-ellipsis">
               {item.type === "heading" ? item.name : item.name.replace(/\.md$/, "")}
             </span>
             {item.type === "heading" ? (
-              <span className="suggestion-item-path">
+              <span className="font-mono text-[0.6875rem] text-[var(--color-ink-muted)] whitespace-nowrap overflow-hidden text-ellipsis">
                 H{item.headingLevel} in {item.displayPath.replace(/\.md$/, "")}
               </span>
             ) : item.displayPath !== item.name && (
-              <span className="suggestion-item-path">
+              <span className="font-mono text-[0.6875rem] text-[var(--color-ink-muted)] whitespace-nowrap overflow-hidden text-ellipsis">
                 {item.displayPath.replace(/\/[^/]+$/, "/")}
               </span>
             )}

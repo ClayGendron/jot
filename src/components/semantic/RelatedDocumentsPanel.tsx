@@ -108,12 +108,12 @@ export function RelatedDocumentsPanel({
   // Not enabled state
   if (!enabled) {
     return (
-      <div className="related-docs-empty-state">
-        <div className="related-docs-empty-icon">
+      <div className="flex flex-col items-center justify-center py-12 px-6 text-center text-[var(--color-ink-faint)]">
+        <div className="mb-4 opacity-50">
           <Link2 className="h-8 w-8" />
         </div>
-        <p className="related-docs-empty-title">Semantic search disabled</p>
-        <p className="related-docs-empty-hint">
+        <p className="m-0 mb-2 font-sans text-sm font-medium text-[var(--color-ink-muted)]">Semantic search disabled</p>
+        <p className="m-0 font-sans text-xs text-[var(--color-ink-faint)]">
           Enable it in Settings to see related documents
         </p>
       </div>
@@ -123,12 +123,12 @@ export function RelatedDocumentsPanel({
   // No file open
   if (!filePath) {
     return (
-      <div className="related-docs-empty-state">
-        <div className="related-docs-empty-icon">
+      <div className="flex flex-col items-center justify-center py-12 px-6 text-center text-[var(--color-ink-faint)]">
+        <div className="mb-4 opacity-50">
           <Link2 className="h-8 w-8" />
         </div>
-        <p className="related-docs-empty-title">No file open</p>
-        <p className="related-docs-empty-hint">
+        <p className="m-0 mb-2 font-sans text-sm font-medium text-[var(--color-ink-muted)]">No file open</p>
+        <p className="m-0 font-sans text-xs text-[var(--color-ink-faint)]">
           Open a document to see related files
         </p>
       </div>
@@ -138,12 +138,12 @@ export function RelatedDocumentsPanel({
   // Model loading
   if (!modelLoaded) {
     return (
-      <div className="related-docs-empty-state">
-        <div className="related-docs-loading">
+      <div className="flex flex-col items-center justify-center py-12 px-6 text-center text-[var(--color-ink-faint)]">
+        <div className="mb-4">
           <LoadingSpinner />
         </div>
-        <p className="related-docs-empty-title">Loading model...</p>
-        <p className="related-docs-empty-hint">
+        <p className="m-0 mb-2 font-sans text-sm font-medium text-[var(--color-ink-muted)]">Loading model...</p>
+        <p className="m-0 font-sans text-xs text-[var(--color-ink-faint)]">
           This may take a moment on first use
         </p>
       </div>
@@ -157,12 +157,12 @@ export function RelatedDocumentsPanel({
 
   if (!isInIndexedFolder) {
     return (
-      <div className="related-docs-empty-state">
-        <div className="related-docs-empty-icon">
+      <div className="flex flex-col items-center justify-center py-12 px-6 text-center text-[var(--color-ink-faint)]">
+        <div className="mb-4 opacity-50">
           <Link2 className="h-8 w-8" />
         </div>
-        <p className="related-docs-empty-title">Not indexed</p>
-        <p className="related-docs-empty-hint">
+        <p className="m-0 mb-2 font-sans text-sm font-medium text-[var(--color-ink-muted)]">Not indexed</p>
+        <p className="m-0 font-sans text-xs text-[var(--color-ink-faint)]">
           This file is not in an indexed folder
         </p>
       </div>
@@ -172,12 +172,12 @@ export function RelatedDocumentsPanel({
   // No related documents
   if (relatedDocuments.length === 0) {
     return (
-      <div className="related-docs-empty-state">
-        <div className="related-docs-empty-icon">
+      <div className="flex flex-col items-center justify-center py-12 px-6 text-center text-[var(--color-ink-faint)]">
+        <div className="mb-4 opacity-50">
           <Link2 className="h-8 w-8" />
         </div>
-        <p className="related-docs-empty-title">No related documents</p>
-        <p className="related-docs-empty-hint">
+        <p className="m-0 mb-2 font-sans text-sm font-medium text-[var(--color-ink-muted)]">No related documents</p>
+        <p className="m-0 font-sans text-xs text-[var(--color-ink-faint)]">
           Similar documents will appear here
         </p>
       </div>
@@ -185,9 +185,9 @@ export function RelatedDocumentsPanel({
   }
 
   return (
-    <div className="related-docs-panel" data-testid="related-docs-panel">
+    <div className="flex flex-col h-full" data-testid="related-docs-panel">
       {/* Related documents list */}
-      <div className="related-docs-list">
+      <div className="flex-1 overflow-y-auto py-2">
         {relatedDocuments.map((doc, index) => (
           <RelatedDocumentItem
             key={`${doc.filePath}-${index}`}
@@ -201,8 +201,8 @@ export function RelatedDocumentsPanel({
       </div>
 
       {/* Stats footer */}
-      <div className="related-docs-footer">
-        <span className="related-docs-stats">
+      <div className="px-4 py-3 border-t border-[var(--color-border)]">
+        <span className="font-sans text-xs text-[var(--color-ink-muted)]">
           {relatedDocuments.length} related document
           {relatedDocuments.length === 1 ? "" : "s"}
         </span>
@@ -233,30 +233,34 @@ function RelatedDocumentItem({
   return (
     <button
       type="button"
-      className="related-doc-item"
+      className="flex items-start gap-3 w-full px-4 py-3 border-none bg-transparent text-left cursor-pointer transition-colors duration-150 hover:bg-[var(--color-paper-warm)]"
       onClick={handleClick}
       data-testid={`related-doc-${displayName}`}
     >
       {/* File icon */}
-      <span className="related-doc-icon">
+      <span className="flex-shrink-0 text-[var(--color-ink-faint)] mt-0.5">
         <File className="h-3.5 w-3.5" />
       </span>
 
-      <div className="related-doc-content">
+      <div className="flex-1 min-w-0 flex flex-col gap-1">
         {/* File name */}
-        <span className="related-doc-name">{displayName}</span>
+        <span className="font-sans text-sm font-medium text-[var(--color-ink)] whitespace-nowrap overflow-hidden text-ellipsis">
+          {displayName}
+        </span>
 
         {/* Path and score */}
-        <div className="related-doc-meta">
+        <div className="flex items-center gap-2 font-mono text-[0.6875rem]">
           {relativePath && (
-            <span className="related-doc-path">{relativePath}</span>
+            <span className="flex-1 text-[var(--color-ink-faint)] whitespace-nowrap overflow-hidden text-ellipsis">
+              {relativePath}
+            </span>
           )}
-          <span className="related-doc-score">{formattedScore}</span>
+          <span className="flex-shrink-0 text-[var(--color-accent)] opacity-90">{formattedScore}</span>
         </div>
 
         {/* Preview snippet */}
         {document.preview && (
-          <span className="related-doc-preview">
+          <span className="font-sans text-xs text-[var(--color-ink-muted)] leading-tight line-clamp-2">
             {document.preview.slice(0, 100)}
             {document.preview.length > 100 && "..."}
           </span>
@@ -267,7 +271,9 @@ function RelatedDocumentItem({
 }
 
 function LoadingSpinner() {
-  return <div className="related-docs-spinner" />;
+  return (
+    <div className="w-6 h-6 border-2 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin" />
+  );
 }
 
 export default RelatedDocumentsPanel;

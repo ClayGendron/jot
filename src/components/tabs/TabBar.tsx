@@ -116,7 +116,7 @@ export function TabBar({
 
   return (
     <div
-      className="tab-bar"
+      className="flex gap-0 px-1 bg-[var(--color-paper)] border-b border-[var(--color-border)] overflow-x-auto flex-shrink-0 scrollbar-none"
       ref={tabBarRef}
       onDragEnd={handleDragEnd}
       data-testid="tab-bar"

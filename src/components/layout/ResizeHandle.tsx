@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
 export interface ResizeHandleProps {
   /** Current width value */
@@ -73,7 +74,7 @@ export function ResizeHandle({
       document.body.classList.remove("resize-dragging");
 
       // Calculate final width for persistence
-      const currentWidth = document.querySelector(".sidebar")?.clientWidth;
+      const currentWidth = document.querySelector(".sidebar, [data-sidebar]")?.clientWidth;
       if (currentWidth && onResizeEnd) {
         onResizeEnd(currentWidth);
       }
@@ -90,7 +91,11 @@ export function ResizeHandle({
 
   return (
     <div
-      className={`resize-handle resize-handle-${position} ${isDragging ? "dragging" : ""} ${disabled ? "disabled" : ""}`}
+      className={cn(
+        "group absolute top-0 bottom-0 w-1.5 z-10 transition-colors duration-150",
+        position === "right" ? "-right-[3px]" : "-left-[3px]",
+        disabled ? "cursor-default pointer-events-none" : "cursor-col-resize"
+      )}
       onMouseDown={handleMouseDown}
       role="separator"
       aria-orientation="vertical"
@@ -98,8 +103,18 @@ export function ResizeHandle({
       aria-valuemin={minWidth}
       aria-valuemax={maxWidth}
       tabIndex={disabled ? -1 : 0}
+      data-testid="resize-handle"
+      data-position={position}
+      data-disabled={disabled}
+      data-dragging={isDragging}
     >
-      <div className="resize-handle-indicator" />
+      <div
+        className={cn(
+          "absolute top-0 bottom-0 left-1/2 w-0.5 -translate-x-1/2 bg-transparent transition-colors duration-150 rounded-sm",
+          (isDragging || !disabled) && "group-hover:bg-[var(--color-accent)]",
+          isDragging && "bg-[var(--color-accent)]"
+        )}
+      />
     </div>
   );
 }

@@ -29,8 +29,8 @@ const CONFIG = {
   highlightColor: "rgba(255, 255, 255, 0.25)",
 
   // Text colors
-  textColor: "#1A0A05",        // Very dark brown (almost black)
-  textShadowColor: "rgba(0, 0, 0, 0.3)",
+  textColor: "#FFFFFF",        // White
+  textShadowColor: "rgba(0, 0, 0, 0.4)",
 
   // Glass overlay
   glassOverlayTop: "rgba(255, 255, 255, 0.15)",
@@ -41,16 +41,16 @@ const CONFIG = {
 
   // Font settings
   fontFamily: "Crimson Pro",
-  fontWeight: 600,
+  fontWeight: 700,
 
   // Font size as percentage of icon size
-  fontSizePercent: 70,
+  fontSizePercent: 85,
 
   // Output directory
   outputDir: "src-tauri/icons",
 
-  // Font file path
-  fontPath: join(__dirname, "fonts/CrimsonPro-600.ttf"),
+  // Font file path (bold italic version for stylized "j")
+  fontPath: join(__dirname, "fonts/CrimsonPro-700-Italic.ttf"),
 };
 
 // macOS icon sizes (Liquid Glass style)
@@ -111,7 +111,7 @@ function generateFlatIcon(size) {
   ctx.font = `${CONFIG.fontWeight} ${fontSize}px "${CONFIG.fontFamily}"`;
 
   // Measure actual visual bounds for perfect centering
-  const metrics = ctx.measureText("Jot");
+  const metrics = ctx.measureText("j");
   const textWidth = metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight;
   const textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
 
@@ -121,7 +121,7 @@ function generateFlatIcon(size) {
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = CONFIG.textColor;
-  ctx.fillText("Jot", x, y);
+  ctx.fillText("j", x, y);
 
   return canvas;
 }
@@ -197,7 +197,7 @@ function generateLiquidGlassIcon(size) {
   ctx.font = `${CONFIG.fontWeight} ${fontSize}px "${CONFIG.fontFamily}"`;
 
   // Measure actual visual bounds for perfect centering
-  const metrics = ctx.measureText("Jot");
+  const metrics = ctx.measureText("j");
   const textWidth = metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight;
   const textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
 
@@ -217,12 +217,12 @@ function generateLiquidGlassIcon(size) {
   ctx.shadowOffsetY = shadowOffset;
   ctx.shadowBlur = shadowBlur;
   ctx.fillStyle = CONFIG.textColor;
-  ctx.fillText("Jot", x, y);
+  ctx.fillText("j", x, y);
   ctx.restore();
 
   // Main text (on top of shadow)
   ctx.fillStyle = CONFIG.textColor;
-  ctx.fillText("Jot", x, y);
+  ctx.fillText("j", x, y);
 
   // === LAYER 7: Text inner highlight (subtle top edge glow) ===
   // This creates a very subtle lighter edge on the text
@@ -364,7 +364,7 @@ async function main() {
   console.log("\n🎨 Jot Icon Generator (Liquid Glass Edition)\n");
   console.log("  Style: Apple Liquid Glass-inspired");
   console.log(`  Gradient: ${CONFIG.gradientTop} → ${CONFIG.gradientBottom}`);
-  console.log(`  Text: "Jot" in Crimson Pro 600\n`);
+  console.log(`  Text: "j" in Crimson Pro 700 Italic\n`);
 
   // Register font
   console.log("Loading Crimson Pro font...");

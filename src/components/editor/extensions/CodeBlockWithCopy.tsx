@@ -18,6 +18,7 @@ import {
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useEditorStore } from "@/stores/editorStore";
+import { cn } from "@/lib/utils";
 import DOMPurify from "dompurify";
 import { renderMermaid, isMermaidLoaded } from "@/lib/mermaid/loader";
 import { resolveTheme } from "@/lib/mermaid/themes";
@@ -203,7 +204,10 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
   if (isMermaid) {
     return (
       <NodeViewWrapper
-        className={`mermaid-block ${selected ? "is-editing" : ""}`}
+        className={cn(
+          "relative my-6 border border-[var(--color-border)] rounded-[10px] overflow-hidden bg-[var(--color-paper)] shadow-[0_1px_3px_rgba(0,0,0,0.04),inset_0_1px_0_rgba(255,255,255,0.5)]",
+          selected && "border-[var(--color-border-strong)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--color-accent)_15%,transparent),0_1px_3px_rgba(0,0,0,0.04)]"
+        )}
         data-testid="mermaid-block"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => {
@@ -212,23 +216,26 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
         }}
       >
         {/* Header with badge and controls */}
-        <div className="mermaid-header">
-          <span className="mermaid-badge">
-            <GitBranch className="h-3 w-3" aria-hidden="true" />
+        <div className="flex items-center justify-between px-4 py-2 bg-gradient-to-b from-[var(--color-border)] to-[color-mix(in_srgb,var(--color-border)_85%,var(--color-paper))] border-b border-[var(--color-border)]">
+          <span className="inline-flex items-center gap-1.5 font-mono text-[0.6875rem] font-medium lowercase tracking-wide text-[var(--color-ink-muted)] px-2.5 py-0.5 bg-[var(--color-paper)] rounded-[5px] shadow-[0_1px_2px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.6)]">
+            <GitBranch className="h-3 w-3 opacity-70" aria-hidden="true" />
             mermaid
           </span>
 
-          <div className={`mermaid-controls ${isHovered ? "visible" : ""}`}>
+          <div className={cn(
+            "flex items-center gap-1.5 opacity-0 translate-x-1 transition-all duration-[180ms] ease-out pointer-events-none",
+            isHovered && "opacity-100 translate-x-0 pointer-events-auto"
+          )}>
             {/* Copy button */}
             <button
               type="button"
-              className="mermaid-control-btn"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 border-none rounded-[5px] bg-[var(--color-paper)] text-[var(--color-ink-muted)] font-sans text-[0.6875rem] font-medium cursor-pointer transition-all duration-150 shadow-[0_1px_2px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.6)] hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)] hover:shadow-[0_2px_4px_rgba(0,0,0,0.08),inset_0_1px_0_rgba(255,255,255,0.6)]"
               onClick={handleCopy}
               title="Copy source"
               aria-label={isCopied ? "Copied!" : "Copy source"}
             >
               {isCopied ? (
-                <Check className="h-3.5 w-3.5 code-copy-check" aria-hidden="true" />
+                <Check className="h-3.5 w-3.5 text-[#5a8f5a]" aria-hidden="true" />
               ) : (
                 <Copy className="h-3.5 w-3.5" aria-hidden="true" />
               )}
@@ -237,10 +244,10 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
 
             {/* Export dropdown - only when showing diagram */}
             {showDiagram && svgContent && (
-              <div className="mermaid-export-wrapper" ref={exportMenuRef}>
+              <div className="relative" ref={exportMenuRef}>
                 <button
                   type="button"
-                  className="mermaid-control-btn"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 border-none rounded-[5px] bg-[var(--color-paper)] text-[var(--color-ink-muted)] font-sans text-[0.6875rem] font-medium cursor-pointer transition-all duration-150 shadow-[0_1px_2px_rgba(0,0,0,0.06),inset_0_1px_0_rgba(255,255,255,0.6)] hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]"
                   onClick={() => setShowExportMenu(!showExportMenu)}
                   title="Export diagram"
                   aria-label="Export diagram"
@@ -251,21 +258,21 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
                 </button>
 
                 {showExportMenu && (
-                  <div className="mermaid-export-menu">
+                  <div className="absolute top-[calc(100%+4px)] right-0 min-w-[140px] p-1.5 bg-[var(--color-paper)] border border-[var(--color-border)] rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1),0_1px_3px_rgba(0,0,0,0.06)] z-[100] animate-in fade-in-0 zoom-in-95 duration-150">
                     <button
                       type="button"
-                      className="mermaid-export-option"
+                      className="flex items-center gap-2 w-full px-2.5 py-2 border-none rounded-[5px] bg-transparent text-[var(--color-ink)] font-sans text-xs font-normal text-left cursor-pointer transition-colors duration-150 hover:bg-[var(--color-paper-warm)]"
                       onClick={handleExportSvg}
                     >
-                      <FileCode className="h-3.5 w-3.5" aria-hidden="true" />
+                      <FileCode className="h-3.5 w-3.5 text-[var(--color-ink-muted)]" aria-hidden="true" />
                       Export as SVG
                     </button>
                     <button
                       type="button"
-                      className="mermaid-export-option"
+                      className="flex items-center gap-2 w-full px-2.5 py-2 border-none rounded-[5px] bg-transparent text-[var(--color-ink)] font-sans text-xs font-normal text-left cursor-pointer transition-colors duration-150 hover:bg-[var(--color-paper-warm)]"
                       onClick={handleExportPng}
                     >
-                      <Image className="h-3.5 w-3.5" aria-hidden="true" />
+                      <Image className="h-3.5 w-3.5 text-[var(--color-ink-muted)]" aria-hidden="true" />
                       Export as PNG
                     </button>
                   </div>
@@ -277,23 +284,23 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
 
         {/* Content area - code when selected, diagram when not */}
         {selected ? (
-          <div className="mermaid-source-wrapper">
-            <pre ref={codeRef} className="mermaid-source">
+          <div className="p-0">
+            <pre ref={codeRef} className="m-0 px-5 py-4 font-mono text-sm leading-relaxed text-[var(--color-ink)] whitespace-pre-wrap break-words bg-[var(--color-paper-warm)] rounded-b-[9px]">
               <NodeViewContent as={"code" as "div"} className="hljs" />
             </pre>
           </div>
         ) : (
-          <div className="mermaid-content">
+          <div className="min-h-[120px] flex flex-col">
             {isLoading && (
-              <div className="mermaid-loading" data-testid="mermaid-loading">
-                <div className="mermaid-loading-spinner" />
+              <div className="flex flex-col items-center justify-center gap-3 py-10 px-4 text-[var(--color-ink-muted)] font-sans text-[0.8125rem]" data-testid="mermaid-loading">
+                <div className="w-5 h-5 border-2 border-[var(--color-border)] border-t-[var(--color-accent)] rounded-full animate-spin" />
                 <span>Rendering diagram...</span>
               </div>
             )}
 
             {!isLoading && svgContent && (
               <div
-                className="mermaid-diagram"
+                className="px-8 py-6 flex justify-center items-center cursor-pointer transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--color-paper-warm)_50%,transparent)] focus:outline-2 focus:outline-[var(--color-accent)] focus:outline-offset-[-2px] focus:rounded-b-[9px] [&_svg]:max-w-full [&_svg]:h-auto"
                 aria-label="Mermaid diagram - click to edit"
                 // Safe: SVG is sanitized by DOMPurify before rendering
                 dangerouslySetInnerHTML={{ __html: svgContent }}
@@ -301,20 +308,20 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
             )}
 
             {!isLoading && error && (
-              <div className="mermaid-error" data-testid="mermaid-error">
-                <div className="mermaid-error-header">
+              <div className="px-5 py-4 bg-[color-mix(in_srgb,var(--color-accent)_8%,var(--color-paper))] border-t border-[color-mix(in_srgb,var(--color-accent)_25%,var(--color-border))]" data-testid="mermaid-error">
+                <div className="flex items-center gap-2 mb-2 text-[var(--color-accent)] font-sans text-xs font-semibold uppercase tracking-wider">
                   <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>Syntax Error</span>
                 </div>
-                <pre className="mermaid-error-message">{error}</pre>
-                <p className="mermaid-error-hint">Click to edit and fix</p>
+                <pre className="m-0 mb-3 px-3 py-2.5 font-mono text-xs leading-normal text-[var(--color-ink)] bg-[var(--color-paper)] rounded-[5px] border border-[var(--color-border)] whitespace-pre-wrap overflow-x-auto">{error}</pre>
+                <p className="m-0 text-xs text-[var(--color-ink-muted)] italic">Click to edit and fix</p>
               </div>
             )}
 
             {!isLoading && !svgContent && !error && (
-              <div className="mermaid-empty">
+              <div className="flex flex-col items-center justify-center gap-2.5 py-8 px-4 text-[var(--color-ink-muted)] font-sans text-[0.8125rem]">
                 <span>Empty diagram</span>
-                <p className="mermaid-empty-hint">Click to add diagram code</p>
+                <p className="m-0 text-xs text-[var(--color-ink-muted)] italic">Click to add diagram code</p>
               </div>
             )}
           </div>
@@ -326,38 +333,44 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
   // Render regular code block
   return (
     <NodeViewWrapper
-      className="code-block-wrapper"
+      className="code-block-wrapper relative my-6"
       data-testid="code-block-container"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Header bar with language and copy button */}
-      <div className="code-block-header">
+      <div className="flex items-center justify-between px-4 py-2 bg-[var(--color-border)] border border-[var(--color-border)] border-b-0 rounded-t-lg min-h-[2.25rem]">
         {showLanguageBadge && (
-          <span className="code-language-badge" data-testid="code-language-badge">
+          <span className="font-mono text-[0.6875rem] font-medium lowercase tracking-wide text-[var(--color-ink-muted)] px-2 py-0.5 bg-[var(--color-paper-warm)] rounded" data-testid="code-language-badge">
             {language}
           </span>
         )}
         <button
           type="button"
-          className={`code-copy-btn ${isHovered ? "opacity-100" : "opacity-0"}`}
+          className={cn(
+            "flex items-center gap-1.5 px-2.5 py-1 border-none rounded bg-[var(--color-paper)] text-[var(--color-ink-muted)] font-sans text-[0.6875rem] font-medium cursor-pointer transition-all duration-150 ml-auto hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)] active:scale-[0.96] focus-visible:outline-2 focus-visible:outline-[var(--color-accent)] focus-visible:outline-offset-1",
+            isHovered ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+          )}
           onClick={handleCopy}
           aria-label={isCopied ? "Copied!" : "Copy code"}
           tabIndex={0}
         >
           {isCopied ? (
-            <Check className="h-3.5 w-3.5 code-copy-check" aria-hidden="true" />
+            <Check className="h-3.5 w-3.5 text-[#5a8f5a]" aria-hidden="true" />
           ) : (
             <Copy className="h-3.5 w-3.5" aria-hidden="true" />
           )}
-          <span className="code-copy-text">{isCopied ? "Copied" : "Copy"}</span>
+          <span className="uppercase tracking-wide">{isCopied ? "Copied" : "Copy"}</span>
         </button>
       </div>
 
       {/* Code content rendered by TipTap */}
       <pre
         ref={codeRef}
-        className={showLineNumbers ? "with-line-numbers" : ""}
+        className={cn(
+          "m-0 rounded-t-none rounded-b-lg",
+          showLineNumbers && "with-line-numbers"
+        )}
         data-show-line-numbers={showLineNumbers}
       >
         <NodeViewContent as={"code" as "div"} className="hljs" />
