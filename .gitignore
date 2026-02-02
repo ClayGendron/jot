@@ -21,6 +21,14 @@ src-tauri/gen/
 target/
 **/*.rs.bk
 
+# ML/AI Models (large binary files)
+*.onnx
+*.safetensors
+*.bin
+*.pt
+*.pth
+**/models/
+
 # IDE
 .idea/
 .vscode/*
@@ -82,3 +90,6 @@ pnpm-lock.yaml
 *.pem
 *.key
 .turbo/
+
+# Benchmarks (development only)
+benchmarks/
