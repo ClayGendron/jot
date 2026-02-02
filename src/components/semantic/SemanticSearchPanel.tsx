@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useSemanticSearchStore } from "@/stores/semanticSearchStore";
 import { semanticSearch } from "@/lib/tauri/semantic";
 import type { SemanticSearchResult } from "@/lib/semantic/types";
-import { X, Search, Brain, File } from "lucide-react";
+import { X, Search, Brain, File, Loader2 } from "lucide-react";
 
 interface SemanticSearchPanelProps {
   onResultClick: (filePath: string) => void;
@@ -136,24 +136,24 @@ export function SemanticSearchPanel({
   // Not enabled state
   if (!enabled) {
     return (
-      <div className="semantic-search-panel">
-        <div className="semantic-search-header">
-          <h3 className="semantic-search-title">
-            <Brain className="h-4 w-4 semantic-search-brain-icon" />
+      <div className="fixed top-0 right-0 bottom-0 w-[360px] z-[100] flex flex-col bg-[var(--color-paper)] border-l border-[var(--color-border)] shadow-[-4px_0_20px_rgba(0,0,0,0.08)]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+          <h3 className="flex items-center gap-2 font-sans text-sm font-semibold text-[var(--color-ink)] m-0">
+            <Brain className="h-4 w-4 text-[var(--color-accent)]" />
             Semantic Search
           </h3>
           <button
-            className="semantic-search-close"
+            className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded text-[var(--color-ink-light)] cursor-pointer transition-colors hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]"
             onClick={onClose}
             title="Close (Escape)"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="semantic-search-empty">
-          <Brain className="h-8 w-8" />
-          <p className="semantic-search-empty-title">Semantic search is disabled</p>
-          <p className="semantic-search-empty-hint">
+        <div className="flex flex-col items-center justify-center px-6 py-12 text-center text-[var(--color-ink-muted)]">
+          <Brain className="h-8 w-8 mb-4 opacity-50" />
+          <p className="font-sans text-sm font-medium text-[var(--color-ink-light)] m-0 mb-1">Semantic search is disabled</p>
+          <p className="font-sans text-[0.8125rem] text-[var(--color-ink-muted)] m-0">
             Enable it in Settings to search by meaning
           </p>
         </div>
@@ -162,15 +162,15 @@ export function SemanticSearchPanel({
   }
 
   return (
-    <div className="semantic-search-panel">
+    <div className="fixed top-0 right-0 bottom-0 w-[360px] z-[100] flex flex-col bg-[var(--color-paper)] border-l border-[var(--color-border)] shadow-[-4px_0_20px_rgba(0,0,0,0.08)]">
       {/* Header */}
-      <div className="semantic-search-header">
-        <h3 className="semantic-search-title">
-          <Brain className="h-4 w-4 semantic-search-brain-icon" />
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+        <h3 className="flex items-center gap-2 font-sans text-sm font-semibold text-[var(--color-ink)] m-0">
+          <Brain className="h-4 w-4 text-[var(--color-accent)]" />
           Semantic Search
         </h3>
         <button
-          className="semantic-search-close"
+          className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded text-[var(--color-ink-light)] cursor-pointer transition-colors hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]"
           onClick={onClose}
           title="Close (Escape)"
         >
@@ -179,14 +179,14 @@ export function SemanticSearchPanel({
       </div>
 
       {/* Search input */}
-      <div className="semantic-search-inputs">
-        <div className="semantic-search-input-row">
-          <div className="semantic-search-input-group">
-            <Search className="h-3.5 w-3.5 semantic-search-icon" />
+      <div className="px-4 py-3 border-b border-[var(--color-border)]">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center flex-1 gap-1.5 px-2.5 py-2 bg-[var(--color-paper-warm)] border border-[var(--color-border)] rounded-md transition-colors focus-within:border-[var(--color-accent)] focus-within:shadow-[0_0_0_3px_var(--color-accent-soft)]">
+            <Search className="h-3.5 w-3.5 text-[var(--color-ink-muted)] shrink-0" />
             <input
               ref={searchInputRef}
               type="text"
-              className="semantic-search-input"
+              className="flex-1 border-none bg-transparent font-sans text-sm text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-muted)]"
               placeholder="Search by meaning..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -198,42 +198,42 @@ export function SemanticSearchPanel({
 
       {/* Results summary */}
       {query.length >= 3 && !isSearching && (
-        <div className="semantic-search-summary">
+        <div className="px-4 py-2 font-sans text-xs text-[var(--color-ink-muted)] bg-[var(--color-paper-warm)] border-b border-[var(--color-border)]">
           {results.length > 0 ? (
             <span>
               {results.length} result{results.length !== 1 ? "s" : ""} found
             </span>
           ) : searchError ? (
-            <span className="semantic-search-error">{searchError}</span>
+            <span className="text-[var(--color-error)]">{searchError}</span>
           ) : (
-            <span className="semantic-search-no-results">No results found</span>
+            <span className="italic">No results found</span>
           )}
         </div>
       )}
 
       {/* Results list */}
-      <div className="semantic-search-results">
+      <div className="flex-1 overflow-y-auto py-2">
         {results.map((result, index) => (
           <button
             key={`${result.filePath}-${index}`}
             type="button"
-            className="semantic-search-result"
+            className="w-full px-4 py-2.5 border-none bg-transparent text-left cursor-pointer transition-colors hover:bg-[var(--color-paper-warm)]"
             onClick={() => handleResultClick(result.filePath)}
           >
-            <div className="semantic-search-result-header">
-              <File className="h-3 w-3 semantic-search-file-icon" />
-              <span className="semantic-search-result-name">
+            <div className="flex items-center gap-2">
+              <File className="h-3 w-3 text-[var(--color-ink-muted)] shrink-0" />
+              <span className="flex-1 font-sans text-sm font-medium text-[var(--color-ink)] overflow-hidden text-ellipsis whitespace-nowrap">
                 {getDisplayName(result.filePath)}
               </span>
-              <span className="semantic-search-result-score">
+              <span className="font-mono text-[0.6875rem] text-[var(--color-accent)] font-medium px-1.5 py-0.5 bg-[var(--color-accent-soft)] rounded">
                 {formatScore(result.score)}
               </span>
             </div>
-            <div className="semantic-search-result-path">
+            <div className="font-sans text-xs text-[var(--color-ink-muted)] mt-1 overflow-hidden text-ellipsis whitespace-nowrap">
               {getDisplayPath(result.filePath)}
             </div>
             {result.chunkText && (
-              <div className="semantic-search-result-preview">
+              <div className="font-sans text-xs text-[var(--color-ink-light)] mt-1.5 leading-relaxed line-clamp-2">
                 {result.chunkText.slice(0, 150)}
                 {result.chunkText.length > 150 && "..."}
               </div>
@@ -243,10 +243,10 @@ export function SemanticSearchPanel({
 
         {/* Empty state */}
         {query.length < 3 && (
-          <div className="semantic-search-empty">
-            <Brain className="h-8 w-8" />
-            <p className="semantic-search-empty-title">Search by meaning</p>
-            <p className="semantic-search-empty-hint">
+          <div className="flex flex-col items-center justify-center px-6 py-12 text-center text-[var(--color-ink-muted)]">
+            <Brain className="h-8 w-8 mb-4 opacity-50" />
+            <p className="font-sans text-sm font-medium text-[var(--color-ink-light)] m-0 mb-1">Search by meaning</p>
+            <p className="font-sans text-[0.8125rem] text-[var(--color-ink-muted)] m-0">
               Type at least 3 characters to find related content
             </p>
           </div>
@@ -254,10 +254,10 @@ export function SemanticSearchPanel({
 
         {/* Model loading state */}
         {!modelLoaded && enabled && (
-          <div className="semantic-search-empty">
+          <div className="flex flex-col items-center justify-center px-6 py-12 text-center text-[var(--color-ink-muted)]">
             <LoadingSpinner />
-            <p className="semantic-search-empty-title">Loading model...</p>
-            <p className="semantic-search-empty-hint">
+            <p className="font-sans text-sm font-medium text-[var(--color-ink-light)] m-0 mb-1 mt-4">Loading model...</p>
+            <p className="font-sans text-[0.8125rem] text-[var(--color-ink-muted)] m-0">
               This may take a moment on first use
             </p>
           </div>
@@ -268,7 +268,7 @@ export function SemanticSearchPanel({
 }
 
 function LoadingSpinner() {
-  return <div className="semantic-search-spinner" />;
+  return <Loader2 className="h-3.5 w-3.5 text-[var(--color-accent)] animate-spin" />;
 }
 
 export default SemanticSearchPanel;

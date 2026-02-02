@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { useEditorStore } from "@/stores/editorStore";
 
 /**
@@ -24,33 +25,38 @@ export function SaveIndicator() {
 
   return (
     <span
-      className={`save-indicator ${saveStatus !== "idle" ? `save-indicator--${saveStatus}` : ""}`}
+      className={cn(
+        "inline-flex items-center ml-3 font-serif text-[0.6875rem] italic tracking-wide text-[var(--color-ink-muted)] opacity-70",
+        saveStatus === "saving" && "opacity-100",
+        saveStatus === "saved" && "opacity-100",
+        saveStatus === "error" && "opacity-100"
+      )}
       role="status"
       aria-live="polite"
     >
       {saveStatus === "saving" && (
-        <span className="save-indicator-content">
-          <span className="save-indicator-dot" />
-          <span className="save-indicator-text">saving</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-ink-muted)] animate-pulse" />
+          <span className="lowercase">saving</span>
         </span>
       )}
       {saveStatus === "saved" && (
-        <span className="save-indicator-content save-indicator-content--reveal">
+        <span className="inline-flex items-center gap-1.5 animate-in fade-in-0 slide-in-from-bottom-1">
           <SavedMark />
-          <span className="save-indicator-text">saved</span>
+          <span className="lowercase">saved</span>
         </span>
       )}
       {saveStatus === "error" && (
-        <span className="save-indicator-content save-indicator-content--error">
+        <span className="inline-flex items-center gap-1.5 text-[var(--color-accent)]">
           <ErrorMark />
-          <span className="save-indicator-text">
+          <span className="lowercase">
             {saveError || "Save failed"}
           </span>
         </span>
       )}
       {saveStatus === "idle" && lastSaved && (
-        <span className="save-indicator-content save-indicator-content--idle">
-          <span className="save-indicator-time">
+        <span className="inline-flex items-center gap-1.5 opacity-50 hover:opacity-80 transition-opacity">
+          <span className="not-italic tabular-nums">
             {formatLastSaved(lastSaved)}
           </span>
         </span>

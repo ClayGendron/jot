@@ -13,6 +13,7 @@ import {
   ChevronDown,
   X,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { Editor } from "@tiptap/react";
 import { useSearchStore } from "@/stores/searchStore";
 import type { SearchAndReplaceStorage } from "@/components/editor/extensions/SearchAndReplace";
@@ -200,19 +201,19 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
 
   return (
     <div
-      className="find-replace-bar"
+      className="absolute top-14 right-4 z-[110] flex flex-col gap-1.5 px-3 py-2.5 bg-[var(--color-paper)] border border-[var(--color-border)] rounded-lg shadow-md min-w-[380px]"
       role="search"
       aria-label="Find and replace"
       onKeyDown={handleKeyDown}
     >
       {/* Search row */}
-      <div className="find-replace-row">
-        <div className="find-replace-input-group">
-          <Search className="h-3.5 w-3.5 find-replace-icon" />
+      <div className="flex items-center gap-2">
+        <div className="flex items-center flex-1 gap-1.5 px-2 py-1.5 bg-[var(--color-paper-warm)] border border-[var(--color-border)] rounded transition-colors focus-within:border-[var(--color-accent)]">
+          <Search className="h-3.5 w-3.5 text-[var(--color-ink-muted)] shrink-0" />
           <input
             ref={searchInputRef}
             type="text"
-            className="find-replace-input"
+            className="flex-1 border-none bg-transparent font-sans text-sm text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-muted)]"
             placeholder="Find..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -221,15 +222,15 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
         </div>
 
         {/* Match counter */}
-        <span className="find-replace-counter" aria-live="polite">
+        <span className="font-mono text-xs text-[var(--color-ink-muted)] min-w-16 text-center" aria-live="polite">
           {totalMatches > 0 ? `${currentMatch}/${totalMatches}` : "No results"}
         </span>
 
         {/* Navigation */}
-        <div className="find-replace-nav">
+        <div className="flex gap-0.5">
           <button
             type="button"
-            className="find-replace-btn"
+            className="flex items-center justify-center p-1 border-none bg-transparent rounded text-[var(--color-ink-light)] cursor-pointer transition-colors hover:not-disabled:bg-[var(--color-paper-warm)] hover:not-disabled:text-[var(--color-ink)] disabled:opacity-40 disabled:cursor-not-allowed"
             onClick={handlePrevious}
             disabled={totalMatches === 0}
             title="Previous (Shift+Enter)"
@@ -239,7 +240,7 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
           </button>
           <button
             type="button"
-            className="find-replace-btn"
+            className="flex items-center justify-center p-1 border-none bg-transparent rounded text-[var(--color-ink-light)] cursor-pointer transition-colors hover:not-disabled:bg-[var(--color-paper-warm)] hover:not-disabled:text-[var(--color-ink)] disabled:opacity-40 disabled:cursor-not-allowed"
             onClick={handleNext}
             disabled={totalMatches === 0}
             title="Next (Enter)"
@@ -252,7 +253,11 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
         {/* Options */}
         <button
           type="button"
-          className={`find-replace-btn find-replace-toggle ${caseSensitive ? "active" : ""}`}
+          className={cn(
+            "flex items-center justify-center px-1.5 py-1 border-none bg-transparent rounded font-mono text-xs font-semibold text-[var(--color-ink-light)] cursor-pointer transition-colors",
+            "hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]",
+            caseSensitive && "bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+          )}
           onClick={handleToggleCaseSensitive}
           title="Case sensitive"
           aria-label="Toggle case sensitivity"
@@ -262,7 +267,11 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
         </button>
         <button
           type="button"
-          className={`find-replace-btn find-replace-toggle ${useRegex ? "active" : ""}`}
+          className={cn(
+            "flex items-center justify-center px-1.5 py-1 border-none bg-transparent rounded font-mono text-xs font-semibold text-[var(--color-ink-light)] cursor-pointer transition-colors",
+            "hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]",
+            useRegex && "bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+          )}
           onClick={handleToggleUseRegex}
           title="Use regular expression"
           aria-label="Toggle regex mode"
@@ -274,7 +283,7 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
         {/* Close */}
         <button
           type="button"
-          className="find-replace-btn find-replace-close"
+          className="flex items-center justify-center p-1 ml-1 border-none bg-transparent rounded text-[var(--color-ink-light)] cursor-pointer transition-colors hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]"
           onClick={handleClose}
           title="Close (Escape)"
           aria-label="Close search"
@@ -284,13 +293,13 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
       </div>
 
       {/* Replace row */}
-      <div className="find-replace-row find-replace-row-secondary">
-        <div className="find-replace-input-group">
-          <ArrowUpDown className="h-3.5 w-3.5 find-replace-icon" />
+      <div className="flex items-center gap-2 pt-1 border-t border-[var(--color-border)] mt-0.5">
+        <div className="flex items-center flex-1 gap-1.5 px-2 py-1.5 bg-[var(--color-paper-warm)] border border-[var(--color-border)] rounded transition-colors focus-within:border-[var(--color-accent)]">
+          <ArrowUpDown className="h-3.5 w-3.5 text-[var(--color-ink-muted)] shrink-0" />
           <input
             ref={replaceInputRef}
             type="text"
-            className="find-replace-input"
+            className="flex-1 border-none bg-transparent font-sans text-sm text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-muted)]"
             placeholder="Replace..."
             value={replaceTerm}
             onChange={(e) => setReplaceTerm(e.target.value)}
@@ -299,10 +308,10 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
         </div>
 
         {/* Replace actions */}
-        <div className="find-replace-actions">
+        <div className="flex gap-1 ml-auto">
           <button
             type="button"
-            className="find-replace-btn find-replace-action"
+            className="flex items-center justify-center px-2 py-1 font-sans text-xs bg-[var(--color-paper-warm)] border border-[var(--color-border)] rounded text-[var(--color-ink-light)] cursor-pointer transition-colors hover:not-disabled:bg-[var(--color-border)] disabled:opacity-40 disabled:cursor-not-allowed"
             onClick={handleReplace}
             disabled={totalMatches === 0}
             title="Replace current"
@@ -311,7 +320,7 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
           </button>
           <button
             type="button"
-            className="find-replace-btn find-replace-action"
+            className="flex items-center justify-center px-2 py-1 font-sans text-xs bg-[var(--color-paper-warm)] border border-[var(--color-border)] rounded text-[var(--color-ink-light)] cursor-pointer transition-colors hover:not-disabled:bg-[var(--color-border)] disabled:opacity-40 disabled:cursor-not-allowed"
             onClick={handleReplaceAll}
             disabled={totalMatches === 0}
             title="Replace all"

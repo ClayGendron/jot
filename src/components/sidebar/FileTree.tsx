@@ -1,5 +1,6 @@
 import { useCallback, useState, useRef, useEffect, useMemo } from "react";
 import { File } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { readFolderChildren, type FileEntry } from "@/lib/tauri/files";
@@ -82,17 +83,17 @@ function FileTreeItem({
     [entry, onDrop]
   );
 
-  // Build class names for drag states
-  let dragClass = "";
-  if (isDragOver) {
-    dragClass = isDragValid ? "drag-over-valid" : "drag-over-invalid";
-  }
-
   return (
-    <div className="file-tree-item-container">
+    <div>
       <button
         type="button"
-        className={`file-tree-item ${isSelected ? "selected" : ""} ${dragClass}`}
+        className={cn(
+          "flex items-center gap-1 w-[calc(100%-1rem)] mx-2 px-2 py-1.5 border-none bg-transparent text-[var(--color-ink-light)] font-sans text-[0.8125rem] text-left cursor-pointer transition-all rounded",
+          "hover:bg-[var(--color-border)] hover:text-[var(--color-ink)]",
+          isSelected && "bg-[var(--color-accent-soft)] text-[var(--color-ink)]",
+          isDragOver && isDragValid && "bg-[rgba(76,175,80,0.15)] outline-2 outline-dashed outline-[#4caf50] outline-offset-[-2px]",
+          isDragOver && !isDragValid && "bg-[rgba(196,93,62,0.1)] outline-2 outline-dashed outline-[var(--color-accent)] outline-offset-[-2px] cursor-not-allowed"
+        )}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onClick={handleClick}
         onContextMenu={handleContextMenu}
@@ -104,16 +105,21 @@ function FileTreeItem({
         data-testid={`file-tree-item-${entry.name}`}
       >
         {/* Expand/collapse chevron for folders */}
-        <span className="file-tree-chevron">
+        <span className="flex items-center justify-center w-4 h-4 shrink-0">
           {entry.is_dir ? (
             <ChevronIcon expanded={isExpanded} />
           ) : (
-            <span style={{ width: 16 }} />
+            <span className="w-4" />
           )}
         </span>
 
         {/* File/folder icon */}
-        <span className="file-tree-icon">
+        <span className={cn(
+          "flex items-center justify-center w-4 h-4 shrink-0 text-[var(--color-ink-muted)]",
+          (isSelected || isDragOver) && "text-[var(--color-accent)]",
+          isDragOver && isDragValid && "text-[#4caf50]",
+          isDragOver && !isDragValid && "text-[var(--color-accent)]"
+        )}>
           {entry.is_dir ? (
             <FolderIcon open={isExpanded} />
           ) : (
@@ -122,22 +128,22 @@ function FileTreeItem({
         </span>
 
         {/* Name */}
-        <span className="file-tree-name">{entry.name}</span>
+        <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{entry.name}</span>
       </button>
 
       {/* Children */}
       {entry.is_dir && isExpanded && (
-        <div className="file-tree-children">
+        <div>
           {isLoading ? (
             <div
-              className="file-tree-loading"
+              className="text-xs text-[var(--color-ink-muted)] italic px-2 py-1"
               style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
             >
               Loading...
             </div>
           ) : entry.children && entry.children.length === 0 ? (
             <div
-              className="file-tree-empty"
+              className="text-xs text-[var(--color-ink-muted)] italic px-2 py-1"
               style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
             >
               Empty folder
@@ -450,9 +456,9 @@ export function FileTree({
 
   if (fileTree.length === 0) {
     return (
-      <div className="file-tree-empty-state">
-        <p>No files yet</p>
-        <p className="file-tree-hint">
+      <div className="flex flex-col items-center justify-center px-4 py-8 text-center text-[var(--color-ink-muted)] font-sans">
+        <p className="m-0 text-sm">No files yet</p>
+        <p className="text-xs mt-2 opacity-70">
           Create a new file or open a folder
         </p>
       </div>
@@ -461,7 +467,7 @@ export function FileTree({
 
   return (
     <div
-      className="file-tree"
+      className="flex-1 overflow-y-auto py-2"
       data-testid="file-tree"
       onDragOver={handleRootDragOver}
       onDrop={handleRootDrop}
@@ -491,17 +497,35 @@ export function FileTree({
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="file-tree-context-menu"
+          className="fixed z-[1000] min-w-40 bg-[var(--color-paper)] border border-[var(--color-border)] rounded-lg shadow-lg py-2 animate-in fade-in-0 zoom-in-95"
           style={{
             top: contextMenu.y,
             left: contextMenu.x,
           }}
         >
-          <button onClick={handleCreateFile}>New File</button>
-          <button onClick={handleCreateFolder}>New Folder</button>
-          <div className="context-menu-divider" />
-          <button onClick={handleRename}>Rename</button>
-          <button onClick={handleDelete} className="danger">
+          <button
+            onClick={handleCreateFile}
+            className="block w-full px-4 py-2 border-none bg-transparent text-[var(--color-ink)] font-sans text-[0.8125rem] text-left cursor-pointer transition-colors hover:bg-[var(--color-paper-warm)]"
+          >
+            New File
+          </button>
+          <button
+            onClick={handleCreateFolder}
+            className="block w-full px-4 py-2 border-none bg-transparent text-[var(--color-ink)] font-sans text-[0.8125rem] text-left cursor-pointer transition-colors hover:bg-[var(--color-paper-warm)]"
+          >
+            New Folder
+          </button>
+          <div className="h-px bg-[var(--color-border)] my-2" />
+          <button
+            onClick={handleRename}
+            className="block w-full px-4 py-2 border-none bg-transparent text-[var(--color-ink)] font-sans text-[0.8125rem] text-left cursor-pointer transition-colors hover:bg-[var(--color-paper-warm)]"
+          >
+            Rename
+          </button>
+          <button
+            onClick={handleDelete}
+            className="block w-full px-4 py-2 border-none bg-transparent text-[#c45d3e] font-sans text-[0.8125rem] text-left cursor-pointer transition-colors hover:bg-[rgba(196,93,62,0.1)]"
+          >
             Delete
           </button>
         </div>
@@ -519,7 +543,10 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
       height="16"
       viewBox="0 0 16 16"
       fill="none"
-      className={`chevron-icon ${expanded ? "expanded" : ""}`}
+      className={cn(
+        "text-[var(--color-ink-muted)] transition-transform",
+        expanded && "rotate-90"
+      )}
     >
       <path
         d="M6 4L10 8L6 12"

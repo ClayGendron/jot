@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Folder, FolderOpen, Star, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { RecentWorkspace } from "@/lib/settings/types";
 
 /**
@@ -29,30 +30,35 @@ export function WelcomeScreen({
   const hasRecent = recentWorkspaces.length > 0;
 
   return (
-    <div className="welcome-screen">
-      <div className="welcome-content">
+    <div className="flex items-center justify-center h-[calc(100vh-3rem)] p-8 animate-in fade-in-0 slide-in-from-bottom-2 duration-500">
+      <div className="max-w-[480px] w-full">
         {/* Header */}
-        <header className="welcome-header">
-          <h1 className="welcome-title">Jot</h1>
-          <p className="welcome-tagline">A place to think</p>
+        <header className="text-center mb-10">
+          <h1 className="font-serif text-[3.5rem] font-light text-[var(--color-ink)] m-0 tracking-[-0.03em]">Jot</h1>
+          <p className="font-serif text-lg italic text-[var(--color-ink-muted)] mt-2">A place to think</p>
         </header>
 
         {/* Actions */}
-        <section className="welcome-actions">
-          <button className="welcome-action-btn primary" onClick={onOpenFolder}>
+        <section className="text-center mb-8">
+          <button
+            className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-accent)] text-white font-sans text-sm font-medium rounded-lg cursor-pointer transition-all hover:opacity-90 hover:-translate-y-0.5"
+            onClick={onOpenFolder}
+          >
             <Folder className="h-4 w-4" />
             <span>Open Folder</span>
           </button>
-          <p className="welcome-shortcut">
-            <kbd>⌘</kbd> + <kbd>O</kbd>
+          <p className="font-sans text-xs text-[var(--color-ink-muted)] mt-3">
+            <kbd className="px-1.5 py-0.5 bg-[var(--color-border)] rounded text-[0.6875rem]">⌘</kbd>
+            {" + "}
+            <kbd className="px-1.5 py-0.5 bg-[var(--color-border)] rounded text-[0.6875rem]">O</kbd>
           </p>
         </section>
 
         {/* Recent Workspaces */}
         {hasRecent && (
-          <section className="welcome-recent">
-            <h2 className="welcome-section-title">Recent</h2>
-            <ul className="welcome-recent-list">
+          <section className="mt-8">
+            <h2 className="font-sans text-xs font-semibold uppercase tracking-wide text-[var(--color-ink-muted)] mb-3 px-1">Recent</h2>
+            <ul className="list-none p-0 m-0 space-y-1">
               {recentWorkspaces.map((workspace) => (
                 <RecentWorkspaceItem
                   key={workspace.path}
@@ -75,16 +81,13 @@ export function WelcomeScreen({
 
         {/* Empty state for no recent */}
         {!hasRecent && (
-          <section className="welcome-empty">
-            <p className="welcome-empty-text">
+          <section className="text-center mt-8">
+            <p className="font-sans text-sm text-[var(--color-ink-muted)]">
               Open a folder to start organizing your markdown notes.
             </p>
           </section>
         )}
       </div>
-
-      {/* Subtle decorative element */}
-      <div className="welcome-decoration" aria-hidden="true" />
     </div>
   );
 }
@@ -113,31 +116,35 @@ function RecentWorkspaceItem({
   }, [workspace.path]);
 
   return (
-    <li className="welcome-recent-item">
+    <li className="flex items-center rounded-lg hover:bg-[var(--color-paper-warm)] transition-colors group">
       <button
-        className="welcome-recent-item-main"
+        className="flex items-center flex-1 gap-3 px-3 py-2.5 border-none bg-transparent cursor-pointer text-left"
         onClick={onOpen}
         title={workspace.path}
       >
-        <div className="welcome-recent-item-icon">
+        <div className="flex items-center justify-center w-8 h-8 rounded bg-[var(--color-border)] text-[var(--color-ink-muted)]">
           <FolderOpen className="h-4 w-4" />
         </div>
-        <div className="welcome-recent-item-info">
-          <span className="welcome-recent-item-name">
+        <div className="flex-1 min-w-0">
+          <span className="font-sans text-sm font-medium text-[var(--color-ink)] flex items-center gap-1.5">
             {workspace.name}
             {isDefault && (
-              <span className="welcome-recent-item-default" title="Default workspace">
+              <span className="text-[var(--color-accent)]" title="Default workspace">
                 ✦
               </span>
             )}
           </span>
-          <span className="welcome-recent-item-path">{truncatedPath}</span>
+          <span className="font-mono text-xs text-[var(--color-ink-muted)] block mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap">{truncatedPath}</span>
         </div>
-        <span className="welcome-recent-item-date">{formattedDate}</span>
+        <span className="font-sans text-xs text-[var(--color-ink-muted)] shrink-0">{formattedDate}</span>
       </button>
-      <div className="welcome-recent-item-actions">
+      <div className="flex items-center gap-1 pr-2 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
-          className="welcome-recent-action"
+          className={cn(
+            "flex items-center justify-center w-7 h-7 border-none bg-transparent rounded cursor-pointer transition-colors",
+            "text-[var(--color-ink-muted)] hover:bg-[var(--color-border)] hover:text-[var(--color-accent)]",
+            isDefault && "text-[var(--color-accent)]"
+          )}
           onClick={(e) => {
             e.stopPropagation();
             onSetDefault();
@@ -147,7 +154,7 @@ function RecentWorkspaceItem({
           {isDefault ? <Star className="h-4 w-4 fill-current" /> : <Star className="h-4 w-4" />}
         </button>
         <button
-          className="welcome-recent-action danger"
+          className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded cursor-pointer text-[var(--color-ink-muted)] transition-colors hover:bg-[rgba(196,93,62,0.1)] hover:text-[#c45d3e]"
           onClick={(e) => {
             e.stopPropagation();
             onRemove();

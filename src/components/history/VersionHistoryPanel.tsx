@@ -15,7 +15,9 @@ import {
   Check,
   Trash2,
   RotateCcw,
+  Loader2,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   getVersions,
   getVersion,
@@ -152,16 +154,19 @@ export function VersionHistoryPanel({
 
   if (isLoading) {
     return (
-      <div className="version-history-panel">
-        <div className="version-history-header">
-          <h3 className="version-history-title">Version History</h3>
-          <button className="version-history-close" onClick={onClose}>
+      <div className="w-[340px] flex flex-col bg-[var(--color-paper)] border-l border-[var(--color-border)]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-gradient-to-b from-[var(--color-paper-warm)] to-[var(--color-paper)]">
+          <h3 className="font-serif text-base font-semibold text-[var(--color-ink)] m-0">Version History</h3>
+          <button
+            className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded text-[var(--color-ink-muted)] cursor-pointer transition-colors hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]"
+            onClick={onClose}
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="version-history-loading">
-          <div className="version-history-spinner" />
-          <span>Loading history...</span>
+        <div className="flex flex-col items-center justify-center flex-1 gap-3 text-[var(--color-ink-muted)]">
+          <Loader2 className="h-5 w-5 animate-spin text-[var(--color-accent)]" />
+          <span className="font-sans text-sm">Loading history...</span>
         </div>
       </div>
     );
@@ -169,34 +174,41 @@ export function VersionHistoryPanel({
 
   if (error) {
     return (
-      <div className="version-history-panel">
-        <div className="version-history-header">
-          <h3 className="version-history-title">Version History</h3>
-          <button className="version-history-close" onClick={onClose}>
+      <div className="w-[340px] flex flex-col bg-[var(--color-paper)] border-l border-[var(--color-border)]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-gradient-to-b from-[var(--color-paper-warm)] to-[var(--color-paper)]">
+          <h3 className="font-serif text-base font-semibold text-[var(--color-ink)] m-0">Version History</h3>
+          <button
+            className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded text-[var(--color-ink-muted)] cursor-pointer transition-colors hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]"
+            onClick={onClose}
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="version-history-error">
+        <div className="flex flex-col items-center justify-center flex-1 gap-2 px-4 text-center text-[var(--color-error)]">
           <AlertCircle className="h-5 w-5" />
-          <span>{error}</span>
+          <span className="font-sans text-sm">{error}</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="version-history-panel">
+    <div className="w-[340px] flex flex-col bg-[var(--color-paper)] border-l border-[var(--color-border)]">
       {/* Header */}
-      <div className="version-history-header">
-        <div className="version-history-header-left">
-          <h3 className="version-history-title">Version History</h3>
-          <span className="version-history-count">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-gradient-to-b from-[var(--color-paper-warm)] to-[var(--color-paper)]">
+        <div className="flex items-center gap-2">
+          <h3 className="font-serif text-base font-semibold text-[var(--color-ink)] m-0">Version History</h3>
+          <span className="font-mono text-[0.625rem] text-[var(--color-ink-muted)] px-1.5 py-0.5 bg-[var(--color-border)] rounded">
             {versions.length} version{versions.length !== 1 ? "s" : ""}
           </span>
         </div>
-        <div className="version-history-header-actions">
+        <div className="flex items-center gap-1">
           <button
-            className={`version-history-compare-toggle ${compareMode ? "active" : ""}`}
+            className={cn(
+              "flex items-center gap-1.5 px-2 py-1 border border-transparent bg-transparent rounded font-sans text-xs cursor-pointer transition-colors",
+              "hover:bg-[var(--color-paper-warm)] text-[var(--color-ink-muted)]",
+              compareMode && "border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]"
+            )}
             onClick={() => {
               setCompareMode(!compareMode);
               setCompareSelection([]);
@@ -206,7 +218,10 @@ export function VersionHistoryPanel({
             <GitCompare className="h-3.5 w-3.5" />
             <span>Compare</span>
           </button>
-          <button className="version-history-close" onClick={onClose}>
+          <button
+            className="flex items-center justify-center w-7 h-7 border-none bg-transparent rounded text-[var(--color-ink-muted)] cursor-pointer transition-colors hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]"
+            onClick={onClose}
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -214,13 +229,13 @@ export function VersionHistoryPanel({
 
       {/* Compare mode instructions */}
       {compareMode && (
-        <div className="version-history-compare-bar">
-          <span className="version-history-compare-hint">
+        <div className="flex items-center justify-between px-4 py-2 bg-[var(--color-accent-soft)] border-b border-[var(--color-border)]">
+          <span className="font-sans text-xs text-[var(--color-accent)]">
             Select two versions to compare
           </span>
           {compareSelection.length === 2 && (
             <button
-              className="version-history-compare-btn"
+              className="px-2.5 py-1 bg-[var(--color-accent)] text-white font-sans text-xs font-medium rounded cursor-pointer transition-colors hover:opacity-90"
               onClick={handleStartCompare}
             >
               View Diff
@@ -230,61 +245,68 @@ export function VersionHistoryPanel({
       )}
 
       {/* Versions list */}
-      <div className="version-history-content">
+      <div className="flex-1 overflow-y-auto">
         {versions.length === 0 ? (
-          <div className="version-history-empty">
-            <History className="h-8 w-8" />
-            <p className="version-history-empty-title">No versions yet</p>
-            <p className="version-history-empty-hint">
+          <div className="flex flex-col items-center justify-center px-6 py-12 text-center text-[var(--color-ink-muted)]">
+            <History className="h-8 w-8 mb-4 opacity-50" />
+            <p className="font-sans text-sm font-medium text-[var(--color-ink-light)] m-0 mb-1">No versions yet</p>
+            <p className="font-sans text-[0.8125rem] text-[var(--color-ink-muted)] m-0">
               Versions are created automatically when you save
             </p>
           </div>
         ) : (
-          <div className="version-timeline">
+          <div className="py-2">
             {Object.entries(groupedVersions).map(([date, dayVersions]) => (
-              <div key={date} className="version-date-group">
-                <div className="version-date-header">
-                  <span className="version-date-label">{date}</span>
+              <div key={date} className="mb-2">
+                <div className="sticky top-0 z-10 px-4 py-1.5 bg-[var(--color-paper-warm)] border-b border-[var(--color-border)]">
+                  <span className="font-sans text-[0.6875rem] font-semibold text-[var(--color-ink-muted)] uppercase tracking-wide">{date}</span>
                 </div>
                 {dayVersions.map((version) => (
                   <button
                     key={version.id}
                     type="button"
-                    className={`version-item ${
-                      selectedVersion?.id === version.id ? "selected" : ""
-                    } ${compareSelection.includes(version.id) ? "compare-selected" : ""}`}
+                    className={cn(
+                      "relative flex items-start w-full px-4 py-2.5 border-none bg-transparent text-left cursor-pointer transition-colors",
+                      "hover:bg-[var(--color-paper-warm)]",
+                      selectedVersion?.id === version.id && "bg-[var(--color-accent-soft)]",
+                      compareSelection.includes(version.id) && "bg-[var(--color-accent-soft)]"
+                    )}
                     onClick={() => handleSelectVersion(version.id)}
                   >
-                    <div className="version-item-marker">
+                    <div className="flex items-center justify-center w-5 mr-3 pt-1">
                       {compareMode ? (
                         <div
-                          className={`version-checkbox ${
-                            compareSelection.includes(version.id) ? "checked" : ""
-                          }`}
+                          className={cn(
+                            "w-4 h-4 rounded border-2 border-[var(--color-border)] flex items-center justify-center transition-colors",
+                            compareSelection.includes(version.id) && "bg-[var(--color-accent)] border-[var(--color-accent)]"
+                          )}
                         >
-                          {compareSelection.includes(version.id) && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
+                          {compareSelection.includes(version.id) && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
                         </div>
                       ) : (
-                        <div className="version-dot" />
+                        <div className={cn(
+                          "w-2 h-2 rounded-full bg-[var(--color-border)]",
+                          (selectedVersion?.id === version.id) && "bg-[var(--color-accent)]"
+                        )} />
                       )}
                     </div>
-                    <div className="version-item-content">
-                      <div className="version-item-time">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-mono text-xs text-[var(--color-ink-light)]">
                         {new Date(version.created_at).toLocaleTimeString(undefined, {
                           hour: "numeric",
                           minute: "2-digit",
                         })}
                       </div>
-                      <div className="version-item-preview">{version.preview}</div>
-                      <div className="version-item-meta">
+                      <div className="font-sans text-sm text-[var(--color-ink)] mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap">{version.preview}</div>
+                      <div className="font-mono text-[0.6875rem] text-[var(--color-ink-muted)] mt-1 flex items-center gap-1">
                         <span>{formatWordCount(version.word_count)}</span>
-                        <span className="version-meta-dot">·</span>
+                        <span>·</span>
                         <span>{formatByteSize(version.byte_size)}</span>
                       </div>
                     </div>
                     {!compareMode && (
                       <button
-                        className="version-item-delete"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center w-6 h-6 border-none bg-transparent rounded text-[var(--color-ink-muted)] cursor-pointer opacity-0 transition-opacity hover:bg-[var(--color-border)] hover:text-[var(--color-error)] group-hover:opacity-100 [.version-item:hover_&]:opacity-100"
                         onClick={(e) => handleDelete(version.id, e)}
                         title="Delete version"
                       >
@@ -301,14 +323,14 @@ export function VersionHistoryPanel({
 
       {/* Preview panel */}
       {selectedVersion && !compareMode && (
-        <div className="version-preview">
-          <div className="version-preview-header">
-            <span className="version-preview-time">
+        <div className="border-t border-[var(--color-border)] max-h-[40%] flex flex-col bg-[var(--color-paper-warm)]">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-[var(--color-border)]">
+            <span className="font-sans text-xs text-[var(--color-ink-muted)]">
               {formatVersionDate(selectedVersion.created_at)}
             </span>
-            <div className="version-preview-actions">
+            <div>
               <button
-                className="version-preview-restore"
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--color-accent)] text-white font-sans text-xs font-medium rounded cursor-pointer transition-colors hover:opacity-90"
                 onClick={handleRestore}
               >
                 <RotateCcw className="h-3.5 w-3.5" />
@@ -316,8 +338,8 @@ export function VersionHistoryPanel({
               </button>
             </div>
           </div>
-          <div className="version-preview-content">
-            <pre>{selectedVersion.content}</pre>
+          <div className="flex-1 overflow-y-auto p-4">
+            <pre className="font-mono text-xs text-[var(--color-ink-light)] leading-relaxed whitespace-pre-wrap m-0">{selectedVersion.content}</pre>
           </div>
         </div>
       )}

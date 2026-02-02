@@ -13,7 +13,9 @@ import {
   ChevronRight,
   ChevronDown,
   File,
+  Loader2,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useSearchStore } from "@/stores/searchStore";
 import {
   searchWorkspace,
@@ -184,12 +186,12 @@ export function GlobalSearchPanel({
   );
 
   return (
-    <div className="global-search-panel">
+    <div className="fixed top-0 right-0 bottom-0 w-[380px] z-[200] flex flex-col bg-[var(--color-paper)] border-l border-[var(--color-border)] shadow-lg">
       {/* Header */}
-      <div className="global-search-header">
-        <h3 className="global-search-title">Search</h3>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)]">
+        <h3 className="font-sans text-sm font-semibold text-[var(--color-ink)] m-0">Search</h3>
         <button
-          className="global-search-close"
+          className="flex items-center justify-center p-1 border-none bg-transparent rounded text-[var(--color-ink-light)] cursor-pointer transition-colors hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]"
           onClick={onClose}
           title="Close (Escape)"
         >
@@ -198,14 +200,14 @@ export function GlobalSearchPanel({
       </div>
 
       {/* Search inputs */}
-      <div className="global-search-inputs">
-        <div className="global-search-input-row">
-          <div className="global-search-input-group">
-            <Search className="h-3.5 w-3.5 global-search-icon" />
+      <div className="px-4 py-3 border-b border-[var(--color-border)]">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center flex-1 gap-1.5 px-2.5 py-2 bg-[var(--color-paper-warm)] border border-[var(--color-border)] rounded-md transition-colors focus-within:border-[var(--color-accent)]">
+            <Search className="h-3.5 w-3.5 text-[var(--color-ink-muted)] shrink-0" />
             <input
               ref={searchInputRef}
               type="text"
-              className="global-search-input"
+              className="flex-1 border-none bg-transparent font-sans text-sm text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-muted)]"
               placeholder="Search files..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -214,10 +216,14 @@ export function GlobalSearchPanel({
           </div>
         </div>
 
-        <div className="global-search-options-row">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
-            className={`global-search-toggle ${caseSensitive ? "active" : ""}`}
+            className={cn(
+              "flex items-center justify-center px-2 py-1 border border-[var(--color-border)] bg-transparent rounded font-mono text-xs font-semibold text-[var(--color-ink-light)] cursor-pointer transition-colors",
+              "hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]",
+              caseSensitive && "bg-[var(--color-accent-soft)] border-[var(--color-accent)] text-[var(--color-accent)]"
+            )}
             onClick={toggleCaseSensitive}
             title="Case sensitive"
           >
@@ -225,16 +231,20 @@ export function GlobalSearchPanel({
           </button>
           <button
             type="button"
-            className={`global-search-toggle ${useRegex ? "active" : ""}`}
+            className={cn(
+              "flex items-center justify-center px-2 py-1 border border-[var(--color-border)] bg-transparent rounded font-mono text-xs font-semibold text-[var(--color-ink-light)] cursor-pointer transition-colors",
+              "hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]",
+              useRegex && "bg-[var(--color-accent-soft)] border-[var(--color-accent)] text-[var(--color-accent)]"
+            )}
             onClick={toggleUseRegex}
             title="Use regex"
           >
             .*
           </button>
-          <div className="global-search-path-filter">
+          <div className="flex-1">
             <input
               type="text"
-              className="global-search-path-input"
+              className="w-full px-2 py-1 border border-[var(--color-border)] bg-transparent rounded font-mono text-xs text-[var(--color-ink)] outline-none transition-colors focus:border-[var(--color-accent)] placeholder:text-[var(--color-ink-muted)]"
               placeholder="Path filter (e.g., docs/*.md)"
               value={pathFilter}
               onChange={(e) => setPathFilter(e.target.value)}
@@ -245,57 +255,57 @@ export function GlobalSearchPanel({
 
       {/* Results summary */}
       {searchTerm.length >= 2 && !isSearching && (
-        <div className="global-search-summary">
+        <div className="px-4 py-2 font-sans text-xs text-[var(--color-ink-muted)] bg-[var(--color-paper-warm)] border-b border-[var(--color-border)]">
           {totalMatches > 0 ? (
             <span>
               {totalMatches} result{totalMatches !== 1 ? "s" : ""} in {fileCount}{" "}
               file{fileCount !== 1 ? "s" : ""}
             </span>
           ) : searchError ? (
-            <span className="global-search-error">{searchError}</span>
+            <span className="text-[#c45d3e]">{searchError}</span>
           ) : (
-            <span className="global-search-no-results">No results found</span>
+            <span className="italic">No results found</span>
           )}
         </div>
       )}
 
       {/* Results list */}
-      <div className="global-search-results">
+      <div className="flex-1 overflow-y-auto py-2">
         {results.map((file) => (
-          <div key={file.filePath} className="global-search-file">
+          <div key={file.filePath} className="mb-1">
             <button
               type="button"
-              className="global-search-file-header"
+              className="flex items-center w-full gap-1.5 px-4 py-2 border-none bg-transparent font-sans text-[0.8125rem] text-[var(--color-ink)] text-left cursor-pointer transition-colors hover:bg-[var(--color-paper-warm)]"
               onClick={() => toggleFileExpanded(file.filePath)}
             >
-              <span className="global-search-file-chevron">
+              <span className="text-[var(--color-ink-muted)] shrink-0">
                 {expandedFiles.has(file.filePath) ? (
                   <ChevronDown className="h-3 w-3" />
                 ) : (
                   <ChevronRight className="h-3 w-3" />
                 )}
               </span>
-              <File className="h-3 w-3 global-search-file-icon" />
-              <span className="global-search-file-path">
+              <File className="h-3 w-3 text-[var(--color-ink-muted)] shrink-0" />
+              <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
                 {getDisplayPath(file.filePath)}
               </span>
-              <span className="global-search-match-count">
+              <span className="px-1.5 py-0.5 bg-[var(--color-paper-warm)] rounded-full font-mono text-[0.6875rem] text-[var(--color-ink-muted)]">
                 {file.matches.length}
               </span>
             </button>
 
             {expandedFiles.has(file.filePath) && (
-              <div className="global-search-matches">
+              <div className="pl-6">
                 {file.matches.map((match, idx) => (
                   <button
                     key={`${file.filePath}-${match.lineNumber}-${idx}`}
                     type="button"
-                    className="global-search-match"
+                    className="flex items-start w-full gap-2 px-4 py-1.5 border-none bg-transparent font-mono text-xs text-[var(--color-ink)] text-left cursor-pointer transition-colors hover:bg-[var(--color-paper-warm)]"
                     onClick={() =>
                       handleMatchClick(file.filePath, match.lineNumber)
                     }
                   >
-                    <span className="global-search-line-num">
+                    <span className="shrink-0 text-[var(--color-ink-muted)] min-w-10">
                       L{match.lineNumber}
                     </span>
                     <MatchPreview match={match} />
@@ -308,10 +318,10 @@ export function GlobalSearchPanel({
 
         {/* Empty state */}
         {searchTerm.length < 2 && (
-          <div className="global-search-empty">
-            <Search className="h-8 w-8" strokeWidth={1.5} />
-            <p className="global-search-empty-title">Search your workspace</p>
-            <p className="global-search-empty-hint">
+          <div className="flex flex-col items-center justify-center px-6 py-12 text-center text-[var(--color-ink-muted)]">
+            <Search className="h-8 w-8 mb-4 opacity-50" strokeWidth={1.5} />
+            <p className="font-sans text-sm font-medium text-[var(--color-ink-light)] m-0 mb-1">Search your workspace</p>
+            <p className="font-sans text-[0.8125rem] text-[var(--color-ink-muted)] m-0">
               Type at least 2 characters to search
             </p>
           </div>
@@ -337,13 +347,13 @@ function MatchPreview({ match }: { match: SearchMatch }) {
   const after = lineContent.slice(matchEnd, displayEnd);
 
   return (
-    <span className="global-search-match-text">
-      {displayStart > 0 && <span className="global-search-ellipsis">…</span>}
-      <span className="global-search-context">{before}</span>
-      <mark className="global-search-highlight">{matched}</mark>
-      <span className="global-search-context">{after}</span>
+    <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap leading-relaxed">
+      {displayStart > 0 && <span className="text-[var(--color-ink-muted)]">…</span>}
+      <span className="text-[var(--color-ink-light)]">{before}</span>
+      <mark className="bg-[var(--color-highlight)] text-[var(--color-ink)] px-0.5 rounded-sm font-semibold">{matched}</mark>
+      <span className="text-[var(--color-ink-light)]">{after}</span>
       {displayEnd < lineContent.length && (
-        <span className="global-search-ellipsis">…</span>
+        <span className="text-[var(--color-ink-muted)]">…</span>
       )}
     </span>
   );
@@ -352,7 +362,7 @@ function MatchPreview({ match }: { match: SearchMatch }) {
 // Helper components
 
 function LoadingSpinner() {
-  return <div className="global-search-spinner" />;
+  return <Loader2 className="h-3.5 w-3.5 text-[var(--color-accent)] animate-spin" />;
 }
 
 export default GlobalSearchPanel;

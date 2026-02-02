@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { Check, Moon } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { THEME_LIST, type ThemePreset, type ThemeName } from "@/lib/settings/themes";
 
 interface ThemePickerProps {
@@ -17,7 +18,7 @@ interface ThemePickerProps {
  */
 export function ThemePicker({ selectedTheme, onSelectTheme }: ThemePickerProps) {
   return (
-    <div className="theme-picker">
+    <div className="grid grid-cols-3 gap-2">
       {THEME_LIST.map((theme) => (
         <ThemeCard
           key={theme.id}
@@ -52,7 +53,11 @@ function ThemeCard({ theme, isSelected, onSelect }: ThemeCardProps) {
 
   return (
     <button
-      className={`theme-card ${isSelected ? "selected" : ""}`}
+      className={cn(
+        "relative border-2 border-[var(--color-border)] rounded-lg overflow-hidden cursor-pointer transition-all",
+        "hover:border-[var(--color-border-strong)] hover:-translate-y-0.5 hover:shadow-sm",
+        isSelected && "border-[var(--color-accent)] shadow-[0_0_0_1px_var(--color-accent)]"
+      )}
       onClick={onSelect}
       onKeyDown={handleKeyDown}
       role="radio"
@@ -61,39 +66,39 @@ function ThemeCard({ theme, isSelected, onSelect }: ThemeCardProps) {
     >
       {/* Color preview swatch */}
       <div
-        className="theme-card-preview"
+        className="relative h-12 p-2"
         style={{ backgroundColor: theme.colors.paper }}
       >
         {/* Sample text lines */}
         <div
-          className="theme-card-line theme-card-line-title"
-          style={{ backgroundColor: theme.colors.ink }}
+          className="h-1.5 rounded-sm mb-1.5"
+          style={{ backgroundColor: theme.colors.ink, width: "60%" }}
         />
         <div
-          className="theme-card-line theme-card-line-text"
-          style={{ backgroundColor: theme.colors.inkLight }}
+          className="h-1 rounded-sm mb-1 opacity-50"
+          style={{ backgroundColor: theme.colors.inkLight, width: "80%" }}
         />
         <div
-          className="theme-card-line theme-card-line-text short"
-          style={{ backgroundColor: theme.colors.inkLight }}
+          className="h-1 rounded-sm opacity-50"
+          style={{ backgroundColor: theme.colors.inkLight, width: "50%" }}
         />
         {/* Accent indicator */}
         <div
-          className="theme-card-accent"
+          className="absolute bottom-1.5 right-1.5 w-2.5 h-2.5 rounded-full"
           style={{ backgroundColor: theme.colors.accent }}
         />
       </div>
 
       {/* Theme info */}
-      <div className="theme-card-info">
-        <span className="theme-card-name">{theme.name}</span>
-        {theme.isDark && <Moon className="h-3 w-3 theme-card-dark-icon" />}
+      <div className="flex items-center justify-between px-2 py-1.5 bg-[var(--color-paper-warm)]">
+        <span className="font-sans text-xs font-medium text-[var(--color-ink)]">{theme.name}</span>
+        {theme.isDark && <Moon className="h-3 w-3 text-[var(--color-ink-muted)]" />}
       </div>
 
       {/* Selected indicator */}
       {isSelected && (
-        <div className="theme-card-check">
-          <Check className="h-4 w-4" />
+        <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-[var(--color-accent)] flex items-center justify-center">
+          <Check className="h-3 w-3 text-white" />
         </div>
       )}
     </button>
