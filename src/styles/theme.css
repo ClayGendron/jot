@@ -1,0 +1,230 @@
+/*
+ * Jot - A refined markdown editor
+ *
+ * Aesthetic: Editorial minimalism meets warm paper textures
+ * Typography: Distinctive serif for prose, clean sans for UI
+ */
+
+@theme {
+  /* Typography */
+  --font-serif: "Crimson Pro", Georgia, serif;
+  --font-sans: "Open Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Light theme - Warm paper tones */
+  --color-paper: #faf8f5;
+  --color-paper-warm: #f5f2eb;
+  --color-ink: #1a1a1a;
+  --color-ink-light: #4a4a4a;
+  --color-ink-muted: #8a8a8a;
+  --color-accent: #c45d3e;
+  --color-accent-soft: #e8b4a4;
+  --color-highlight: #fff3cd;
+  --color-border: #e5e2dc;
+  --color-border-strong: #d0cdc5;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+
+  /* Spacing */
+  --spacing-page: clamp(1rem, 5vw, 4rem);
+
+  /* Transitions */
+  --transition-fast: 120ms ease;
+  --transition-smooth: 200ms ease;
+}
+
+/* Dark theme - System preference (fallback when no explicit theme set) */
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-paper: #1a1a1a;
+    --color-paper-warm: #222222;
+    --color-ink: #e8e6e3;
+    --color-ink-light: #b0ada8;
+    --color-ink-muted: #6a6a6a;
+    --color-accent: #e07a5f;
+    --color-accent-soft: #5c3d34;
+    --color-highlight: #3d3520;
+    --color-border: #2a2a2a;
+    --color-border-strong: #3a3a3a;
+  }
+}
+
+/* ========================================================================
+   Theme Presets
+   Each theme defines a complete color palette for a distinct writing mood.
+   Themes are applied via data-theme attribute on <html>.
+   ======================================================================== */
+
+/* Paper theme - Warm cream tones (default light) */
+html[data-theme="paper"],
+html[data-theme="light"] {
+  --color-paper: #faf8f5;
+  --color-paper-warm: #f5f2eb;
+  --color-ink: #1a1a1a;
+  --color-ink-light: #4a4a4a;
+  --color-ink-muted: #8a8a8a;
+  --color-accent: #c45d3e;
+  --color-accent-soft: #e8b4a4;
+  --color-highlight: #fff3cd;
+  --color-border: #e5e2dc;
+  --color-border-strong: #d0cdc5;
+}
+
+/* Midnight theme - Deep dark mode (default dark) */
+html[data-theme="midnight"],
+html[data-theme="dark"] {
+  --color-paper: #1a1a1a;
+  --color-paper-warm: #222222;
+  --color-ink: #e8e6e3;
+  --color-ink-light: #b0ada8;
+  --color-ink-muted: #6a6a6a;
+  --color-accent: #e07a5f;
+  --color-accent-soft: #5c3d34;
+  --color-highlight: #3d3520;
+  --color-border: #2a2a2a;
+  --color-border-strong: #3a3a3a;
+}
+
+/* Sepia theme - Aged paper tones for relaxed reading */
+html[data-theme="sepia"] {
+  --color-paper: #f4ecd8;
+  --color-paper-warm: #ebe3ca;
+  --color-ink: #3d3028;
+  --color-ink-light: #5c5040;
+  --color-ink-muted: #8a7e6a;
+  --color-accent: #8b5a2b;
+  --color-accent-soft: #d4b896;
+  --color-highlight: #e6d5a8;
+  --color-border: #d9cfb8;
+  --color-border-strong: #c4b89e;
+}
+
+/* High Contrast theme - Maximum readability for accessibility */
+html[data-theme="highContrast"] {
+  --color-paper: #ffffff;
+  --color-paper-warm: #f5f5f5;
+  --color-ink: #000000;
+  --color-ink-light: #333333;
+  --color-ink-muted: #666666;
+  --color-accent: #0052cc;
+  --color-accent-soft: #cce0ff;
+  --color-highlight: #fff176;
+  --color-border: #cccccc;
+  --color-border-strong: #999999;
+}
+
+/* Olive theme - Muted sage tones for calm writing */
+html[data-theme="olive"] {
+  --color-paper: #f5f7f4;
+  --color-paper-warm: #edf0ea;
+  --color-ink: #2d3329;
+  --color-ink-light: #4a5245;
+  --color-ink-muted: #7a8574;
+  --color-accent: #5f7a5e;
+  --color-accent-soft: #b8cab5;
+  --color-highlight: #e5ecd8;
+  --color-border: #d4dbd0;
+  --color-border-strong: #bfc8b8;
+}
+
+/* ========================================================================
+   Custom Accent Color Override
+   When data-accent-color and data-accent-soft are set, override theme accent
+   ======================================================================== */
+html[data-accent-color] {
+  --color-accent: var(--custom-accent-color, var(--color-accent));
+  --color-accent-soft: var(--custom-accent-soft, var(--color-accent-soft));
+}
+
+/* ========================================================================
+   shadcn/ui Compatibility Layer
+   Maps Jot's semantic tokens to shadcn's expected variable names.
+
+   IMPORTANT: All theme presets MUST set --color-* variables (not direct colors).
+   shadcn components read these mapped variables, which reference --color-*.
+   ======================================================================== */
+
+:root {
+  /* Surface colors */
+  --background: var(--color-paper);
+  --foreground: var(--color-ink);
+  --muted: var(--color-paper-warm);
+  --muted-foreground: var(--color-ink-muted);
+
+  /* Popover/Card surfaces */
+  --popover: var(--color-paper);
+  --popover-foreground: var(--color-ink);
+  --card: var(--color-paper);
+  --card-foreground: var(--color-ink);
+
+  /* Borders and inputs */
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-accent);
+
+  /* Primary action color */
+  --primary: var(--color-accent);
+  --primary-foreground: #ffffff;
+
+  /* Secondary elements */
+  --secondary: var(--color-paper-warm);
+  --secondary-foreground: var(--color-ink);
+
+  /* Accent highlights */
+  --accent: var(--color-accent-soft);
+  --accent-foreground: var(--color-ink);
+
+  /* Destructive actions */
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Border radius */
+  --radius: 6px;
+}
+
+/* High Contrast theme overrides for WCAG compliance */
+html[data-theme="highContrast"] {
+  --primary-foreground: #ffffff;
+  --destructive: #cc0000;
+}
+
+/* ========================================================================
+   Tailwind v4 Theme Inline Block
+   Maps CSS variables to Tailwind color utilities (bg-*, text-*, border-*, etc.)
+   This enables classes like `bg-background`, `text-foreground`, etc.
+   ======================================================================== */
+
+@theme inline {
+  /* Map shadcn variables to Tailwind colors */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Border radius utilities */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}

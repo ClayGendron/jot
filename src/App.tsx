@@ -57,7 +57,19 @@ import type { ThemeName } from "@/lib/settings/themes";
 import { getRelativePath, joinFsPaths, getParentPath } from "@/lib/path/pathUtils";
 import { saveDocumentPipeline, saveAllDirtyTabs } from "@/services/saveService";
 import { indexFolder } from "@/services/semanticIndexingService";
-import "./index.css";
+import {
+  PanelLeft,
+  FolderOpen,
+  FilePlus,
+  Folder,
+  List,
+  Link,
+  Clock,
+  Maximize,
+  Settings,
+  Upload,
+} from "lucide-react";
+import "./styles/index.css";
 
 type SidebarTab = "files" | "outline" | "backlinks" | "related";
 
@@ -1330,14 +1342,14 @@ function App() {
               title="New file"
               disabled={!workspacePath}
             >
-              <NewFileIcon />
+              <FilePlus className="h-4 w-4" />
             </button>
             <button
               className="sidebar-action-btn"
               onClick={handleOpenFolder}
               title="Open folder"
             >
-              <FolderOpenIcon />
+              <FolderOpen className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -1348,7 +1360,7 @@ function App() {
             className={`sidebar-tab ${activeSidebarTab === "files" ? "active" : ""}`}
             onClick={() => setActiveSidebarTab("files")}
           >
-            <FilesTabIcon />
+            <Folder className="h-3.5 w-3.5" />
             <span>Files</span>
           </button>
           <button
@@ -1357,7 +1369,7 @@ function App() {
             disabled={!filePath}
             title={!filePath ? "Open a file to see outline" : undefined}
           >
-            <OutlineTabIcon />
+            <List className="h-3.5 w-3.5" />
             <span>Outline</span>
           </button>
           <button
@@ -1366,7 +1378,7 @@ function App() {
             disabled={!filePath}
             title={!filePath ? "Open a file to see backlinks" : undefined}
           >
-            <BacklinksTabIcon />
+            <Link className="h-3.5 w-3.5" />
             <span>Links</span>
           </button>
           {semanticEnabled && (
@@ -1387,7 +1399,7 @@ function App() {
           <>
             {!workspacePath ? (
               <button className="open-folder-btn" onClick={handleOpenFolder}>
-                <FolderOpenIcon />
+                <FolderOpen className="h-4 w-4" />
                 <span>Open Folder</span>
               </button>
             ) : isLoading ? (
@@ -1453,7 +1465,7 @@ function App() {
               onClick={handleToggleSidebar}
               title={sidebarOpen ? "Hide sidebar (⌘B)" : "Show sidebar (⌘B)"}
             >
-              <SidebarIcon />
+              <PanelLeft className="h-5 w-5" />
             </button>
             <span className="document-title">
               {filePath ? getFileName(filePath) : "Untitled"}
@@ -1468,7 +1480,7 @@ function App() {
                 onClick={() => setShowExport(true)}
                 title="Export"
               >
-                <ExportIcon />
+                <Upload className="h-4 w-4" />
               </button>
             )}
             <button
@@ -1476,14 +1488,14 @@ function App() {
               onClick={() => setShowSettings(true)}
               title="Settings"
             >
-              <SettingsIcon />
+              <Settings className="h-4 w-4" />
             </button>
             <button
               className={`title-bar-btn ${zenMode ? "active" : ""}`}
               onClick={toggleZenMode}
               title={zenMode ? "Exit zen mode (Esc)" : "Zen mode"}
             >
-              <ZenModeIcon />
+              <Maximize className="h-4 w-4" />
             </button>
             {filePath && workspacePath && (
               <button
@@ -1491,7 +1503,7 @@ function App() {
                 onClick={() => setShowHistory(!showHistory)}
                 title="Version history"
               >
-                <HistoryIcon />
+                <Clock className="h-4 w-4" />
               </button>
             )}
           </div>
@@ -1651,120 +1663,7 @@ function App() {
   );
 }
 
-// Icons
-
-function SidebarIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <line x1="9" y1="3" x2="9" y2="21" />
-    </svg>
-  );
-}
-
-function FolderOpenIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-      <path d="M2 10h20" />
-    </svg>
-  );
-}
-
-function NewFileIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="12" y1="18" x2="12" y2="12" />
-      <line x1="9" y1="15" x2="15" y2="15" />
-    </svg>
-  );
-}
-
-function FilesTabIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-    </svg>
-  );
-}
-
-function OutlineTabIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="8" y1="6" x2="21" y2="6" />
-      <line x1="8" y1="12" x2="21" y2="12" />
-      <line x1="8" y1="18" x2="21" y2="18" />
-      <line x1="3" y1="6" x2="3.01" y2="6" />
-      <line x1="3" y1="12" x2="3.01" y2="12" />
-      <line x1="3" y1="18" x2="3.01" y2="18" />
-    </svg>
-  );
-}
-
-function BacklinksTabIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-    </svg>
-  );
-}
+// Custom Icons - kept for unique designs without Lucide equivalents
 
 function RelatedDocsTabIcon() {
   return (
@@ -1780,81 +1679,6 @@ function RelatedDocsTabIcon() {
     >
       <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" />
       <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" />
-    </svg>
-  );
-}
-
-function HistoryIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  );
-}
-
-function ZenModeIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M8 3H5a2 2 0 0 0-2 2v3" />
-      <path d="M21 8V5a2 2 0 0 0-2-2h-3" />
-      <path d="M3 16v3a2 2 0 0 0 2 2h3" />
-      <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
-    </svg>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function ExportIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="17 8 12 3 7 8" />
-      <line x1="12" y1="3" x2="12" y2="15" />
     </svg>
   );
 }

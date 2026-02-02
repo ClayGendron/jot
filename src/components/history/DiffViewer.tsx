@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { X } from "lucide-react";
 import {
   diffVersions,
   getVersion,
@@ -112,7 +113,7 @@ export function DiffViewer({
             </button>
           </div>
           <button className="diff-viewer-close" onClick={onClose}>
-            <CloseIcon />
+            <X className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -257,24 +258,6 @@ function DiffLineRow({
       </span>
       <span className="diff-line-content">{line.content}</span>
     </div>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
   );
 }
 

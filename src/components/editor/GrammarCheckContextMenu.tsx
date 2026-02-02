@@ -10,6 +10,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { Editor } from "@tiptap/react";
+import { AlertCircle, Check, SkipForward, Ban } from "lucide-react";
 import type { GrammarIssue } from "@/lib/grammarcheck";
 import { addIgnoredRule } from "@/lib/grammarcheck/ignoredRules";
 
@@ -115,7 +116,7 @@ export function GrammarCheckContextMenu({
         <>
           {/* Header */}
           <div className="grammar-context-menu-header">
-            <GrammarIcon />
+            <AlertCircle className="h-4 w-4 grammar-context-menu-icon" />
             <span className="grammar-context-menu-category">{issue.category}</span>
           </div>
 
@@ -142,7 +143,7 @@ export function GrammarCheckContextMenu({
                     onClick={() => handleSuggestionClick(suggestion)}
                     role="menuitem"
                   >
-                    <CheckIcon />
+                    <Check className="h-4 w-4" />
                     <span>"{suggestion}"</span>
                   </button>
                 ))}
@@ -158,7 +159,7 @@ export function GrammarCheckContextMenu({
             onClick={handleIgnore}
             role="menuitem"
           >
-            <SkipIcon />
+            <SkipForward className="h-4 w-4" />
             <span>Ignore</span>
           </button>
 
@@ -167,91 +168,12 @@ export function GrammarCheckContextMenu({
             onClick={handleAlwaysIgnore}
             role="menuitem"
           >
-            <IgnoreRuleIcon />
+            <Ban className="h-4 w-4" />
             <span>Always ignore this rule</span>
           </button>
         </>
       )}
     </div>
-  );
-}
-
-// Icons
-
-function GrammarIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="grammar-context-menu-icon"
-    >
-      <path d="M12 2v8" />
-      <path d="m4.93 10.93 1.41 1.41" />
-      <path d="M2 18h2" />
-      <path d="M20 18h2" />
-      <path d="m19.07 10.93-1.41 1.41" />
-      <path d="M22 22H2" />
-      <path d="m8 22 4-10 4 10" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function SkipIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5 4h4v16H5" />
-      <path d="m15 4 5 8-5 8" />
-    </svg>
-  );
-}
-
-function IgnoreRuleIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-    </svg>
   );
 }
 

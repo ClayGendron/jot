@@ -9,6 +9,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import type { Editor } from "@tiptap/react";
 import { copyAsFormatted, copyAsMarkdown } from "@/lib/clipboard/copyFormatted";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { FileText, FileCode, Check } from "lucide-react";
 
 interface EditorContextMenuProps {
   /** Position to show the menu */
@@ -148,7 +149,7 @@ export function EditorContextMenu({
         role="menuitem"
       >
         <span className="editor-context-menu-icon">
-          <FormattedIcon />
+          <FileText className="h-4 w-4" />
         </span>
         <span className="editor-context-menu-label">
           {copyFeedback === "formatted" ? "Copied!" : `${copyLabel} as Formatted`}
@@ -164,7 +165,7 @@ export function EditorContextMenu({
         role="menuitem"
       >
         <span className="editor-context-menu-icon">
-          <MarkdownIcon />
+          <FileCode className="h-4 w-4" />
         </span>
         <span className="editor-context-menu-label">
           {copyFeedback === "markdown" ? "Copied!" : `${copyLabel} as Markdown`}
@@ -184,7 +185,7 @@ export function EditorContextMenu({
           role="menuitem"
         >
           <span className="editor-context-menu-icon">
-            {defaultCopyFormat === "formatted" ? <CheckIcon /> : null}
+            {defaultCopyFormat === "formatted" ? <Check className="h-3.5 w-3.5" /> : null}
           </span>
           <span className="editor-context-menu-label">Formatted (Rich Text)</span>
         </button>
@@ -194,70 +195,11 @@ export function EditorContextMenu({
           role="menuitem"
         >
           <span className="editor-context-menu-icon">
-            {defaultCopyFormat === "markdown" ? <CheckIcon /> : null}
+            {defaultCopyFormat === "markdown" ? <Check className="h-3.5 w-3.5" /> : null}
           </span>
           <span className="editor-context-menu-label">Markdown</span>
         </button>
       </div>
     </div>
-  );
-}
-
-// Icons
-
-function FormattedIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-      <polyline points="10 9 9 9 8 9" />
-    </svg>
-  );
-}
-
-function MarkdownIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <path d="M7 14h.01M7 18h.01M11 14h6M11 18h6" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
   );
 }

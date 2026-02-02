@@ -5,6 +5,7 @@
  */
 
 import type { IndexingProgress as IndexingProgressData } from "@/lib/semantic/types";
+import { Brain } from "lucide-react";
 
 interface IndexingProgressProps {
   progress: IndexingProgressData;
@@ -19,7 +20,7 @@ export function IndexingProgress({ progress, onCancel }: IndexingProgressProps) 
   return (
     <div className="indexing-progress">
       <div className="indexing-progress-header">
-        <BrainIcon />
+        <Brain className="h-3.5 w-3.5" />
         <span className="indexing-progress-title">Indexing documents</span>
       </div>
 
@@ -60,7 +61,7 @@ export function IndexingIndicator({ progress }: { progress: IndexingProgressData
 
   return (
     <div className="indexing-indicator" title={`Indexing: ${progress.current}/${progress.total}`}>
-      <BrainIcon />
+      <Brain className="h-3.5 w-3.5" />
       <div className="indexing-indicator-bar">
         <div
           className="indexing-indicator-fill"
@@ -76,24 +77,6 @@ function truncateFileName(path: string, maxLength: number = 30): string {
   const name = path.split(/[/\\]/).pop() || path;
   if (name.length <= maxLength) return name;
   return `...${name.slice(-maxLength + 3)}`;
-}
-
-function BrainIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
-      <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
-    </svg>
-  );
 }
 
 export default IndexingProgress;

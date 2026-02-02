@@ -7,6 +7,13 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import {
+  X,
+  Search,
+  ChevronRight,
+  ChevronDown,
+  File,
+} from "lucide-react";
 import { useSearchStore } from "@/stores/searchStore";
 import {
   searchWorkspace,
@@ -186,7 +193,7 @@ export function GlobalSearchPanel({
           onClick={onClose}
           title="Close (Escape)"
         >
-          <CloseIcon />
+          <X className="h-4 w-4" />
         </button>
       </div>
 
@@ -194,7 +201,7 @@ export function GlobalSearchPanel({
       <div className="global-search-inputs">
         <div className="global-search-input-row">
           <div className="global-search-input-group">
-            <SearchIcon />
+            <Search className="h-3.5 w-3.5 global-search-icon" />
             <input
               ref={searchInputRef}
               type="text"
@@ -263,12 +270,12 @@ export function GlobalSearchPanel({
             >
               <span className="global-search-file-chevron">
                 {expandedFiles.has(file.filePath) ? (
-                  <ChevronDownIcon />
+                  <ChevronDown className="h-3 w-3" />
                 ) : (
-                  <ChevronRightIcon />
+                  <ChevronRight className="h-3 w-3" />
                 )}
               </span>
-              <FileIcon />
+              <File className="h-3 w-3 global-search-file-icon" />
               <span className="global-search-file-path">
                 {getDisplayPath(file.filePath)}
               </span>
@@ -302,7 +309,7 @@ export function GlobalSearchPanel({
         {/* Empty state */}
         {searchTerm.length < 2 && (
           <div className="global-search-empty">
-            <SearchEmptyIcon />
+            <Search className="h-8 w-8" strokeWidth={1.5} />
             <p className="global-search-empty-title">Search your workspace</p>
             <p className="global-search-empty-hint">
               Type at least 2 characters to search
@@ -342,118 +349,10 @@ function MatchPreview({ match }: { match: SearchMatch }) {
   );
 }
 
-// Icons
-
-function CloseIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="global-search-icon"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
-}
+// Helper components
 
 function LoadingSpinner() {
   return <div className="global-search-spinner" />;
-}
-
-function ChevronRightIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
-
-function FileIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="global-search-file-icon"
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-    </svg>
-  );
-}
-
-function SearchEmptyIcon() {
-  return (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
 }
 
 export default GlobalSearchPanel;

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { ArrowUpDown } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import type { SortBy, SortDirection } from "@/lib/files/sortFiles";
 
@@ -14,27 +15,6 @@ const SORT_OPTIONS: SortOption[] = [
   { sortBy: "modified", sortDirection: "desc", label: "Date (Newest)" },
   { sortBy: "modified", sortDirection: "asc", label: "Date (Oldest)" },
 ];
-
-function SortIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="4" y1="6" x2="16" y2="6" />
-      <line x1="4" y1="12" x2="12" y2="12" />
-      <line x1="4" y1="18" x2="8" y2="18" />
-      <polyline points="15 15 18 18 21 15" />
-      <line x1="18" y1="18" x2="18" y2="9" />
-    </svg>
-  );
-}
 
 function ChevronIcon({ isOpen }: { isOpen: boolean }) {
   return (
@@ -110,7 +90,7 @@ export function SortDropdown() {
         aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
-        <SortIcon />
+        <ArrowUpDown className="h-4 w-4" />
         <span className="sort-label">{currentOption?.label ?? "Sort"}</span>
         <ChevronIcon isOpen={isOpen} />
       </button>

@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { Editor } from "@tiptap/react";
+import { XCircle, BookPlus, SkipForward } from "lucide-react";
 import { getSpellSuggestions } from "./extensions/SpellCheck";
 import { addToPersonalDictionary } from "@/lib/spellcheck/personalDictionary";
 
@@ -125,7 +126,7 @@ export function SpellCheckContextMenu({
         <>
           {/* Misspelled word header */}
           <div className="spell-context-menu-header">
-            <SpellErrorIcon />
+            <XCircle className="h-4 w-4 spell-context-menu-icon-error" />
             <span className="spell-context-menu-word">{word}</span>
           </div>
 
@@ -157,7 +158,7 @@ export function SpellCheckContextMenu({
             onClick={handleAddToDictionary}
             role="menuitem"
           >
-            <BookPlusIcon />
+            <BookPlus className="h-4 w-4" />
             <span>Add to Dictionary</span>
           </button>
 
@@ -166,71 +167,12 @@ export function SpellCheckContextMenu({
             onClick={handleIgnore}
             role="menuitem"
           >
-            <SkipIcon />
+            <SkipForward className="h-4 w-4" />
             <span>Ignore</span>
           </button>
         </>
       )}
     </div>
-  );
-}
-
-// Icons
-
-function SpellErrorIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="spell-context-menu-icon-error"
-    >
-      <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
-      <path d="m9 9 6 6" />
-      <path d="m15 9-6 6" />
-    </svg>
-  );
-}
-
-function BookPlusIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
-      <path d="M9 10h6" />
-      <path d="M12 7v6" />
-    </svg>
-  );
-}
-
-function SkipIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M5 4h4v16H5" />
-      <path d="m15 4 5 8-5 8" />
-    </svg>
   );
 }
 

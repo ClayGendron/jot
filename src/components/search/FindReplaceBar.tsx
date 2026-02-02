@@ -6,6 +6,13 @@
  */
 
 import { useEffect, useRef, useCallback } from "react";
+import {
+  Search,
+  ArrowUpDown,
+  ChevronUp,
+  ChevronDown,
+  X,
+} from "lucide-react";
 import type { Editor } from "@tiptap/react";
 import { useSearchStore } from "@/stores/searchStore";
 import type { SearchAndReplaceStorage } from "@/components/editor/extensions/SearchAndReplace";
@@ -201,7 +208,7 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
       {/* Search row */}
       <div className="find-replace-row">
         <div className="find-replace-input-group">
-          <SearchIcon />
+          <Search className="h-3.5 w-3.5 find-replace-icon" />
           <input
             ref={searchInputRef}
             type="text"
@@ -228,7 +235,7 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
             title="Previous (Shift+Enter)"
             aria-label="Previous match"
           >
-            <ChevronUpIcon />
+            <ChevronUp className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
@@ -238,7 +245,7 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
             title="Next (Enter)"
             aria-label="Next match"
           >
-            <ChevronDownIcon />
+            <ChevronDown className="h-3.5 w-3.5" />
           </button>
         </div>
 
@@ -272,14 +279,14 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
           title="Close (Escape)"
           aria-label="Close search"
         >
-          <CloseIcon />
+          <X className="h-3.5 w-3.5" />
         </button>
       </div>
 
       {/* Replace row */}
       <div className="find-replace-row find-replace-row-secondary">
         <div className="find-replace-input-group">
-          <ReplaceIcon />
+          <ArrowUpDown className="h-3.5 w-3.5 find-replace-icon" />
           <input
             ref={replaceInputRef}
             type="text"
@@ -314,100 +321,6 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
         </div>
       </div>
     </div>
-  );
-}
-
-// Icons
-
-function SearchIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="find-replace-icon"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
-}
-
-function ReplaceIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="find-replace-icon"
-    >
-      <path d="M12 3v6" />
-      <path d="M9 6l3-3 3 3" />
-      <path d="M12 21v-6" />
-      <path d="M9 18l3 3 3-3" />
-    </svg>
-  );
-}
-
-function ChevronUpIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="18 15 12 9 6 15" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
   );
 }
 

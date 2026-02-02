@@ -10,6 +10,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useSemanticSearchStore } from "@/stores/semanticSearchStore";
 import { semanticSearch } from "@/lib/tauri/semantic";
 import type { SemanticSearchResult } from "@/lib/semantic/types";
+import { X, Search, Brain, File } from "lucide-react";
 
 interface SemanticSearchPanelProps {
   onResultClick: (filePath: string) => void;
@@ -138,7 +139,7 @@ export function SemanticSearchPanel({
       <div className="semantic-search-panel">
         <div className="semantic-search-header">
           <h3 className="semantic-search-title">
-            <BrainIcon />
+            <Brain className="h-4 w-4 semantic-search-brain-icon" />
             Semantic Search
           </h3>
           <button
@@ -146,11 +147,11 @@ export function SemanticSearchPanel({
             onClick={onClose}
             title="Close (Escape)"
           >
-            <CloseIcon />
+            <X className="h-4 w-4" />
           </button>
         </div>
         <div className="semantic-search-empty">
-          <BrainEmptyIcon />
+          <Brain className="h-8 w-8" />
           <p className="semantic-search-empty-title">Semantic search is disabled</p>
           <p className="semantic-search-empty-hint">
             Enable it in Settings to search by meaning
@@ -165,7 +166,7 @@ export function SemanticSearchPanel({
       {/* Header */}
       <div className="semantic-search-header">
         <h3 className="semantic-search-title">
-          <BrainIcon />
+          <Brain className="h-4 w-4 semantic-search-brain-icon" />
           Semantic Search
         </h3>
         <button
@@ -173,7 +174,7 @@ export function SemanticSearchPanel({
           onClick={onClose}
           title="Close (Escape)"
         >
-          <CloseIcon />
+          <X className="h-4 w-4" />
         </button>
       </div>
 
@@ -181,7 +182,7 @@ export function SemanticSearchPanel({
       <div className="semantic-search-inputs">
         <div className="semantic-search-input-row">
           <div className="semantic-search-input-group">
-            <SearchIcon />
+            <Search className="h-3.5 w-3.5 semantic-search-icon" />
             <input
               ref={searchInputRef}
               type="text"
@@ -220,7 +221,7 @@ export function SemanticSearchPanel({
             onClick={() => handleResultClick(result.filePath)}
           >
             <div className="semantic-search-result-header">
-              <FileIcon />
+              <File className="h-3 w-3 semantic-search-file-icon" />
               <span className="semantic-search-result-name">
                 {getDisplayName(result.filePath)}
               </span>
@@ -243,7 +244,7 @@ export function SemanticSearchPanel({
         {/* Empty state */}
         {query.length < 3 && (
           <div className="semantic-search-empty">
-            <BrainEmptyIcon />
+            <Brain className="h-8 w-8" />
             <p className="semantic-search-empty-title">Search by meaning</p>
             <p className="semantic-search-empty-hint">
               Type at least 3 characters to find related content
@@ -266,103 +267,8 @@ export function SemanticSearchPanel({
   );
 }
 
-// Icons
-
-function CloseIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="semantic-search-icon"
-    >
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  );
-}
-
-function BrainIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="semantic-search-brain-icon"
-    >
-      <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" />
-      <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" />
-    </svg>
-  );
-}
-
-function BrainEmptyIcon() {
-  return (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" />
-      <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" />
-    </svg>
-  );
-}
-
 function LoadingSpinner() {
   return <div className="semantic-search-spinner" />;
-}
-
-function FileIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="semantic-search-file-icon"
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-    </svg>
-  );
 }
 
 export default SemanticSearchPanel;

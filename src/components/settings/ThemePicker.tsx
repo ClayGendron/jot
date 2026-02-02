@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { Check, Moon } from "lucide-react";
 import { THEME_LIST, type ThemePreset, type ThemeName } from "@/lib/settings/themes";
 
 interface ThemePickerProps {
@@ -86,46 +87,15 @@ function ThemeCard({ theme, isSelected, onSelect }: ThemeCardProps) {
       {/* Theme info */}
       <div className="theme-card-info">
         <span className="theme-card-name">{theme.name}</span>
-        {theme.isDark && <MoonIcon />}
+        {theme.isDark && <Moon className="h-3 w-3 theme-card-dark-icon" />}
       </div>
 
       {/* Selected indicator */}
       {isSelected && (
         <div className="theme-card-check">
-          <CheckIcon />
+          <Check className="h-4 w-4" />
         </div>
       )}
     </button>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="3"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      className="theme-card-dark-icon"
-    >
-      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-    </svg>
   );
 }

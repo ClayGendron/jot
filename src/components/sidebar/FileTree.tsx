@@ -1,4 +1,5 @@
 import { useCallback, useState, useRef, useEffect, useMemo } from "react";
+import { File } from "lucide-react";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { readFolderChildren, type FileEntry } from "@/lib/tauri/files";
@@ -116,7 +117,7 @@ function FileTreeItem({
           {entry.is_dir ? (
             <FolderIcon open={isExpanded} />
           ) : (
-            <FileIcon />
+            <File className="h-4 w-4" />
           )}
         </span>
 
@@ -565,37 +566,6 @@ function FolderIcon({ open }: { open: boolean }) {
       />
       <path
         d="M2 4.5C2 3.67 2.67 3 3.5 3H6L7.5 4.5H12.5C13.33 4.5 14 5.17 14 6V11.5C14 12.33 13.33 13 12.5 13H3.5C2.67 13 2 12.33 2 11.5V4.5Z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function FileIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path
-        d="M4 2H9L12 5V13C12 13.55 11.55 14 11 14H4C3.45 14 3 13.55 3 13V3C3 2.45 3.45 2 4 2Z"
-        fill="currentColor"
-        opacity="0.1"
-      />
-      <path
-        d="M9 2L12 5H10C9.45 5 9 4.55 9 4V2Z"
-        fill="currentColor"
-        opacity="0.2"
-      />
-      <path
-        d="M4 2H9L12 5V13C12 13.55 11.55 14 11 14H4C3.45 14 3 13.55 3 13V3C3 2.45 3.45 2 4 2Z"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M9 2V4C9 4.55 9.45 5 10 5H12"
         stroke="currentColor"
         strokeWidth="1.2"
         strokeLinecap="round"

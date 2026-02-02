@@ -8,6 +8,15 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
+  X,
+  History,
+  AlertCircle,
+  GitCompare,
+  Check,
+  Trash2,
+  RotateCcw,
+} from "lucide-react";
+import {
   getVersions,
   getVersion,
   deleteVersion,
@@ -147,7 +156,7 @@ export function VersionHistoryPanel({
         <div className="version-history-header">
           <h3 className="version-history-title">Version History</h3>
           <button className="version-history-close" onClick={onClose}>
-            <CloseIcon />
+            <X className="h-4 w-4" />
           </button>
         </div>
         <div className="version-history-loading">
@@ -164,11 +173,11 @@ export function VersionHistoryPanel({
         <div className="version-history-header">
           <h3 className="version-history-title">Version History</h3>
           <button className="version-history-close" onClick={onClose}>
-            <CloseIcon />
+            <X className="h-4 w-4" />
           </button>
         </div>
         <div className="version-history-error">
-          <ErrorIcon />
+          <AlertCircle className="h-5 w-5" />
           <span>{error}</span>
         </div>
       </div>
@@ -194,11 +203,11 @@ export function VersionHistoryPanel({
             }}
             title="Compare versions"
           >
-            <CompareIcon />
+            <GitCompare className="h-3.5 w-3.5" />
             <span>Compare</span>
           </button>
           <button className="version-history-close" onClick={onClose}>
-            <CloseIcon />
+            <X className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -224,7 +233,7 @@ export function VersionHistoryPanel({
       <div className="version-history-content">
         {versions.length === 0 ? (
           <div className="version-history-empty">
-            <HistoryIcon />
+            <History className="h-8 w-8" />
             <p className="version-history-empty-title">No versions yet</p>
             <p className="version-history-empty-hint">
               Versions are created automatically when you save
@@ -253,7 +262,7 @@ export function VersionHistoryPanel({
                             compareSelection.includes(version.id) ? "checked" : ""
                           }`}
                         >
-                          {compareSelection.includes(version.id) && <CheckIcon />}
+                          {compareSelection.includes(version.id) && <Check className="h-2.5 w-2.5" strokeWidth={3} />}
                         </div>
                       ) : (
                         <div className="version-dot" />
@@ -279,7 +288,7 @@ export function VersionHistoryPanel({
                         onClick={(e) => handleDelete(version.id, e)}
                         title="Delete version"
                       >
-                        <TrashIcon />
+                        <Trash2 className="h-3 w-3" />
                       </button>
                     )}
                   </button>
@@ -302,7 +311,7 @@ export function VersionHistoryPanel({
                 className="version-preview-restore"
                 onClick={handleRestore}
               >
-                <RestoreIcon />
+                <RotateCcw className="h-3.5 w-3.5" />
                 Restore
               </button>
             </div>
@@ -313,135 +322,6 @@ export function VersionHistoryPanel({
         </div>
       )}
     </div>
-  );
-}
-
-// Icons
-
-function CloseIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
-
-function HistoryIcon() {
-  return (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  );
-}
-
-function ErrorIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <line x1="12" y1="8" x2="12" y2="12" />
-      <line x1="12" y1="16" x2="12.01" y2="16" />
-    </svg>
-  );
-}
-
-function CompareIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="18" y1="20" x2="18" y2="10" />
-      <line x1="12" y1="20" x2="12" y2="4" />
-      <line x1="6" y1="20" x2="6" y2="14" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="3"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-    </svg>
-  );
-}
-
-function RestoreIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-      <path d="M3 3v5h5" />
-    </svg>
   );
 }
 

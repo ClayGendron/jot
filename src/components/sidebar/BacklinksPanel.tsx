@@ -6,6 +6,7 @@
  */
 
 import { useCallback } from "react";
+import { Link2, File, Link } from "lucide-react";
 import type { BacklinkEntry } from "@/lib/links/backlinks";
 
 interface BacklinkItemProps {
@@ -27,7 +28,7 @@ function BacklinkItem({ backlink, onClick }: BacklinkItemProps) {
     >
       {/* Source file icon */}
       <span className="backlink-icon">
-        <FileIcon />
+        <File className="h-4 w-4" />
       </span>
 
       <div className="backlink-content">
@@ -36,7 +37,7 @@ function BacklinkItem({ backlink, onClick }: BacklinkItemProps) {
 
         {/* Link text used */}
         <span className="backlink-link-text">
-          <LinkIcon />
+          <Link className="h-3 w-3" />
           {backlink.linkText}
         </span>
 
@@ -59,7 +60,7 @@ export function BacklinksPanel({ backlinks, onBacklinkClick }: BacklinksPanelPro
     return (
       <div className="backlinks-empty-state">
         <div className="backlinks-empty-icon">
-          <BacklinksIcon />
+          <Link2 className="h-8 w-8" />
         </div>
         <p className="backlinks-empty-title">No backlinks</p>
         <p className="backlinks-empty-hint">
@@ -89,70 +90,6 @@ export function BacklinksPanel({ backlinks, onBacklinkClick }: BacklinksPanelPro
         </span>
       </div>
     </div>
-  );
-}
-
-// Icons
-
-function BacklinksIcon() {
-  return (
-    <svg
-      width="32"
-      height="32"
-      viewBox="0 0 32 32"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      {/* Incoming arrows pointing to center document */}
-      <rect x="11" y="10" width="10" height="12" rx="2" />
-      <path d="M5 16h6" />
-      <path d="M8 13l-3 3 3 3" />
-      <path d="M21 8l5-4" />
-      <path d="M23 4h3v3" />
-      <path d="M21 24l5 4" />
-      <path d="M23 28h3v-3" />
-    </svg>
-  );
-}
-
-function FileIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-    </svg>
-  );
-}
-
-function LinkIcon() {
-  return (
-    <svg
-      width="10"
-      height="10"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-    </svg>
   );
 }
 

@@ -27,6 +27,15 @@ import {
   downloadBlob,
   generateExportFilename,
 } from "@/lib/mermaid/exporter";
+import {
+  Copy,
+  Check,
+  GitBranch,
+  Download,
+  FileCode,
+  Image,
+  AlertCircle,
+} from "lucide-react";
 
 /** Duration to show "Copied!" state before resetting to "Copy" */
 const COPY_SUCCESS_DURATION_MS = 2000;
@@ -205,7 +214,7 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
         {/* Header with badge and controls */}
         <div className="mermaid-header">
           <span className="mermaid-badge">
-            <DiagramIcon />
+            <GitBranch className="h-3 w-3" aria-hidden="true" />
             mermaid
           </span>
 
@@ -218,7 +227,11 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
               title="Copy source"
               aria-label={isCopied ? "Copied!" : "Copy source"}
             >
-              {isCopied ? <CheckIcon /> : <CopyIcon />}
+              {isCopied ? (
+                <Check className="h-3.5 w-3.5 code-copy-check" aria-hidden="true" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
               <span>{isCopied ? "Copied" : "Copy"}</span>
             </button>
 
@@ -233,7 +246,7 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
                   aria-label="Export diagram"
                   aria-expanded={showExportMenu}
                 >
-                  <DownloadIcon />
+                  <Download className="h-3 w-3" aria-hidden="true" />
                   <span>Export</span>
                 </button>
 
@@ -244,7 +257,7 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
                       className="mermaid-export-option"
                       onClick={handleExportSvg}
                     >
-                      <SvgIcon />
+                      <FileCode className="h-3.5 w-3.5" aria-hidden="true" />
                       Export as SVG
                     </button>
                     <button
@@ -252,7 +265,7 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
                       className="mermaid-export-option"
                       onClick={handleExportPng}
                     >
-                      <ImageIcon />
+                      <Image className="h-3.5 w-3.5" aria-hidden="true" />
                       Export as PNG
                     </button>
                   </div>
@@ -290,7 +303,7 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
             {!isLoading && error && (
               <div className="mermaid-error" data-testid="mermaid-error">
                 <div className="mermaid-error-header">
-                  <ErrorIcon />
+                  <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
                   <span>Syntax Error</span>
                 </div>
                 <pre className="mermaid-error-message">{error}</pre>
@@ -332,7 +345,11 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
           aria-label={isCopied ? "Copied!" : "Copy code"}
           tabIndex={0}
         >
-          {isCopied ? <CheckIcon /> : <CopyIcon />}
+          {isCopied ? (
+            <Check className="h-3.5 w-3.5 code-copy-check" aria-hidden="true" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
           <span className="code-copy-text">{isCopied ? "Copied" : "Copy"}</span>
         </button>
       </div>
@@ -346,149 +363,6 @@ function CodeBlockView({ node, selected }: NodeViewProps) {
         <NodeViewContent as={"code" as "div"} className="hljs" />
       </pre>
     </NodeViewWrapper>
-  );
-}
-
-// ============================================================================
-// Icons
-// ============================================================================
-
-function CopyIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      className="code-copy-check"
-    >
-      <polyline points="20 6 9 17 4 12" className="code-copy-check-path" />
-    </svg>
-  );
-}
-
-function DiagramIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <path d="M14 17.5h7" />
-      <path d="M17.5 14v7" />
-    </svg>
-  );
-}
-
-function DownloadIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  );
-}
-
-function SvgIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <path d="M7 12l3-3 3 3 4-4" />
-    </svg>
-  );
-}
-
-function ImageIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="3" y="3" width="18" height="18" rx="2" />
-      <circle cx="8.5" cy="8.5" r="1.5" />
-      <path d="m21 15-5-5L5 21" />
-    </svg>
-  );
-}
-
-function ErrorIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <line x1="12" y1="8" x2="12" y2="12" />
-      <line x1="12" y1="16" x2="12.01" y2="16" />
-    </svg>
   );
 }
 

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { Sun, Moon, Monitor } from "lucide-react";
 import { useEditorStore, type FontFamily } from "@/stores/editorStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 
@@ -17,9 +18,9 @@ interface FontOption {
 }
 
 const THEME_OPTIONS: ThemeOption[] = [
-  { value: "light", label: "Light", icon: <SunIcon /> },
-  { value: "dark", label: "Dark", icon: <MoonIcon /> },
-  { value: "system", label: "System", icon: <MonitorIcon /> },
+  { value: "light", label: "Light", icon: <Sun className="h-4 w-4" /> },
+  { value: "dark", label: "Dark", icon: <Moon className="h-4 w-4" /> },
+  { value: "system", label: "System", icon: <Monitor className="h-4 w-4" /> },
 ];
 
 const FONT_OPTIONS: FontOption[] = [
@@ -92,7 +93,7 @@ export function ThemeStyleDropdown() {
         aria-expanded={isOpen}
         aria-haspopup="listbox"
       >
-        {currentThemeOption?.icon ?? <SunIcon />}
+        {currentThemeOption?.icon ?? <Sun className="h-4 w-4" />}
       </button>
       {isOpen && (
         <div className="theme-dropdown-menu" role="listbox">
@@ -146,68 +147,5 @@ export function ThemeStyleDropdown() {
         </div>
       )}
     </div>
-  );
-}
-
-// Icons
-
-function SunIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2" />
-      <path d="M12 20v2" />
-      <path d="m4.93 4.93 1.41 1.41" />
-      <path d="m17.66 17.66 1.41 1.41" />
-      <path d="M2 12h2" />
-      <path d="M20 12h2" />
-      <path d="m6.34 17.66-1.41 1.41" />
-      <path d="m19.07 4.93-1.41 1.41" />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-    </svg>
-  );
-}
-
-function MonitorIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect width="20" height="14" x="2" y="3" rx="2" />
-      <line x1="8" x2="16" y1="21" y2="21" />
-      <line x1="12" x2="12" y1="17" y2="21" />
-    </svg>
   );
 }

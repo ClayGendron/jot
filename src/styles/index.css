@@ -1,0 +1,17 @@
+/* Tailwind base - must be first and only once */
+@import "tailwindcss";
+
+/* shadcn/ui animation utilities */
+@import "tw-animate-css";
+
+/* shadcn/ui base styles */
+@import "shadcn/tailwind.css";
+
+/* Theme variables and presets */
+@import "./theme.css";
+
+/* TipTap/ProseMirror editor styles */
+@import "./editor.css";
+
+/* Legacy component styles - delete sections as components migrate */
+@import "./legacy-components.css";

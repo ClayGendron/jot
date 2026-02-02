@@ -9,6 +9,7 @@
  */
 
 import { useState, useCallback } from "react";
+import { X, Download, AlertCircle, Loader2 } from "lucide-react";
 import {
   exportAndDownloadPdf,
   type ExportOptions,
@@ -129,7 +130,7 @@ export function ExportPanel({
             onClick={onClose}
             aria-label="Close export panel"
           >
-            <CloseIcon />
+            <X className="h-5 w-5" />
           </button>
         </header>
 
@@ -303,7 +304,7 @@ export function ExportPanel({
           {/* Error Message */}
           {error && (
             <div className="export-error">
-              <ErrorIcon />
+              <AlertCircle className="h-4 w-4" />
               <span>{error}</span>
             </div>
           )}
@@ -318,12 +319,12 @@ export function ExportPanel({
           >
             {isExporting ? (
               <>
-                <LoadingSpinner />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 <span>Exporting...</span>
               </>
             ) : (
               <>
-                <DownloadIcon />
+                <Download className="h-4 w-4" />
                 <span>Export {format.toUpperCase()}</span>
               </>
             )}
@@ -334,25 +335,7 @@ export function ExportPanel({
   );
 }
 
-// Icons
-
-function CloseIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  );
-}
+// Custom Icons - kept for unique document type designs
 
 function PdfIcon() {
   return (
@@ -429,58 +412,3 @@ function OrientationLandscapeIcon() {
   );
 }
 
-function DownloadIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="7 10 12 15 17 10" />
-      <line x1="12" y1="15" x2="12" y2="3" />
-    </svg>
-  );
-}
-
-function ErrorIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <line x1="12" y1="8" x2="12" y2="12" />
-      <line x1="12" y1="16" x2="12.01" y2="16" />
-    </svg>
-  );
-}
-
-function LoadingSpinner() {
-  return (
-    <svg
-      className="export-spinner"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </svg>
-  );
-}
