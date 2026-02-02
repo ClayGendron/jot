@@ -6,6 +6,7 @@
  */
 
 use chrono::Utc;
+use fastembed::{TextEmbedding, TokenizerFiles, UserDefinedEmbeddingModel};
 use once_cell::sync::OnceCell;
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
@@ -77,16 +78,31 @@ pub struct SemanticStatus {
 // ==========================================
 
 /// Global embedding model instance (lazy-initialized)
-static EMBEDDING_MODEL: OnceCell<Mutex<fastembed::TextEmbedding>> = OnceCell::new();
+static EMBEDDING_MODEL: OnceCell<Mutex<TextEmbedding>> = OnceCell::new();
+
+/// Get bundled model files embedded at compile time
+fn get_bundled_model() -> UserDefinedEmbeddingModel {
+    let tokenizer_files = TokenizerFiles {
+        tokenizer_file: include_bytes!("../models/all-MiniLM-L6-v2/tokenizer.json").to_vec(),
+        config_file: include_bytes!("../models/all-MiniLM-L6-v2/config.json").to_vec(),
+        special_tokens_map_file: include_bytes!("../models/all-MiniLM-L6-v2/special_tokens_map.json").to_vec(),
+        tokenizer_config_file: include_bytes!("../models/all-MiniLM-L6-v2/tokenizer_config.json").to_vec(),
+    };
+
+    UserDefinedEmbeddingModel::new(
+        include_bytes!("../models/all-MiniLM-L6-v2/model.onnx").to_vec(),
+        tokenizer_files,
+    )
+}
 
 /// Initialize or get the embedding model
-fn get_model() -> Result<&'static Mutex<fastembed::TextEmbedding>, String> {
+fn get_model() -> Result<&'static Mutex<TextEmbedding>, String> {
     EMBEDDING_MODEL.get_or_try_init(|| {
-        let options = fastembed::InitOptions::new(fastembed::EmbeddingModel::AllMiniLML6V2)
-            .with_show_download_progress(true);
-
-        let model = fastembed::TextEmbedding::try_new(options)
-            .map_err(|e| format!("Failed to initialize embedding model: {}", e))?;
+        let model = TextEmbedding::try_new_from_user_defined(
+            get_bundled_model(),
+            Default::default(),
+        )
+        .map_err(|e| format!("Failed to initialize embedding model: {}", e))?;
 
         Ok(Mutex::new(model))
     })
