@@ -3,10 +3,11 @@
 /**
  * Jot Icon Generator
  *
- * Generates desktop icons with:
- * - Terracotta background
- * - Rounded edges
- * - "Jot" text in Crimson Pro
+ * Generates desktop icons with Apple Liquid Glass-inspired design:
+ * - Gradient background with depth
+ * - Specular highlights (top edge glow)
+ * - Subtle shadows for text depth
+ * - Glass-like overlay effect
  *
  * Usage: bun run scripts/generate-icon.js
  */
@@ -20,14 +21,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Configuration
 const CONFIG = {
-  // Terracotta color
-  backgroundColor: "#C45B35",
+  // Base terracotta colors for gradient (subtle)
+  gradientTop: "#CC6045",      // Slightly lighter terracotta (top)
+  gradientBottom: "#C05839",   // Base terracotta (bottom)
 
-  // Text color - black
-  textColor: "#000000",
+  // Highlight color (specular)
+  highlightColor: "rgba(255, 255, 255, 0.25)",
+
+  // Text colors
+  textColor: "#1A0A05",        // Very dark brown (almost black)
+  textShadowColor: "rgba(0, 0, 0, 0.3)",
+
+  // Glass overlay
+  glassOverlayTop: "rgba(255, 255, 255, 0.15)",
+  glassOverlayBottom: "rgba(255, 255, 255, 0.02)",
 
   // Corner radius as percentage of size
-  cornerRadiusPercent: 18,
+  cornerRadiusPercent: 22,     // Slightly more rounded for modern look
 
   // Font settings
   fontFamily: "Crimson Pro",
@@ -43,15 +53,16 @@ const CONFIG = {
   fontPath: join(__dirname, "fonts/CrimsonPro-600.ttf"),
 };
 
-// Required icon sizes for Tauri
-const ICON_SIZES = {
-  // macOS
+// macOS icon sizes (Liquid Glass style)
+const MACOS_ICON_SIZES = {
   "icon.png": 512,
   "128x128.png": 128,
   "128x128@2x.png": 256,
   "32x32.png": 32,
+};
 
-  // Windows Store logos
+// Windows icon sizes (flat style)
+const WINDOWS_ICON_SIZES = {
   "StoreLogo.png": 50,
   "Square30x30Logo.png": 30,
   "Square44x44Logo.png": 44,
@@ -65,7 +76,7 @@ const ICON_SIZES = {
 };
 
 /**
- * Draw a rounded rectangle
+ * Draw a rounded rectangle path
  */
 function roundRect(ctx, x, y, width, height, radius) {
   ctx.beginPath();
@@ -82,25 +93,110 @@ function roundRect(ctx, x, y, width, height, radius) {
 }
 
 /**
- * Generate icon at specified size
+ * Generate flat icon at specified size (for Windows)
  */
-function generateIcon(size) {
+function generateFlatIcon(size) {
   const canvas = createCanvas(size, size);
   const ctx = canvas.getContext("2d");
 
   const cornerRadius = Math.round(size * (CONFIG.cornerRadiusPercent / 100));
   const fontSize = Math.round(size * (CONFIG.fontSizePercent / 100));
 
-  // Draw rounded rectangle background
-  ctx.fillStyle = CONFIG.backgroundColor;
+  // Solid terracotta background (midpoint of gradient)
+  ctx.fillStyle = "#C05839";
   roundRect(ctx, 0, 0, size, size, cornerRadius);
   ctx.fill();
 
-  // Draw text - use actual bounding box for true centering
-  ctx.fillStyle = CONFIG.textColor;
+  // Text
   ctx.font = `${CONFIG.fontWeight} ${fontSize}px "${CONFIG.fontFamily}"`;
 
-  // Measure actual visual bounds
+  // Measure actual visual bounds for perfect centering
+  const metrics = ctx.measureText("Jot");
+  const textWidth = metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight;
+  const textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+
+  const x = (size - textWidth) / 2 + metrics.actualBoundingBoxLeft;
+  const y = (size - textHeight) / 2 + metrics.actualBoundingBoxAscent;
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = CONFIG.textColor;
+  ctx.fillText("Jot", x, y);
+
+  return canvas;
+}
+
+/**
+ * Generate icon at specified size with Liquid Glass effects (for macOS)
+ */
+function generateLiquidGlassIcon(size) {
+  const canvas = createCanvas(size, size);
+  const ctx = canvas.getContext("2d");
+
+  const cornerRadius = Math.round(size * (CONFIG.cornerRadiusPercent / 100));
+  const fontSize = Math.round(size * (CONFIG.fontSizePercent / 100));
+
+  // === LAYER 1: Base gradient background ===
+  const bgGradient = ctx.createLinearGradient(0, 0, 0, size);
+  bgGradient.addColorStop(0, CONFIG.gradientTop);
+  bgGradient.addColorStop(1, CONFIG.gradientBottom);
+
+  ctx.fillStyle = bgGradient;
+  roundRect(ctx, 0, 0, size, size, cornerRadius);
+  ctx.fill();
+
+  // === LAYER 2: Inner shadow (depth at edges) ===
+  ctx.save();
+  roundRect(ctx, 0, 0, size, size, cornerRadius);
+  ctx.clip();
+
+  // Bottom/right inner shadow
+  const innerShadowGradient = ctx.createLinearGradient(0, size * 0.7, 0, size);
+  innerShadowGradient.addColorStop(0, "rgba(0, 0, 0, 0)");
+  innerShadowGradient.addColorStop(1, "rgba(0, 0, 0, 0.15)");
+  ctx.fillStyle = innerShadowGradient;
+  ctx.fillRect(0, 0, size, size);
+  ctx.restore();
+
+  // === LAYER 3: Top specular highlight (light reflection) ===
+  ctx.save();
+  roundRect(ctx, 0, 0, size, size, cornerRadius);
+  ctx.clip();
+
+  const highlightGradient = ctx.createLinearGradient(0, 0, 0, size * 0.5);
+  highlightGradient.addColorStop(0, CONFIG.highlightColor);
+  highlightGradient.addColorStop(0.5, "rgba(255, 255, 255, 0.08)");
+  highlightGradient.addColorStop(1, "rgba(255, 255, 255, 0)");
+  ctx.fillStyle = highlightGradient;
+  ctx.fillRect(0, 0, size, size);
+  ctx.restore();
+
+  // === LAYER 4: Glass overlay (subtle shine) ===
+  ctx.save();
+  roundRect(ctx, 0, 0, size, size, cornerRadius);
+  ctx.clip();
+
+  // Diagonal glass shine
+  const glassGradient = ctx.createLinearGradient(0, 0, size, size * 0.6);
+  glassGradient.addColorStop(0, CONFIG.glassOverlayTop);
+  glassGradient.addColorStop(0.4, "rgba(255, 255, 255, 0.05)");
+  glassGradient.addColorStop(1, CONFIG.glassOverlayBottom);
+  ctx.fillStyle = glassGradient;
+  ctx.fillRect(0, 0, size, size);
+  ctx.restore();
+
+  // === LAYER 5: Inner border highlight (edge definition) ===
+  ctx.save();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+  ctx.lineWidth = Math.max(1, size * 0.004);
+  roundRect(ctx, ctx.lineWidth / 2, ctx.lineWidth / 2, size - ctx.lineWidth, size - ctx.lineWidth, cornerRadius - ctx.lineWidth / 2);
+  ctx.stroke();
+  ctx.restore();
+
+  // === LAYER 6: Text with shadow ===
+  ctx.font = `${CONFIG.fontWeight} ${fontSize}px "${CONFIG.fontFamily}"`;
+
+  // Measure actual visual bounds for perfect centering
   const metrics = ctx.measureText("Jot");
   const textWidth = metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight;
   const textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
@@ -111,7 +207,33 @@ function generateIcon(size) {
 
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
+
+  // Text shadow (subtle depth)
+  const shadowOffset = Math.max(1, size * 0.006);
+  const shadowBlur = Math.max(2, size * 0.015);
+  ctx.save();
+  ctx.shadowColor = CONFIG.textShadowColor;
+  ctx.shadowOffsetX = shadowOffset;
+  ctx.shadowOffsetY = shadowOffset;
+  ctx.shadowBlur = shadowBlur;
+  ctx.fillStyle = CONFIG.textColor;
   ctx.fillText("Jot", x, y);
+  ctx.restore();
+
+  // Main text (on top of shadow)
+  ctx.fillStyle = CONFIG.textColor;
+  ctx.fillText("Jot", x, y);
+
+  // === LAYER 7: Text inner highlight (subtle top edge glow) ===
+  // This creates a very subtle lighter edge on the text
+  ctx.save();
+  ctx.globalCompositeOperation = "source-atop";
+  const textHighlight = ctx.createLinearGradient(0, y - textHeight, 0, y);
+  textHighlight.addColorStop(0, "rgba(255, 255, 255, 0.1)");
+  textHighlight.addColorStop(0.3, "rgba(255, 255, 255, 0)");
+  ctx.fillStyle = textHighlight;
+  ctx.fillRect(0, 0, size, size);
+  ctx.restore();
 
   return canvas;
 }
@@ -119,22 +241,23 @@ function generateIcon(size) {
 /**
  * Generate PNG buffer from canvas
  */
-async function generatePNG(size, outputPath) {
-  const canvas = generateIcon(size);
+async function generatePNG(size, outputPath, useLiquidGlass = true) {
+  const canvas = useLiquidGlass ? generateLiquidGlassIcon(size) : generateFlatIcon(size);
   const buffer = canvas.toBuffer("image/png");
   await writeFile(outputPath, buffer);
-  console.log(`  ✓ Generated ${outputPath} (${size}x${size})`);
+  const style = useLiquidGlass ? "Liquid Glass" : "Flat";
+  console.log(`  ✓ Generated ${outputPath} (${size}x${size}, ${style})`);
 }
 
 /**
- * Generate ICO file for Windows
+ * Generate ICO file for Windows (flat style)
  */
 async function generateICO(outputPath) {
   const sizes = [16, 32, 48, 256];
   const images = [];
 
   for (const size of sizes) {
-    const canvas = generateIcon(size);
+    const canvas = generateFlatIcon(size);
     const png = canvas.toBuffer("image/png");
     images.push({ size, png });
   }
@@ -211,7 +334,7 @@ async function generateICNS(outputDir) {
   ];
 
   for (const { name, size } of iconsetSizes) {
-    const canvas = generateIcon(size);
+    const canvas = generateLiquidGlassIcon(size);
     const buffer = canvas.toBuffer("image/png");
     await writeFile(join(iconsetDir, name), buffer);
   }
@@ -238,23 +361,31 @@ async function generateICNS(outputDir) {
  * Main function
  */
 async function main() {
-  console.log("\n🎨 Jot Icon Generator\n");
-  console.log(`  Background: ${CONFIG.backgroundColor} (Terracotta)`);
-  console.log(`  Text: "Jot" in Crimson Pro 600 (${CONFIG.textColor})\n`);
+  console.log("\n🎨 Jot Icon Generator (Liquid Glass Edition)\n");
+  console.log("  Style: Apple Liquid Glass-inspired");
+  console.log(`  Gradient: ${CONFIG.gradientTop} → ${CONFIG.gradientBottom}`);
+  console.log(`  Text: "Jot" in Crimson Pro 600\n`);
 
   // Register font
   console.log("Loading Crimson Pro font...");
   GlobalFonts.registerFromPath(CONFIG.fontPath, "Crimson Pro");
-  console.log(`  ✓ Registered font: ${GlobalFonts.families}\n`);
+  console.log("  ✓ Font registered\n");
 
   const outputDir = join(process.cwd(), CONFIG.outputDir);
   await mkdir(outputDir, { recursive: true });
 
-  console.log("Generating PNG icons...\n");
+  console.log("Generating macOS icons (Liquid Glass)...\n");
 
-  for (const [filename, size] of Object.entries(ICON_SIZES)) {
+  for (const [filename, size] of Object.entries(MACOS_ICON_SIZES)) {
     const outputPath = join(outputDir, filename);
-    await generatePNG(size, outputPath);
+    await generatePNG(size, outputPath, true);
+  }
+
+  console.log("\nGenerating Windows icons (Flat)...\n");
+
+  for (const [filename, size] of Object.entries(WINDOWS_ICON_SIZES)) {
+    const outputPath = join(outputDir, filename);
+    await generatePNG(size, outputPath, false);
   }
 
   console.log("\nGenerating platform-specific icons...\n");
