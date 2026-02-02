@@ -14,7 +14,7 @@ Two-part migration:
 | Phase | Status | Commit |
 | --- | --- | --- |
 | Phase 1: Foundation Setup | ✅ Complete | `9797d17`, `f664687` |
-| Phase 2: Tier 1 Components | ⏳ Pending | - |
+| Phase 2: Tier 1 Components | ✅ Complete | `38dcc5c` |
 | Phase 3: Tier 2 Components | ⏳ Pending | - |
 | Phase 4: Tier 3 Components | ⏳ Pending | - |
 | Phase 5: Final CSS Cleanup | ⏳ Pending | - |
@@ -300,9 +300,23 @@ import "./styles/index.css";
 
 ---
 
-## Phase 2: Tier 1 Components (High Value)
+## Phase 2: Tier 1 Components (High Value) ✅ Complete
 
 These eliminate the most boilerplate and provide immediate value.
+
+**Completed (2026-02-02):**
+- All 930 tests pass
+- TypeScript compiles without errors
+- Production build succeeds (main bundle: 2,224 KB / 717 KB gzipped)
+- Rust backend builds successfully
+- Code review passed
+
+**Key improvements:**
+- 50-70% code reduction in dropdown/dialog components
+- Proper ARIA roles (menuitemradio vs option)
+- Consistent component API across codebase
+- Added `active` prop to Button for toggle states
+- Fixed ResizeObserver mock for floating-ui compatibility in tests
 
 **Per-Component Migration Process:**
 
@@ -377,6 +391,8 @@ bunx shadcn@latest add button
 
 **CSS to delete:** `.toolbar-button`, `.semantic-setup-btn-*` (~50 lines)
 
+**✅ Completed:** Enhanced button.tsx with `active` prop and data-active styling. Migrated EditorToolbar, SemanticSetupDialog, SettingsPanel, and ExportPanel to use shadcn Button.
+
 ### 2.2 Dialog
 
 ```bash
@@ -440,6 +456,8 @@ export function SemanticSetupDialog({ isOpen, onClose, onComplete }: Props) {
     
 
 **CSS to delete:** `.semantic-setup-overlay`, `.semantic-setup-dialog`, `.semantic-setup-*` (~80 lines)
+
+**✅ Completed:** Added shadcn Dialog component. Rewrote SemanticSetupDialog using DialogContent, DialogHeader, DialogTitle, DialogDescription, and DialogFooter.
 
 ### 2.3 DropdownMenu
 
@@ -522,6 +540,8 @@ export function ThemeStyleDropdown() {
 
 **CSS to delete:** `.theme-dropdown-*`, `.sort-dropdown-*`, `.recent-workspaces-*` (~100 lines)
 
+**✅ Completed:** Added shadcn DropdownMenu component. Rewrote ThemeStyleDropdown, SortDropdown, and RecentWorkspacesMenu using DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuLabel, and DropdownMenuSeparator. Updated ThemeStyleDropdown tests for Base UI ARIA roles (menuitemradio).
+
 ### 2.4 Input
 
 ```bash
@@ -541,6 +561,8 @@ bunx shadcn@latest add input
     
 
 **CSS to delete:** Form input styles (~30 lines)
+
+**✅ Completed:** Added shadcn Input component. Migrated ExportPanel margin inputs.
 
 ### 2.5 Switch
 
@@ -565,6 +587,8 @@ bunx shadcn@latest add switch
     
 
 **CSS to delete:** `.settings-toggle`, toggle styles (~40 lines)
+
+**✅ Completed:** Added shadcn Switch component. Migrated SettingsPanel toggles (spell check, grammar check, typewriter mode, focus mode, line numbers) and ExportPanel bookmarks toggle.
 
 ---
 
