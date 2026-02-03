@@ -423,13 +423,31 @@ export function extractMermaidData(state: EditorState): MermaidData[] {
 }
 
 /**
+ * Check if cursor/selection is inside a range
+ * Returns true if cursor position or any part of selection overlaps with [from, to)
+ */
+function isSelectionInRange(state: EditorState, from: number, to: number): boolean {
+  const { main } = state.selection;
+  // Selection overlaps if it starts before the end AND ends at or after the start
+  // Using >= for 'from' to handle point cursors at the start of the range
+  return main.from < to && main.to >= from;
+}
+
+/**
  * Build decorations for all mermaid blocks in the document
+ * Skips decoration for blocks that contain the cursor (shows raw code instead)
  */
 function buildMermaidDecorations(state: EditorState): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   const blocks = extractMermaidData(state);
 
   for (const block of blocks) {
+    // Skip widget decoration if cursor is inside this block
+    // This allows editing the raw mermaid code
+    if (isSelectionInRange(state, block.from, block.to)) {
+      continue;
+    }
+
     const widget = Decoration.replace({
       widget: new MermaidWidget(block.source),
       block: true,
@@ -444,12 +462,14 @@ function buildMermaidDecorations(state: EditorState): DecorationSet {
 
 /**
  * StateField that tracks mermaid decorations
+ * Rebuilds on both document changes AND selection changes
  */
 export const mermaidField = StateField.define<DecorationSet>({
   create: (state) => buildMermaidDecorations(state),
 
   update: (value, tr) => {
-    if (tr.docChanged) {
+    // Rebuild decorations if document changed OR selection changed
+    if (tr.docChanged || tr.selection) {
       return buildMermaidDecorations(tr.state);
     }
     return value;
@@ -457,6 +477,8 @@ export const mermaidField = StateField.define<DecorationSet>({
 
   provide: (field) => [
     EditorView.decorations.from(field),
+    // Only provide atomic ranges for non-focused blocks
+    // (focused blocks show raw code, so no atomic range needed)
     EditorView.atomicRanges.of((view) => view.state.field(field)),
   ],
 });

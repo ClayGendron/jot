@@ -127,8 +127,10 @@ describe("mermaidField decorations", () => {
     }
   });
 
-  it("creates decorations for mermaid blocks", () => {
-    view = createView("```mermaid\ngraph TD;\n```");
+  it("creates decorations for mermaid blocks when cursor is outside", () => {
+    // Add text before mermaid block so cursor at 0 is outside
+    view = createView("text\n\n```mermaid\ngraph TD;\n```");
+    // Cursor defaults to 0 which is in "text", outside the mermaid block
 
     const decorations = view.state.field(mermaidField);
     expect(decorations.size).toBeGreaterThan(0);
@@ -142,7 +144,7 @@ describe("mermaidField decorations", () => {
   });
 
   it("updates decorations when document changes", () => {
-    view = createView("```mermaid\ngraph TD;\n```");
+    view = createView("text\n\n```mermaid\ngraph TD;\n```");
 
     const initialSize = view.state.field(mermaidField).size;
 
@@ -165,8 +167,9 @@ describe("mermaid widget rendering", () => {
     }
   });
 
-  it("renders mermaid widget in DOM", () => {
-    view = createView("```mermaid\ngraph TD;\n```");
+  it("renders mermaid widget in DOM when cursor outside", () => {
+    // Cursor at 0 is in "text", outside mermaid block
+    view = createView("text\n\n```mermaid\ngraph TD;\n```");
     view.requestMeasure();
 
     const widget = view.dom.querySelector(".cm-mermaid-widget");
@@ -174,7 +177,7 @@ describe("mermaid widget rendering", () => {
   });
 
   it("shows mermaid badge in header", () => {
-    view = createView("```mermaid\ngraph TD;\n```");
+    view = createView("text\n\n```mermaid\ngraph TD;\n```");
     view.requestMeasure();
 
     const badge = view.dom.querySelector(".cm-mermaid-badge");
@@ -183,10 +186,10 @@ describe("mermaid widget rendering", () => {
   });
 
   it("shows rendered diagram when not focused", async () => {
-    view = createView("```mermaid\ngraph TD;\n```");
+    view = createView("text\n\n```mermaid\ngraph TD;\n```");
     view.requestMeasure();
 
-    // Widget should show diagram container when not focused
+    // Widget should show diagram container when cursor is outside
     await vi.waitFor(() => {
       const diagramArea = view.dom.querySelector(".cm-mermaid-diagram");
       expect(diagramArea).toBeTruthy();
@@ -194,11 +197,10 @@ describe("mermaid widget rendering", () => {
   });
 
   it("shows loading state during render", () => {
-    view = createView("```mermaid\ngraph TD;\n```");
+    view = createView("text\n\n```mermaid\ngraph TD;\n```");
     view.requestMeasure();
 
-    // Initially may show loading state (transient, may or may not be visible)
-    // Just verify widget exists
+    // Just verify widget exists when cursor is outside
     const widget = view.dom.querySelector(".cm-mermaid-widget");
     expect(widget).toBeTruthy();
   });
@@ -214,18 +216,65 @@ describe("mermaid focus behavior", () => {
     }
   });
 
-  it("widget respects selection state for focus", () => {
-    const doc = "```mermaid\ngraph TD;\n```";
+  it("shows widget when cursor is outside mermaid block", () => {
+    const doc = "Some text\n\n```mermaid\ngraph TD;\n```\n\nMore text";
     view = createView(doc);
+
+    // Put cursor at the beginning (outside mermaid block)
+    view.dispatch({ selection: { anchor: 0 } });
     view.requestMeasure();
 
-    // The mermaid widget should track whether cursor is inside
+    // Widget should be rendered when cursor is outside
     const widget = view.dom.querySelector(".cm-mermaid-widget");
     expect(widget).toBeTruthy();
+  });
 
-    // When cursor is inside the mermaid block, it should show code
-    // When cursor is outside, it should show diagram
-    // This behavior is determined by comparing selection to block range
+  it("hides widget when cursor is inside mermaid block", () => {
+    const doc = "Some text\n\n```mermaid\ngraph TD;\n```\n\nMore text";
+    view = createView(doc);
+
+    // Put cursor inside the mermaid block (after ```mermaid\n)
+    // "Some text\n\n```mermaid\n" = 22 chars
+    view.dispatch({ selection: { anchor: 22 } });
+    view.requestMeasure();
+
+    // Widget should NOT be rendered when cursor is inside
+    const widget = view.dom.querySelector(".cm-mermaid-widget");
+    expect(widget).toBeFalsy();
+  });
+
+  it("shows raw mermaid code when cursor moves into block", () => {
+    const doc = "```mermaid\ngraph TD;\n```";
+    view = createView(doc);
+
+    // Initially cursor at 0 (start of block)
+    view.dispatch({ selection: { anchor: 0 } });
+    view.requestMeasure();
+
+    // Since cursor is at position 0 which is inside the block range,
+    // widget should not be shown
+    const widget = view.dom.querySelector(".cm-mermaid-widget");
+    expect(widget).toBeFalsy();
+
+    // The raw markdown should be visible in the editor
+    const content = view.state.doc.toString();
+    expect(content).toContain("```mermaid");
+    expect(content).toContain("graph TD;");
+  });
+
+  it("re-renders widget when cursor moves out of block", () => {
+    const doc = "Text before\n\n```mermaid\ngraph TD;\n```\n\nText after";
+    view = createView(doc);
+
+    // Start with cursor inside
+    view.dispatch({ selection: { anchor: 20 } });
+    view.requestMeasure();
+    expect(view.dom.querySelector(".cm-mermaid-widget")).toBeFalsy();
+
+    // Move cursor outside (to the end)
+    view.dispatch({ selection: { anchor: doc.length } });
+    view.requestMeasure();
+    expect(view.dom.querySelector(".cm-mermaid-widget")).toBeTruthy();
   });
 });
 
@@ -246,7 +295,8 @@ describe("mermaid error handling", () => {
   });
 
   it("displays error message for invalid syntax", async () => {
-    view = createView("```mermaid\ninvalid syntax here\n```");
+    // Cursor at 0 is in "text", outside mermaid block
+    view = createView("text\n\n```mermaid\ninvalid syntax here\n```");
     view.requestMeasure();
 
     // Wait for render attempt
@@ -271,7 +321,7 @@ describe("mermaid export functionality", () => {
   });
 
   it("shows export button when diagram is rendered", async () => {
-    view = createView("```mermaid\ngraph TD;\n```");
+    view = createView("text\n\n```mermaid\ngraph TD;\n```");
     view.requestMeasure();
 
     await vi.waitFor(() => {
@@ -281,7 +331,7 @@ describe("mermaid export functionality", () => {
   });
 
   it("shows copy button", () => {
-    view = createView("```mermaid\ngraph TD;\n```");
+    view = createView("text\n\n```mermaid\ngraph TD;\n```");
     view.requestMeasure();
 
     const copyBtn = view.dom.querySelector(".cm-mermaid-copy-button");
