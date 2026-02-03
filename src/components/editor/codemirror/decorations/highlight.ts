@@ -8,8 +8,12 @@
  * Key behaviors:
  * - Regex-based matching (not Lezer, since == isn't in GFM)
  * - Skips code blocks and inline code
- * - Hides == markers via Decoration.replace()
- * - Applies highlight class to content
+ * - Hides == markers via Decoration.replace() (atomic - cursor skips)
+ * - Applies highlight class to content (NOT atomic - text is editable)
+ *
+ * Split into two fields:
+ * - highlightMarkerField: Hides == markers (atomic)
+ * - highlightStyleField: Styles content (NOT atomic - editable)
  */
 
 import { StateField, RangeSetBuilder, type EditorState } from "@codemirror/state";
@@ -119,9 +123,10 @@ const hideMarker = Decoration.replace({ inclusive: false });
 const highlightMark = Decoration.mark({ class: "cm-highlight" });
 
 /**
- * Build decorations for all highlights in the document
+ * Build decorations for highlight markers only (the == symbols)
+ * These are atomic - cursor skips over them
  */
-function buildHighlightDecorations(state: EditorState): DecorationSet {
+function buildMarkerDecorations(state: EditorState): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   const doc = state.doc.toString();
   const ranges = findHighlightRanges(doc, state);
@@ -129,11 +134,6 @@ function buildHighlightDecorations(state: EditorState): DecorationSet {
   for (const range of ranges) {
     // Hide opening ==
     builder.add(range.from, range.contentFrom, hideMarker);
-
-    // Style the content
-    if (range.contentFrom < range.contentTo) {
-      builder.add(range.contentFrom, range.contentTo, highlightMark);
-    }
 
     // Hide closing ==
     builder.add(range.contentTo, range.to, hideMarker);
@@ -143,18 +143,36 @@ function buildHighlightDecorations(state: EditorState): DecorationSet {
 }
 
 /**
- * StateField that tracks highlight decorations
- *
- * - Creates decorations on initialization
- * - Updates when document changes
- * - Provides decorations and atomic ranges
+ * Build decorations for highlight styling only (the content between ==)
+ * NOT atomic - content is editable
  */
-export const highlightField = StateField.define<DecorationSet>({
-  create: (state) => buildHighlightDecorations(state),
+function buildStyleDecorations(state: EditorState): DecorationSet {
+  const builder = new RangeSetBuilder<Decoration>();
+  const doc = state.doc.toString();
+  const ranges = findHighlightRanges(doc, state);
+
+  for (const range of ranges) {
+    // Style the content (but don't make it atomic)
+    if (range.contentFrom < range.contentTo) {
+      builder.add(range.contentFrom, range.contentTo, highlightMark);
+    }
+  }
+
+  return builder.finish();
+}
+
+/**
+ * StateField for highlight markers (== symbols)
+ *
+ * - Creates decorations to hide == markers
+ * - Markers are atomic (cursor skips them)
+ */
+export const highlightMarkerField = StateField.define<DecorationSet>({
+  create: (state) => buildMarkerDecorations(state),
 
   update: (value, tr) => {
     if (tr.docChanged) {
-      return buildHighlightDecorations(tr.state);
+      return buildMarkerDecorations(tr.state);
     }
     return value;
   },
@@ -164,6 +182,74 @@ export const highlightField = StateField.define<DecorationSet>({
     EditorView.decorations.from(field),
 
     // Make hidden markers atomic (cursor skips them)
+    EditorView.atomicRanges.of((view) => view.state.field(field)),
+  ],
+});
+
+/**
+ * StateField for highlight styling (content between ==)
+ *
+ * - Creates decorations to style highlighted content
+ * - NOT atomic - content is editable
+ */
+export const highlightStyleField = StateField.define<DecorationSet>({
+  create: (state) => buildStyleDecorations(state),
+
+  update: (value, tr) => {
+    if (tr.docChanged) {
+      return buildStyleDecorations(tr.state);
+    }
+    return value;
+  },
+
+  provide: (field) => [
+    // Apply decorations only - no atomicRanges so text is editable
+    EditorView.decorations.from(field),
+  ],
+});
+
+/**
+ * Legacy combined field for backwards compatibility
+ * @deprecated Use highlightMarkerField and highlightStyleField instead
+ */
+export const highlightField = StateField.define<DecorationSet>({
+  create: (state) => {
+    const builder = new RangeSetBuilder<Decoration>();
+    const doc = state.doc.toString();
+    const ranges = findHighlightRanges(doc, state);
+
+    for (const range of ranges) {
+      builder.add(range.from, range.contentFrom, hideMarker);
+      if (range.contentFrom < range.contentTo) {
+        builder.add(range.contentFrom, range.contentTo, highlightMark);
+      }
+      builder.add(range.contentTo, range.to, hideMarker);
+    }
+
+    return builder.finish();
+  },
+
+  update: (value, tr) => {
+    if (tr.docChanged) {
+      const builder = new RangeSetBuilder<Decoration>();
+      const doc = tr.state.doc.toString();
+      const ranges = findHighlightRanges(doc, tr.state);
+
+      for (const range of ranges) {
+        builder.add(range.from, range.contentFrom, hideMarker);
+        if (range.contentFrom < range.contentTo) {
+          builder.add(range.contentFrom, range.contentTo, highlightMark);
+        }
+        builder.add(range.contentTo, range.to, hideMarker);
+      }
+
+      return builder.finish();
+    }
+    return value;
+  },
+
+  provide: (field) => [
+    EditorView.decorations.from(field),
     EditorView.atomicRanges.of((view) => view.state.field(field)),
   ],
 });

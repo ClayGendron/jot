@@ -378,6 +378,15 @@ class TableWidget extends WidgetType {
         allCells.push(contentWrapper);
         const cellIndex = allCells.length - 1;
 
+        // Prevent CM from stealing focus on mousedown/click
+        contentWrapper.addEventListener("mousedown", (e) => {
+          e.stopPropagation();
+        });
+
+        contentWrapper.addEventListener("click", (e) => {
+          e.stopPropagation();
+        });
+
         // Handle Tab/Shift+Tab navigation
         contentWrapper.addEventListener("keydown", (e) => {
           if (e.key === "Tab") {
@@ -598,13 +607,23 @@ class TableWidget extends WidgetType {
     );
   }
 
+  /**
+   * Estimated height for CodeMirror's tile layout system.
+   * Block widgets must provide this for proper viewport calculation.
+   */
+  get estimatedHeight(): number {
+    // Estimate based on row count: header row (~40px) + data rows (~36px each) + controls (~32px)
+    const rowCount = this.tableData.rows.length;
+    return 72 + rowCount * 36;
+  }
+
   destroy(): void {
     this.viewRef = null;
   }
 
   ignoreEvent(): boolean {
-    // Allow events to propagate to contenteditable cells
-    return false;
+    // Let widget handle its own events (contenteditable cells)
+    return true;
   }
 }
 
@@ -644,7 +663,7 @@ export const tableField = StateField.define<DecorationSet>({
   },
 
   provide: (field) => [
+    // Apply decorations only - no atomicRanges since cells are editable
     EditorView.decorations.from(field),
-    EditorView.atomicRanges.of((view) => view.state.field(field)),
   ],
 });

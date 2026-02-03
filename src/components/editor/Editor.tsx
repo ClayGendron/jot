@@ -1,522 +1,279 @@
-import { useEditor, EditorContent } from "@tiptap/react";
-import type { Editor as TipTapEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
-import Typography from "@tiptap/extension-typography";
-import Image from "@tiptap/extension-image";
-import Highlight from "@tiptap/extension-highlight";
-import TaskList from "@tiptap/extension-task-list";
-import TaskItem from "@tiptap/extension-task-item";
-import { Table } from "@tiptap/extension-table";
-import { TableRow } from "@tiptap/extension-table-row";
-import { TableCell } from "@tiptap/extension-table-cell";
-import { TableHeader } from "@tiptap/extension-table-header";
-import { common, createLowlight } from "lowlight";
+/**
+ * CodeMirror 6 Markdown Editor
+ *
+ * A WYSIWYG-capable markdown editor where markdown is the canonical format.
+ * No conversion on load/save - what you edit is what gets stored.
+ *
+ * Phase 1: Basic editing
+ * Phase 2: Hidden syntax decorations for true WYSIWYG, formatting commands
+ * Phase 4: Links and images with internal link navigation
+ * Phase 8: Integrated toolbar with CM6 commands
+ */
+
 import {
-  useCallback,
-  useEffect,
-  useState,
   useRef,
-  useMemo,
+  useEffect,
+  useCallback,
   forwardRef,
   useImperativeHandle,
+  useState,
 } from "react";
+import { EditorView } from "@codemirror/view";
+import { createEditorState, createEditorView, createExtensions, toggleRawView, toggleWysiwyg } from "./codemirror/setup";
 import { useEditorStore } from "@/stores/editorStore";
-import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { useSettingsStore } from "@/stores/settingsStore";
-import type { FileEntry } from "@/lib/tauri/files";
-import { EditorToolbar } from "./EditorToolbar";
-import { CodeBlockWithCopy } from "./extensions/CodeBlockWithCopy";
-import { HeadingWithId } from "./extensions/HeadingWithId";
-import { InternalLinkMark } from "./extensions/InternalLinkMark";
-import { InternalLink } from "./extensions/InternalLink";
-import { SearchAndReplace } from "./extensions/SearchAndReplace";
-import { SpellCheck } from "./extensions/SpellCheck";
-// Grammar check disabled - see docs/GRAMMAR_CHECK_IMPLEMENTATION.md
-// import { GrammarCheck } from "./extensions/GrammarCheck";
-import { createSuggestionRender } from "./extensions/internalLinkSuggestionRender";
-import { SourceEditor } from "./SourceEditor";
-import { EditorContextMenu } from "./EditorContextMenu";
-import { SpellCheckContextMenu } from "./SpellCheckContextMenu";
-// import { GrammarCheckContextMenu } from "./GrammarCheckContextMenu";
-import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
-import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { useInternalLinkNavigation } from "@/hooks/useInternalLinkNavigation";
 import { cn } from "@/lib/utils";
-import { readFile } from "@/lib/tauri/files";
-import { getRelativePath } from "@/lib/path/pathUtils";
-import { loadPersonalDictionary } from "@/lib/spellcheck/personalDictionary";
-// import { loadIgnoredRules } from "@/lib/grammarcheck/ignoredRules";
-import type { SpellCheckLanguage } from "@/lib/spellcheck";
-// import type { GrammarDialect, GrammarIssue } from "@/lib/grammarcheck";
-
-// Create lowlight instance with common languages
-const lowlight = createLowlight(common);
+import { EditorToolbar } from "./EditorToolbar";
+import { EditorContextMenu } from "./EditorContextMenu";
 
 export interface EditorProps {
+  /** Initial markdown content */
   initialContent?: string;
+  /** Callback when content changes */
   onUpdate?: (content: string) => void;
+  /** Placeholder text shown when editor is empty */
   placeholder?: string;
+  /** Whether to focus editor on mount */
   autofocus?: boolean;
+  /** Current file path - used for same-file heading navigation */
+  filePath?: string | null;
   /** Callback when an internal link is clicked (cross-file navigation) */
   onInternalLinkClick?: (path: string, heading?: string) => void;
-  /** Callback when a same-file heading link is clicked - scroll without file reload */
-  onScrollToHeading?: (heading: string) => void;
-  /** Callback when a broken link is clicked - receives the intended file path */
+  /** Callback when a same-file heading link is clicked */
+  onScrollToHeading?: (headingId: string) => void;
+  /** Callback when a broken link is clicked */
   onBrokenLinkClick?: (intendedPath: string) => void;
 }
 
 /**
- * Editor ref handle for external access to editor instance
+ * Editor ref handle for external access
  */
 export interface EditorRef {
-  editor: TipTapEditor | null;
+  /** The CodeMirror EditorView instance */
+  view: EditorView | null;
+  /** Get current document content */
+  getContent: () => string;
+  /** Set document content */
+  setContent: (content: string) => void;
 }
 
 /**
- * Core WYSIWYG markdown editor built on TipTap
+ * CodeMirror 6 based Markdown editor
  *
- * Features:
- * - Full markdown support via StarterKit
- * - Syntax highlighting for code blocks
- * - Task lists, tables, images
- * - Typography improvements (smart quotes, etc.)
- * - Internal link support
- * - Search and replace (Cmd+F)
+ * Markdown is the canonical format (no HTML conversion).
+ * Content is stored and edited as raw markdown.
+ * Hidden syntax decorations provide WYSIWYG feel.
+ * sourceMode toggles between WYSIWYG and raw markdown view.
  */
-export const Editor = forwardRef<EditorRef, EditorProps>(function Editor(
-  {
-    initialContent = "",
-    onUpdate,
-    placeholder = "Start writing...",
-    autofocus = true,
-    onInternalLinkClick,
-    onScrollToHeading,
-    onBrokenLinkClick,
-  },
-  ref
-) {
-  // Use individual selectors to avoid React 19 + Zustand issues
-  const setContent = useEditorStore((state) => state.setContent);
-  const content = useEditorStore((state) => state.content);
-  const focusMode = useEditorStore((state) => state.focusMode);
-  const sourceMode = useEditorStore((state) => state.sourceMode);
-  const toggleSourceMode = useEditorStore((state) => state.toggleSourceMode);
-  const filePath = useEditorStore((state) => state.filePath);
-  const fontFamily = useEditorStore((state) => state.fontFamily);
-
-  // Ref for the editor container (for internal link click handling)
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Context menu state
-  const [contextMenu, setContextMenu] = useState<{
-    position: { x: number; y: number };
-    type: "regular" | "spellcheck";
-    spellError?: { word: string; from: number; to: number };
-    // Grammar check disabled - see docs/GRAMMAR_CHECK_IMPLEMENTATION.md
-    // grammarIssue?: GrammarIssue;
-  } | null>(null);
-
-  // Spell check settings
-  const spellCheckEnabled = useSettingsStore(
-    (s) => s.appearance?.spellCheckEnabled ?? true
-  );
-  const spellCheckLanguage = useSettingsStore(
-    (s) => (s.appearance?.spellCheckLanguage ?? "en_US") as SpellCheckLanguage
-  );
-
-  // Grammar check disabled - see docs/GRAMMAR_CHECK_IMPLEMENTATION.md
-  // const grammarCheckEnabled = useSettingsStore(
-  //   (s) => s.appearance?.grammarCheckEnabled ?? true
-  // );
-  // const grammarDialect = useSettingsStore(
-  //   (s) => (s.appearance?.grammarDialect ?? "american") as GrammarDialect
-  // );
-
-  // Get files for internal link suggestions - compute with useMemo for React 19 compatibility
-  // Using primitive selectors to avoid Zustand snapshot caching issues
-  const fileTree = useWorkspaceStore((state) => state.fileTree);
-  const workspacePath = useWorkspaceStore((state) => state.workspacePath);
-
-  const files = useMemo(() => {
-    const result: { name: string; path: string; displayPath: string }[] = [];
-
-    const collectFiles = (entries: FileEntry[]) => {
-      for (const entry of entries) {
-        if (entry.is_markdown) {
-          // Use getRelativePath for cross-platform consistency (Windows backslashes → forward slashes)
-          const displayPath = workspacePath
-            ? getRelativePath(workspacePath, entry.path) || entry.name
-            : entry.name;
-
-          result.push({
-            name: entry.name,
-            path: entry.path,
-            displayPath,
-          });
-        }
-        if (entry.children) {
-          collectFiles(entry.children);
-        }
-      }
-    };
-
-    collectFiles(fileTree);
-    return result;
-  }, [fileTree, workspacePath]);
-
-  const getFiles = useCallback(() => files, [files]);
-
-  // Get current file path and content for same-file heading links
-  const getCurrentFilePath = useCallback(() => filePath, [filePath]);
-  const getCurrentFileContent = useCallback(() => content, [content]);
-
-  // Create a wrapper for readFile that captures workspace path
-  // This is needed because readFile now requires workspace validation
-  const readFileContent = useCallback(
-    async (path: string): Promise<string> => {
-      if (!workspacePath) {
-        throw new Error("No workspace is open");
-      }
-      return readFile(path, workspacePath);
+export const Editor = forwardRef<EditorRef, EditorProps>(
+  function Editor(
+    {
+      initialContent = "",
+      onUpdate,
+      placeholder = "Start writing...",
+      autofocus = true,
+      filePath,
+      onInternalLinkClick,
+      onScrollToHeading,
+      onBrokenLinkClick,
     },
-    [workspacePath]
-  );
+    ref
+  ) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const viewRef = useRef<EditorView | null>(null);
+    const onUpdateRef = useRef(onUpdate);
 
-  // Create suggestion render function (memoized)
-  const suggestionRender = useMemo(
-    () => createSuggestionRender({
-      getFiles,
-      readFileContent,
-      getCurrentFilePath,
-      getCurrentFileContent,
-    }),
-    [getFiles, readFileContent, getCurrentFilePath, getCurrentFileContent]
-  );
+    // Track view state for toolbar reactivity
+    const [view, setView] = useState<EditorView | null>(null);
 
-  // Handle internal link navigation
-  const handleInternalLinkNavigate = useCallback(
-    (path: string, heading?: string) => {
-      onInternalLinkClick?.(path, heading);
-    },
-    [onInternalLinkClick]
-  );
+    // Context menu state
+    const [contextMenu, setContextMenu] = useState<{
+      position: { x: number; y: number };
+    } | null>(null);
 
-  // Set up internal link click handling
-  useInternalLinkNavigation({
-    onNavigate: handleInternalLinkNavigate,
-    onScrollToHeading,
-    onBrokenLinkClick,
-    containerRef,
-    enabled: !!onInternalLinkClick && !sourceMode,
-    currentFilePath: filePath,
-  });
+    // Keep callback ref updated without recreating editor
+    useEffect(() => {
+      onUpdateRef.current = onUpdate;
+    }, [onUpdate]);
 
-  // Track markdown source when in source mode
-  const [markdownSource, setMarkdownSource] = useState("");
-  const wasInSourceMode = useRef(false);
+    // Get editor settings from store
+    const fontFamily = useEditorStore((state) => state.fontFamily);
+    const focusMode = useEditorStore((state) => state.focusMode);
+    const showLineNumbers = useEditorStore((state) => state.showLineNumbers);
+    const sourceMode = useEditorStore((state) => state.sourceMode);
 
-  // Load personal dictionary on mount
-  useEffect(() => {
-    loadPersonalDictionary().catch(console.error);
-    // Grammar check disabled - see docs/GRAMMAR_CHECK_IMPLEMENTATION.md
-    // loadIgnoredRules().catch(console.error);
-  }, []);
-
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        codeBlock: false, // We use CodeBlockWithCopy instead
-        heading: false, // We use HeadingWithId instead
-      }),
-      // Custom heading extension with auto-generated IDs for link navigation
-      HeadingWithId.configure({
-        levels: [1, 2, 3, 4, 5, 6],
-      }),
-      Placeholder.configure({
-        placeholder,
-        emptyEditorClass: "is-editor-empty",
-      }),
-      Typography.configure({
-        // Smart quotes, ellipsis, em-dashes
-        oneHalf: false,
-        oneQuarter: false,
-        threeQuarters: false,
-      }),
-      // Custom link extension with internal link attributes (class, data-internal-link)
-      InternalLinkMark.configure({
-        openOnClick: false, // We handle this manually
-        HTMLAttributes: {
-          rel: "noopener noreferrer",
-        },
-      }),
-      Image.configure({
-        inline: false,
-        allowBase64: true,
-      }),
-      Highlight.configure({
-        multicolor: false,
-      }),
-      TaskList,
-      TaskItem.configure({
-        nested: true,
-      }),
-      Table,
-      TableRow,
-      TableCell,
-      TableHeader,
-      CodeBlockWithCopy.configure({
-        lowlight,
-        defaultLanguage: "plaintext",
-      }),
-      InternalLink.configure({
-        suggestion: {
-          render: suggestionRender,
-        },
-      }),
-      SearchAndReplace.configure({
-        searchResultClass: "search-result",
-        searchResultCurrentClass: "search-result-current",
-      }),
-      SpellCheck.configure({
-        spellErrorClass: "spell-error",
-        language: spellCheckLanguage,
-        enabled: spellCheckEnabled,
-      }),
-      // Grammar check disabled - see docs/GRAMMAR_CHECK_IMPLEMENTATION.md
-      // GrammarCheck.configure({
-      //   grammarErrorClass: "grammar-error",
-      //   dialect: grammarDialect,
-      //   enabled: grammarCheckEnabled,
-      // }),
-    ],
-    content: initialContent || content,
-    autofocus,
-    editorProps: {
-      attributes: {
-        class: `tiptap-editor font-${fontFamily}`,
-        spellcheck: "true",
+    // Handle internal link navigation (clicks on links in editor)
+    const handleInternalLinkNavigate = useCallback(
+      (path: string, heading?: string) => {
+        onInternalLinkClick?.(path, heading);
       },
-    },
-    onUpdate: ({ editor }) => {
-      const html = editor.getHTML();
-      setContent(html);
-      onUpdate?.(html);
-    },
-  });
+      [onInternalLinkClick]
+    );
 
-  // Expose editor instance via ref for parent components (e.g., FindReplaceBar)
-  useImperativeHandle(
-    ref,
-    () => ({
-      editor,
-    }),
-    [editor]
-  );
+    // Set up internal link click handling for CodeMirror
+    useInternalLinkNavigation({
+      onNavigate: handleInternalLinkNavigate,
+      onScrollToHeading,
+      onBrokenLinkClick,
+      containerRef,
+      enabled: !!onInternalLinkClick && !sourceMode,
+      currentFilePath: filePath,
+      cmView: view,
+    });
 
-  // Sync content when initialContent changes
-  useEffect(() => {
-    if (editor && initialContent && editor.getHTML() !== initialContent) {
-      editor.commands.setContent(initialContent);
-    }
-  }, [editor, initialContent]);
+    // Initialize CodeMirror
+    useEffect(() => {
+      if (!containerRef.current) return;
 
-  // Sync spell check settings with editor
-  useEffect(() => {
-    if (!editor) return;
-
-    if (spellCheckEnabled) {
-      editor.commands.enableSpellCheck();
-      editor.commands.setSpellCheckLanguage(spellCheckLanguage);
-    } else {
-      editor.commands.disableSpellCheck();
-    }
-  }, [editor, spellCheckEnabled, spellCheckLanguage]);
-
-  // Grammar check disabled - see docs/GRAMMAR_CHECK_IMPLEMENTATION.md
-  // useEffect(() => {
-  //   if (!editor) return;
-  //   if (grammarCheckEnabled) {
-  //     editor.commands.enableGrammarCheck();
-  //     editor.commands.setGrammarDialect(grammarDialect);
-  //   } else {
-  //     editor.commands.disableGrammarCheck();
-  //   }
-  // }, [editor, grammarCheckEnabled, grammarDialect]);
-
-  // Handle mode switching
-  useEffect(() => {
-    if (!editor) return;
-
-    if (sourceMode && !wasInSourceMode.current) {
-      // Switching TO source mode: convert HTML to Markdown
-      const html = editor.getHTML();
-      const markdown = htmlToMarkdown(html);
-      setMarkdownSource(markdown);
-      wasInSourceMode.current = true;
-    } else if (!sourceMode && wasInSourceMode.current) {
-      // Switching FROM source mode: convert Markdown to HTML
-      const html = markdownToHtml(markdownSource);
-      editor.commands.setContent(html);
-      setContent(html);
-      onUpdate?.(html);
-      wasInSourceMode.current = false;
-    }
-  }, [sourceMode, editor, markdownSource, setContent, onUpdate]);
-
-  // Handle source editor changes
-  const handleSourceChange = useCallback(
-    (newMarkdown: string) => {
-      setMarkdownSource(newMarkdown);
-      // Don't update HTML content until mode switch
-    },
-    []
-  );
-
-  // Handle context menu (right-click)
-  const handleContextMenu = useCallback(
-    (event: React.MouseEvent) => {
-      // Only show context menu in WYSIWYG mode
-      if (sourceMode) return;
-
-      event.preventDefault();
-
-      const target = event.target as HTMLElement;
-
-      // Grammar check disabled - see docs/GRAMMAR_CHECK_IMPLEMENTATION.md
-      // const grammarErrorElement = target.closest("[data-grammar-error]") as HTMLElement | null;
-      // if (grammarErrorElement && grammarCheckEnabled) { ... }
-
-      // Check if we clicked on a spell error
-      const spellErrorElement = target.closest("[data-spell-error]") as HTMLElement | null;
-
-      if (spellErrorElement && spellCheckEnabled) {
-        // Get spell error data from the element
-        const word = spellErrorElement.getAttribute("data-word") || spellErrorElement.textContent || "";
-
-        // Find the position in the document
-        // We need to find the decoration's position
-        const view = editor?.view;
-        if (view) {
-          const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
-          if (pos) {
-            // Search for the word boundaries around this position
-            const $pos = view.state.doc.resolve(pos.pos);
-            const start = $pos.start();
-            const textBefore = view.state.doc.textBetween(start, pos.pos, "");
-            const textAfter = view.state.doc.textBetween(pos.pos, $pos.end(), "");
-
-            // Find word boundaries
-            const beforeMatch = textBefore.match(/[a-zA-Z\u00C0-\u024F\u0400-\u04FF]*$/);
-            const afterMatch = textAfter.match(/^[a-zA-Z\u00C0-\u024F\u0400-\u04FF]*/);
-
-            const from = pos.pos - (beforeMatch?.[0]?.length || 0);
-            const to = pos.pos + (afterMatch?.[0]?.length || 0);
-
-            setContextMenu({
-              position: { x: event.clientX, y: event.clientY },
-              type: "spellcheck",
-              spellError: { word, from, to },
-            });
-            return;
-          }
-        }
-      }
-
-      // Regular context menu
-      setContextMenu({
-        position: { x: event.clientX, y: event.clientY },
-        type: "regular",
+      // Create extensions with current settings
+      // sourceMode = true means show raw markdown (rawMode = true)
+      const extensions = createExtensions({
+        showLineNumbers,
+        rawMode: sourceMode,
       });
-    },
-    [sourceMode, spellCheckEnabled, editor]
-  );
 
-  // Dismiss context menu
-  const handleDismissContextMenu = useCallback(() => {
-    setContextMenu(null);
-  }, []);
+      // Add update listener
+      const updateListener = EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+          const content = update.state.doc.toString();
+          onUpdateRef.current?.(content);
+        }
+      });
 
-  // Keyboard shortcuts
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
-      const isMod = event.metaKey || event.ctrlKey;
+      // Create editor state and view
+      const state = createEditorState(initialContent, [...extensions, updateListener]);
+      const editorView = createEditorView(state, containerRef.current);
+      viewRef.current = editorView;
+      setView(editorView);
 
-      // Cmd/Ctrl + S: Save (prevent default, we autosave)
-      if (isMod && event.key === "s") {
-        event.preventDefault();
-        // Trigger manual save if needed
+      // Focus if requested
+      if (autofocus) {
+        // Small delay to ensure DOM is ready
+        requestAnimationFrame(() => {
+          editorView.focus();
+        });
       }
 
-      // Cmd/Ctrl + /: Toggle source mode
-      if (isMod && event.key === "/") {
-        event.preventDefault();
-        toggleSourceMode();
+      // Cleanup on unmount
+      return () => {
+        editorView.destroy();
+        viewRef.current = null;
+        setView(null);
+      };
+      // Only run on mount - content updates handled separately
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Handle sourceMode (raw view) toggle
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) return;
+
+      // Toggle both compartments based on sourceMode
+      // sourceMode = true means show raw markdown (hide WYSIWYG)
+      toggleRawView(view, sourceMode);   // Hidden syntax markers
+      toggleWysiwyg(view, !sourceMode);  // WYSIWYG widgets
+    }, [sourceMode]);
+
+    // Sync external content changes (e.g., switching files)
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) return;
+
+      const currentContent = view.state.doc.toString();
+      if (currentContent !== initialContent) {
+        view.dispatch({
+          changes: {
+            from: 0,
+            to: currentContent.length,
+            insert: initialContent,
+          },
+        });
       }
-    },
-    [toggleSourceMode]
-  );
+    }, [initialContent]);
 
-  useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+    // Helper functions for ref
+    const getContent = useCallback(() => {
+      return viewRef.current?.state.doc.toString() ?? "";
+    }, []);
 
-  if (!editor) {
-    return null;
+    const setContent = useCallback((content: string) => {
+      const view = viewRef.current;
+      if (!view) return;
+
+      const currentContent = view.state.doc.toString();
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: currentContent.length,
+          insert: content,
+        },
+      });
+    }, []);
+
+    // Handle context menu (right-click)
+    const handleContextMenu = useCallback(
+      (event: React.MouseEvent) => {
+        // Only show context menu in WYSIWYG mode
+        if (sourceMode) return;
+
+        event.preventDefault();
+        setContextMenu({
+          position: { x: event.clientX, y: event.clientY },
+        });
+      },
+      [sourceMode]
+    );
+
+    // Dismiss context menu
+    const handleDismissContextMenu = useCallback(() => {
+      setContextMenu(null);
+    }, []);
+
+    // Expose ref API
+    useImperativeHandle(
+      ref,
+      () => ({
+        view: viewRef.current,
+        getContent,
+        setContent,
+      }),
+      [getContent, setContent]
+    );
+
+    return (
+      <div
+        className={cn(
+          "markdown-editor flex flex-col h-screen bg-[var(--color-paper)]",
+          focusMode && "focus-mode",
+          sourceMode && "source-mode-active"
+        )}
+        data-testid="markdown-editor-container"
+        onContextMenu={handleContextMenu}
+      >
+        <EditorToolbar cmView={view} />
+        <div
+          className={cn(
+            "flex-1 overflow-y-auto",
+            `font-${fontFamily}`
+          )}
+        >
+          <div
+            ref={containerRef}
+            className="cm-wrapper min-h-full"
+            data-placeholder={placeholder}
+          />
+        </div>
+        {contextMenu && (
+          <EditorContextMenu
+            position={contextMenu.position}
+            cmView={view}
+            onDismiss={handleDismissContextMenu}
+          />
+        )}
+      </div>
+    );
   }
-
-  return (
-    <div
-      ref={containerRef}
-      className={cn(
-        "flex flex-col h-screen bg-[var(--color-paper)]",
-        focusMode && "focus-mode",
-        sourceMode && "source-mode-active"
-      )}
-      data-testid="editor-container"
-      onContextMenu={handleContextMenu}
-    >
-      <EditorToolbar editor={editor} />
-      {sourceMode ? (
-        <SourceEditor
-          value={markdownSource}
-          onChange={handleSourceChange}
-          placeholder={placeholder}
-          autofocus
-        />
-      ) : (
-        <EditorContent editor={editor} />
-      )}
-      {contextMenu && contextMenu.type === "spellcheck" && contextMenu.spellError && (
-        <SpellCheckContextMenu
-          position={contextMenu.position}
-          word={contextMenu.spellError.word}
-          from={contextMenu.spellError.from}
-          to={contextMenu.spellError.to}
-          editor={editor}
-          onDismiss={handleDismissContextMenu}
-        />
-      )}
-      {/* Grammar check disabled - see docs/GRAMMAR_CHECK_IMPLEMENTATION.md
-      {contextMenu && contextMenu.type === "grammarcheck" && contextMenu.grammarIssue && (
-        <GrammarCheckContextMenu
-          position={contextMenu.position}
-          issue={contextMenu.grammarIssue}
-          editor={editor}
-          onDismiss={handleDismissContextMenu}
-        />
-      )}
-      */}
-      {contextMenu && contextMenu.type === "regular" && (
-        <EditorContextMenu
-          position={contextMenu.position}
-          editor={editor}
-          onDismiss={handleDismissContextMenu}
-        />
-      )}
-    </div>
-  );
-});
+);
 
 export default Editor;

@@ -26,21 +26,25 @@ import { codeBlockField, extractCodeBlockData } from "../decorations/codeBlocks"
 /**
  * Create an editor state with the code block field
  */
-function createState(doc: string): EditorState {
+function createState(doc: string, cursorAtEnd = false): EditorState {
   return EditorState.create({
     doc,
     extensions: [markdown({ extensions: [GFM] }), codeBlockField],
+    // Position cursor at end to avoid being inside code blocks (raw-when-focused)
+    selection: cursorAtEnd ? { anchor: doc.length } : undefined,
   });
 }
 
 /**
  * Create an editor view for DOM-based tests
+ * By default, positions cursor at end so code block widgets render
+ * (code blocks show raw code when cursor is inside them)
  */
-function createView(doc: string): EditorView {
+function createView(doc: string, cursorAtEnd = true): EditorView {
   const container = document.createElement("div");
   document.body.appendChild(container);
   return new EditorView({
-    state: createState(doc),
+    state: createState(doc, cursorAtEnd),
     parent: container,
   });
 }

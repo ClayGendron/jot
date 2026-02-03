@@ -189,10 +189,7 @@ export const imageField = StateField.define<DecorationSet>({
   },
 
   provide: (field) => [
-    // Apply decorations
+    // Apply decorations only - widget is selectable but doesn't block editing elsewhere
     EditorView.decorations.from(field),
-
-    // Make image syntax atomic (cursor skips the widget)
-    EditorView.atomicRanges.of((view) => view.state.field(field)),
   ],
 });

@@ -4,16 +4,17 @@
  * Phase 4: Hide [text](url) syntax and show styled clickable links.
  *
  * Key behaviors:
- * - Hides []() markers via Decoration.replace()
- * - Shows link text with link styling
+ * - Hides []() syntax markers via Decoration.replace()
+ * - Shows link text with link styling via Decoration.mark()
+ * - Link text is EDITABLE (like Microsoft Word)
  * - Distinguishes internal links (.md files) from external links
- * - Adds data-internal-link attribute for click detection
- * - Creates atomic ranges for link markers (cursor skips them)
+ * - Adds data-href and data-internal-link attributes for click detection
+ * - URL can be edited via right-click context menu
  * - Preserves original markdown on edit (no normalization)
  */
 
 import { StateField, RangeSetBuilder, type EditorState } from "@codemirror/state";
-import { Decoration, EditorView, type DecorationSet, WidgetType } from "@codemirror/view";
+import { Decoration, EditorView, type DecorationSet } from "@codemirror/view";
 import { syntaxTree } from "@codemirror/language";
 import { isInternalLink } from "@/lib/links/resolver";
 
@@ -36,46 +37,6 @@ export interface LinkData {
   textTo: number;
   urlFrom: number;
   urlTo: number;
-}
-
-/**
- * Widget that renders a clickable link
- * Used to create proper anchor elements with attributes
- */
-class LinkWidget extends WidgetType {
-  constructor(
-    readonly text: string,
-    readonly url: string,
-    readonly isInternal: boolean
-  ) {
-    super();
-  }
-
-  toDOM(): HTMLElement {
-    const anchor = document.createElement("a");
-    anchor.className = this.isInternal ? "cm-link cm-internal-link" : "cm-link cm-external-link";
-    anchor.href = this.url;
-    anchor.textContent = this.text;
-
-    if (this.isInternal) {
-      anchor.setAttribute("data-internal-link", "true");
-    } else {
-      // External links open in new tab
-      anchor.setAttribute("target", "_blank");
-      anchor.setAttribute("rel", "noopener noreferrer");
-    }
-
-    return anchor;
-  }
-
-  eq(other: LinkWidget): boolean {
-    return other.text === this.text && other.url === this.url && other.isInternal === this.isInternal;
-  }
-
-  ignoreEvent(): boolean {
-    // Allow click events to propagate for navigation
-    return false;
-  }
 }
 
 /**
@@ -192,20 +153,37 @@ export function extractLinkData(state: EditorState): LinkData[] {
 }
 
 /**
+ * Decoration to hide link syntax markers
+ */
+const hideSyntax = Decoration.replace({ inclusive: false });
+
+/**
  * Build decorations for all links in the document
+ *
+ * Uses marks for display text (editable) and replace for syntax (hidden).
+ * This allows Word-like behavior where you can click and edit the link text.
  */
 function buildLinkDecorations(state: EditorState): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
   const links = extractLinkData(state);
 
   for (const link of links) {
-    // Replace entire link syntax with a widget that renders as anchor
-    const widget = Decoration.replace({
-      widget: new LinkWidget(link.text, link.url, link.isInternal),
-      inclusive: false,
-    });
+    // Hide opening bracket: [
+    builder.add(link.from, link.textFrom, hideSyntax);
 
-    builder.add(link.from, link.to, widget);
+    // Mark the display text (editable, styled)
+    const linkClass = link.isInternal ? "cm-link cm-internal-link" : "cm-link cm-external-link";
+    const linkMark = Decoration.mark({
+      class: linkClass,
+      attributes: {
+        "data-href": link.url,
+        ...(link.isInternal ? { "data-internal-link": "true" } : {}),
+      },
+    });
+    builder.add(link.textFrom, link.textTo, linkMark);
+
+    // Hide closing bracket and URL: ](url)
+    builder.add(link.textTo, link.to, hideSyntax);
   }
 
   return builder.finish();
@@ -225,13 +203,28 @@ export const linkField = StateField.define<DecorationSet>({
   },
 
   provide: (field) => [
-    // Apply decorations
+    // Apply decorations only - no atomicRanges so text is editable
     EditorView.decorations.from(field),
-
-    // Make link syntax atomic (cursor skips the hidden parts)
-    EditorView.atomicRanges.of((view) => view.state.field(field)),
   ],
 });
+
+/**
+ * Get link data at a specific position in the document
+ * Useful for click handlers and context menus
+ *
+ * @param state - The editor state
+ * @param pos - The position to check
+ * @returns LinkData if position is within a link, null otherwise
+ */
+export function getLinkAtPosition(state: EditorState, pos: number): LinkData | null {
+  const links = extractLinkData(state);
+  for (const link of links) {
+    if (pos >= link.textFrom && pos <= link.textTo) {
+      return link;
+    }
+  }
+  return null;
+}
 
 /**
  * Autolink decoration - handles raw URLs in text

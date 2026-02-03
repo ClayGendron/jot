@@ -317,6 +317,16 @@ class CodeBlockWidget extends WidgetType {
     return other.language === this.language && other.code === this.code;
   }
 
+  /**
+   * Estimated height for CodeMirror's tile layout system.
+   * Block widgets must provide this for proper viewport calculation.
+   */
+  get estimatedHeight(): number {
+    // Estimate based on line count: header (~40px) + lines (~24px each) + padding (~32px)
+    const lineCount = this.code.split("\n").length;
+    return 72 + lineCount * 24;
+  }
+
   destroy(): void {
     if (this.copyTimeout) {
       clearTimeout(this.copyTimeout);
@@ -369,8 +379,20 @@ export function extractCodeBlockData(state: EditorState): CodeBlockData[] {
 }
 
 /**
+ * Check if cursor/selection is inside a range
+ * Returns true if cursor position or any part of selection overlaps with [from, to)
+ */
+function isSelectionInRange(state: EditorState, from: number, to: number): boolean {
+  const { main } = state.selection;
+  // Selection overlaps if it starts before the end AND ends at or after the start
+  // Using >= for 'from' to handle point cursors at the start of the range
+  return main.from < to && main.to >= from;
+}
+
+/**
  * Build decorations for all code blocks in the document
  * Excludes mermaid blocks (handled separately)
+ * Skips decoration for blocks that contain the cursor (shows raw code instead)
  */
 function buildCodeBlockDecorations(state: EditorState): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>();
@@ -378,6 +400,12 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
 
   for (const block of blocks) {
     if (block.isMermaid) {
+      continue;
+    }
+
+    // Skip widget decoration if cursor is inside this block
+    // This allows editing the raw code
+    if (isSelectionInRange(state, block.from, block.to)) {
       continue;
     }
 
@@ -395,12 +423,14 @@ function buildCodeBlockDecorations(state: EditorState): DecorationSet {
 
 /**
  * StateField that tracks code block decorations
+ * Rebuilds on both document changes AND selection changes
  */
 export const codeBlockField = StateField.define<DecorationSet>({
   create: (state) => buildCodeBlockDecorations(state),
 
   update: (value, tr) => {
-    if (tr.docChanged) {
+    // Rebuild decorations if document changed OR selection changed
+    if (tr.docChanged || tr.selection) {
       return buildCodeBlockDecorations(tr.state);
     }
     return value;
@@ -408,6 +438,7 @@ export const codeBlockField = StateField.define<DecorationSet>({
 
   provide: (field) => [
     EditorView.decorations.from(field),
+    // Atomic ranges for non-focused blocks (they're intentionally non-editable when rendered)
     EditorView.atomicRanges.of((view) => view.state.field(field)),
   ],
 });

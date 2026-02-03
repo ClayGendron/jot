@@ -26,29 +26,12 @@ import { jotTheme } from "./theme";
 
 // Phase 2 extensions
 import { createHiddenSyntaxExtension, hiddenSyntaxCompartment, toggleRawView } from "./extensions/hiddenSyntax";
-import { highlightField } from "./decorations/highlight";
+import { createWysiwygExtension, wysiwygCompartment, toggleWysiwyg } from "./extensions/wysiwygCompartment";
 import { autoCloseMarkdown } from "./extensions/autoCloseMarkdown";
 import { deleteBehavior } from "./extensions/deleteBehavior";
 
-// Phase 3 extensions
-import { headingField } from "./decorations/headings";
-import { listField } from "./decorations/lists";
-import { blockquoteField } from "./decorations/blockquotes";
+// Phase 3 extensions (now managed by wysiwygCompartment)
 import { inputRules } from "./extensions/inputRules";
-
-// Phase 4 extensions
-import { linkField } from "./decorations/links";
-import { imageField } from "./decorations/images";
-
-// Phase 5 extensions
-import { codeBlockField } from "./decorations/codeBlocks";
-import { mermaidField } from "./decorations/mermaid";
-
-// Phase 6 extensions
-import { tableField } from "./decorations/tables";
-
-// Phase 9 extensions
-import { horizontalRuleField } from "./decorations/horizontalRule";
 
 // Phase 7 extensions
 import { createSearchExtension } from "./extensions/search";
@@ -83,24 +66,13 @@ export function createBaseExtensions(options: CreateExtensionsOptions = {}): Ext
     highlightActiveLine(),
     highlightSelectionMatches(),
 
-    // Phase 2: WYSIWYG features (only in non-raw mode)
+    // Phase 2: Hidden syntax decorations (toggleable via compartment)
     createHiddenSyntaxExtension(rawMode),
-    highlightField, // Custom ==highlight== decoration
 
-    // Phase 3: Block structure decorations (only in non-raw mode)
-    ...(rawMode ? [] : [headingField, listField, blockquoteField]),
-
-    // Phase 4: Links and images (only in non-raw mode)
-    ...(rawMode ? [] : [linkField, imageField]),
-
-    // Phase 5: Code blocks and Mermaid diagrams (only in non-raw mode)
-    ...(rawMode ? [] : [codeBlockField, mermaidField]),
-
-    // Phase 6: Tables (only in non-raw mode)
-    ...(rawMode ? [] : [tableField]),
-
-    // Phase 9: Horizontal rules (only in non-raw mode)
-    ...(rawMode ? [] : [horizontalRuleField]),
+    // WYSIWYG decorations (toggleable via compartment)
+    // Includes: headings, lists, blockquotes, links, images,
+    // code blocks, mermaid, tables, horizontal rules, highlight
+    createWysiwygExtension(!rawMode),
 
     // Phase 7: Search (always active)
     createSearchExtension(),
@@ -144,6 +116,7 @@ export function createExtensions(options: CreateExtensionsOptions = {}): Extensi
 
 // Re-export for convenience
 export { hiddenSyntaxCompartment, toggleRawView };
+export { wysiwygCompartment, toggleWysiwyg };
 
 // Re-export Phase 3 utilities for document outline
 export { extractHeadingData, type HeadingData } from "./decorations/headings";
@@ -151,7 +124,7 @@ export { extractListData, type ListItemData } from "./decorations/lists";
 export { extractBlockquoteData, type BlockquoteLineData } from "./decorations/blockquotes";
 
 // Re-export Phase 4 utilities for links and images
-export { extractLinkData, type LinkData } from "./decorations/links";
+export { extractLinkData, getLinkAtPosition, type LinkData } from "./decorations/links";
 export { extractImageData, type ImageData } from "./decorations/images";
 
 // Re-export Phase 5 utilities for code blocks and mermaid

@@ -161,11 +161,8 @@ export const blockquoteField = StateField.define<DecorationSet>({
   },
 
   provide: (field) => [
-    // Apply decorations
+    // Apply decorations only - hiddenSyntax.ts handles atomic ranges for > markers
     EditorView.decorations.from(field),
-
-    // Make hidden markers atomic (cursor skips them)
-    EditorView.atomicRanges.of((view) => view.state.field(field)),
   ],
 });
 
