@@ -553,6 +553,65 @@ const baseTheme = EditorView.theme({
     color: "var(--color-ink-muted)",
     fontSize: "0.9em",
   },
+
+  // Phase 6: Tables
+  ".cm-table-widget": {
+    display: "block",
+    margin: "1rem 0",
+    borderRadius: "8px",
+    overflow: "hidden",
+    border: "1px solid var(--color-border)",
+    backgroundColor: "var(--color-paper)",
+  },
+  ".cm-table": {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontFamily: "var(--font-sans)",
+    fontSize: "0.9em",
+  },
+  ".cm-table th, .cm-table td": {
+    border: "1px solid var(--color-border)",
+    padding: "0",
+  },
+  ".cm-table th": {
+    backgroundColor: "var(--color-paper-warm)",
+    fontWeight: "600",
+  },
+  ".cm-table-cell": {
+    verticalAlign: "top",
+  },
+  ".cm-table-cell-content": {
+    padding: "0.5rem 0.75rem",
+    minHeight: "1.5em",
+    outline: "none",
+  },
+  ".cm-table-cell-content:focus": {
+    backgroundColor: "color-mix(in srgb, var(--color-accent-soft) 20%, transparent)",
+    boxShadow: "inset 0 0 0 2px var(--color-accent)",
+  },
+  ".cm-table-controls": {
+    display: "flex",
+    gap: "0.5rem",
+    padding: "0.5rem",
+    backgroundColor: "var(--color-paper-warm)",
+    borderTop: "1px solid var(--color-border)",
+  },
+  ".cm-table-add-row, .cm-table-add-column": {
+    padding: "0.25rem 0.5rem",
+    fontSize: "0.75em",
+    color: "var(--color-ink-muted)",
+    backgroundColor: "transparent",
+    border: "1px solid var(--color-border)",
+    borderRadius: "4px",
+    cursor: "pointer",
+    fontFamily: "var(--font-sans)",
+    transition: "all 0.15s ease",
+  },
+  ".cm-table-add-row:hover, .cm-table-add-column:hover": {
+    color: "var(--color-ink)",
+    backgroundColor: "var(--color-paper)",
+    borderColor: "var(--color-accent)",
+  },
 });
 
 /**

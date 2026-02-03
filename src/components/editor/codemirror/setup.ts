@@ -9,6 +9,7 @@
  * Phase 3: Block structure (headings, lists, blockquotes), input rules
  * Phase 4: Links and images with internal link navigation
  * Phase 5: Code blocks with syntax highlighting and Mermaid diagrams
+ * Phase 6: Tables with minimal mutation and WYSIWYG editing
  */
 
 import { EditorState, type Extension } from "@codemirror/state";
@@ -42,6 +43,9 @@ import { imageField } from "./decorations/images";
 // Phase 5 extensions
 import { codeBlockField } from "./decorations/codeBlocks";
 import { mermaidField } from "./decorations/mermaid";
+
+// Phase 6 extensions
+import { tableField } from "./decorations/tables";
 
 /**
  * Options for creating editor extensions
@@ -84,6 +88,9 @@ export function createBaseExtensions(options: CreateExtensionsOptions = {}): Ext
 
     // Phase 5: Code blocks and Mermaid diagrams (only in non-raw mode)
     ...(rawMode ? [] : [codeBlockField, mermaidField]),
+
+    // Phase 6: Tables (only in non-raw mode)
+    ...(rawMode ? [] : [tableField]),
 
     // Phase 3: Input rules (always active)
     inputRules,
@@ -134,6 +141,9 @@ export { extractImageData, type ImageData } from "./decorations/images";
 // Re-export Phase 5 utilities for code blocks and mermaid
 export { extractCodeBlockData, type CodeBlockData } from "./decorations/codeBlocks";
 export { extractMermaidData, type MermaidData } from "./decorations/mermaid";
+
+// Re-export Phase 6 utilities for tables
+export { extractTableData, type TableData, type CellData, type Alignment } from "./decorations/tables";
 
 /**
  * Create a new CodeMirror editor state

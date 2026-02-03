@@ -11,7 +11,7 @@
 | Phase 3: Block Structure | **COMPLETE** | `cfc40f6` | 2026-02-03 |
 | Phase 4: Links/Images | **COMPLETE** | `f234853` | 2026-02-03 |
 | Phase 5: Code/Mermaid | **COMPLETE** | `f6b4a1c` | 2026-02-03 |
-| Phase 6: Tables | Pending | - | - |
+| Phase 6: Tables | **COMPLETE** | `819d7c2` | 2026-02-03 |
 | Phase 7: Search/Spell | Pending | - | - |
 | Phase 8: Toolbar/Menus | Pending | - | - |
 | Phase 9: CSS Migration | Pending | - | - |
@@ -486,25 +486,34 @@ hast-util-to-html
 
 ---
 
-### Phase 6: Tables
+### Phase 6: Tables ✅ COMPLETE
 **Full table editing with minimal mutation.**
 
-**Create:**
-- `codemirror/tables/parseTable.ts` - parse table with cell ranges + padding
-- `codemirror/tables/updateCell.ts` - minimal cell mutation
-- `codemirror/widgets/TableWidget.tsx` - editable table UI
-- `codemirror/commands/insertTable.ts` - create new table
+> **Completed:** 2026-02-03
 
-**Features:**
-- Tab/Shift+Tab navigation between cells
-- Enter inserts `<br>` newline
-- **Edits commit on blur/Tab only** (not on keystroke)
-- Preserve original cell padding (`padLeft`, `padRight`)
-- Preserve existing `<br>` style per cell (`<br>`, `<br/>`, `<br />`)
-- Add/remove rows/columns via UI buttons
-- **Never normalize table** outside the edited cell
+**Created:** ✅
+- `codemirror/decorations/tables.ts` - TableWidget with cell parsing, editing, and minimal mutation ✅
 
-**Test:** Create table, edit cells, Tab navigation, multiline cells, verify no drift
+**Features:** ✅
+- Tab/Shift+Tab navigation between cells ✅
+- Enter inserts `<br>` newline ✅
+- **Edits commit on blur/Tab only** (not on keystroke) to avoid CM6 focus glitches ✅
+- Preserve original cell padding (`padLeft`, `padRight`) ✅
+- Preserve existing `<br>` style per cell (`<br>`, `<br/>`, `<br />`) ✅
+- Add/remove rows/columns via UI buttons ✅
+- **Never normalize table** outside the edited cell ✅
+- Column alignment support (left, center, right) ✅
+- Escaped pipe handling (`\|`) ✅
+
+**Tests Added:** ✅
+- `tables.test.ts` (39 tests) - extraction, decorations, editing, alignment, edge cases
+
+**Verification:** ✅
+- All 1331 tests pass
+- TypeScript check passes
+- Rust build passes
+
+**Note:** Implementation consolidated into single `decorations/tables.ts` file following existing codebase patterns (rather than separate tables/widgets folders as originally planned).
 
 ---
 
@@ -651,19 +660,21 @@ src/components/editor/codemirror/
 │   │   └── mermaid.test.ts         ✅ Phase 5 (13 tests)
 ```
 
+### Created (Phase 6) ✅
+```
+src/components/editor/codemirror/
+│   ├── decorations/
+│   │   └── tables.ts               ✅ Phase 6 - TableWidget with editing, Tab nav, minimal mutation
+│   ├── __tests__/
+│   │   └── tables.test.ts          ✅ Phase 6 (39 tests)
+```
+
 ### To Create (Future Phases)
 ```
 src/components/editor/codemirror/
 │   ├── extensions/
 │   │   ├── search.ts               # Phase 7 - CM6 search integration
 │   │   └── spellCheck.ts           # Phase 7 - spell check integration
-│   ├── commands/
-│   │   └── insertTable.ts          # Phase 6 - table creation
-│   ├── tables/
-│   │   ├── parseTable.ts           # Phase 6 - parse with cell ranges
-│   │   └── updateCell.ts           # Phase 6 - minimal cell mutation
-│   ├── widgets/
-│   │   └── TableWidget.tsx         # Phase 6 - editable table UI
 ```
 
 ### Modified (Phase 1) ✅
@@ -692,6 +703,10 @@ src/components/editor/codemirror/
 - `src/components/editor/codemirror/setup.ts` - Added codeBlockField, mermaidField, Phase 5 re-exports ✅
 - `src/components/editor/codemirror/theme.ts` - Added code block and mermaid widget styles ✅
 - `package.json` - Added shiki, removed lowlight and hast-util-to-html ✅
+
+### Modified (Phase 6) ✅
+- `src/components/editor/codemirror/setup.ts` - Added tableField, Phase 6 re-exports (TableData, CellData, Alignment) ✅
+- `src/components/editor/codemirror/theme.ts` - Added table widget styles ✅
 
 ### To Modify (Future Phases)
 - `src/components/editor/EditorToolbar.tsx` - CM6 commands, raw mode toggle
