@@ -6,6 +6,7 @@
  *
  * Phase 1: Basic editing
  * Phase 2: Hidden syntax, formatting commands, auto-close markers
+ * Phase 3: Block structure (headings, lists, blockquotes), input rules
  */
 
 import { EditorState, type Extension } from "@codemirror/state";
@@ -25,6 +26,12 @@ import { createHiddenSyntaxExtension, hiddenSyntaxCompartment, toggleRawView } f
 import { highlightField } from "./decorations/highlight";
 import { autoCloseMarkdown } from "./extensions/autoCloseMarkdown";
 import { deleteBehavior } from "./extensions/deleteBehavior";
+
+// Phase 3 extensions
+import { headingField } from "./decorations/headings";
+import { listField } from "./decorations/lists";
+import { blockquoteField } from "./decorations/blockquotes";
+import { inputRules } from "./extensions/inputRules";
 
 /**
  * Options for creating editor extensions
@@ -59,6 +66,12 @@ export function createBaseExtensions(options: CreateExtensionsOptions = {}): Ext
     createHiddenSyntaxExtension(rawMode),
     highlightField, // Custom ==highlight== decoration
 
+    // Phase 3: Block structure decorations (only in non-raw mode)
+    ...(rawMode ? [] : [headingField, listField, blockquoteField]),
+
+    // Phase 3: Input rules (always active)
+    inputRules,
+
     // Phase 2: Auto-close and delete behavior (always active)
     autoCloseMarkdown,
     deleteBehavior,
@@ -92,6 +105,11 @@ export function createExtensions(options: CreateExtensionsOptions = {}): Extensi
 
 // Re-export for convenience
 export { hiddenSyntaxCompartment, toggleRawView };
+
+// Re-export Phase 3 utilities for document outline
+export { extractHeadingData, type HeadingData } from "./decorations/headings";
+export { extractListData, type ListItemData } from "./decorations/lists";
+export { extractBlockquoteData, type BlockquoteLineData } from "./decorations/blockquotes";
 
 /**
  * Create a new CodeMirror editor state

@@ -166,6 +166,106 @@ const baseTheme = EditorView.theme({
     color: "var(--color-ink-muted)",
     cursor: "pointer",
   },
+
+  // Phase 3: Headings (line decorations)
+  ".cm-heading": {
+    fontWeight: "700",
+    color: "var(--color-ink)",
+  },
+  ".cm-heading-1": {
+    fontSize: "1.75em",
+    lineHeight: "1.3",
+    marginTop: "1.5em",
+  },
+  ".cm-heading-2": {
+    fontSize: "1.5em",
+    lineHeight: "1.35",
+    marginTop: "1.25em",
+  },
+  ".cm-heading-3": {
+    fontSize: "1.25em",
+    lineHeight: "1.4",
+    marginTop: "1em",
+  },
+  ".cm-heading-4": {
+    fontSize: "1.125em",
+    fontWeight: "600",
+  },
+  ".cm-heading-5": {
+    fontSize: "1em",
+    fontWeight: "600",
+  },
+  ".cm-heading-6": {
+    fontSize: "0.9em",
+    fontWeight: "600",
+    color: "var(--color-ink-light)",
+  },
+
+  // Phase 3: Lists (widget styles)
+  ".cm-list-bullet": {
+    display: "inline-block",
+    width: "1.5em",
+    textAlign: "center",
+    color: "var(--color-accent)",
+    fontWeight: "700",
+  },
+  ".cm-list-number": {
+    display: "inline-block",
+    width: "1.5em",
+    textAlign: "right",
+    paddingRight: "0.5em",
+    color: "var(--color-ink-light)",
+    fontFamily: "var(--font-mono)",
+    fontSize: "0.9em",
+  },
+  ".cm-task-checkbox": {
+    display: "inline-block",
+    width: "1.5em",
+    textAlign: "center",
+    cursor: "pointer",
+  },
+  ".cm-task-unchecked": {
+    color: "var(--color-ink-muted)",
+  },
+  ".cm-task-checked": {
+    color: "var(--color-accent)",
+  },
+
+  // Phase 3: Blockquotes (line decorations)
+  ".cm-blockquote": {
+    borderLeft: "3px solid var(--color-border-strong)",
+    paddingLeft: "1rem",
+    color: "var(--color-ink-light)",
+    fontStyle: "italic",
+  },
+  ".cm-blockquote-1": {
+    borderLeftColor: "var(--color-border-strong)",
+  },
+  ".cm-blockquote-2": {
+    borderLeftWidth: "4px",
+    paddingLeft: "1.5rem",
+    borderLeftColor: "var(--color-accent)",
+  },
+  ".cm-blockquote-3": {
+    borderLeftWidth: "5px",
+    paddingLeft: "2rem",
+    borderLeftColor: "var(--color-ink-muted)",
+  },
+  ".cm-blockquote-4": {
+    borderLeftWidth: "6px",
+    paddingLeft: "2.5rem",
+  },
+  ".cm-blockquote-5": {
+    borderLeftWidth: "7px",
+    paddingLeft: "3rem",
+  },
+
+  // Phase 2: Highlight (custom ==...== syntax)
+  ".cm-highlight": {
+    backgroundColor: "var(--color-highlight)",
+    borderRadius: "2px",
+    padding: "0.1em 0",
+  },
 });
 
 /**
