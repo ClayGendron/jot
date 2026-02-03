@@ -19,55 +19,47 @@
   font-family: var(--font-mono);
 }
 
-/* Base styles */
-* {
-  box-sizing: border-box;
-}
+/*
+ * Base styles
+ * Note: box-sizing, margin:0 handled by Tailwind preflight
+ */
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-html {
-  font-size: 16px;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-paper);
+    color: var(--color-ink);
+    line-height: 1.6;
+  }
 
-body {
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-sans);
-  background-color: var(--color-paper);
-  color: var(--color-ink);
-  line-height: 1.6;
-}
+  /* Selection using theme colors */
+  ::selection {
+    background-color: var(--color-accent-soft);
+    color: var(--color-ink);
+  }
 
-/* Selection */
-::selection {
-  background-color: var(--color-accent-soft);
-  color: var(--color-ink);
-}
+  /* Custom scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-strong);
+    border-radius: 4px;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: var(--color-border-strong);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-ink-muted);
-}
-
-/* Focus styles */
-:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-ink-muted);
+  }
 }
 
 /* TipTap Editor Styles */
@@ -491,103 +483,7 @@ body.resize-dragging * {
 }
 
 /* ==========================================
-   Component Animations
+   Note: Component animations now use Tailwind v4 utilities
+   (animate-in, fade-in-0, zoom-in-95, animate-spin, animate-pulse)
+   via tw-animate-css. See individual components for usage.
    ========================================== */
-
-/* Dropdown / Menu animations */
-@keyframes sort-dropdown-appear {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes context-menu-appear {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* Save indicator animations */
-@keyframes save-dot-pulse {
-  0%, 100% {
-    opacity: 0.4;
-    transform: scale(0.9);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes save-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(2px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes save-check-draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes save-error-shake {
-  0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-2px); }
-  40%, 80% { transform: translateX(2px); }
-}
-
-/* Outline pulse animation */
-@keyframes outline-pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.7;
-    transform: scale(1.1);
-  }
-}
-
-/* Code block check animation */
-@keyframes code-check-draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-/* Mermaid diagram animations */
-@keyframes mermaid-menu-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes mermaid-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* Shared spinner animation */
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
