@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { cn } from "@/lib/utils";
 import { Editor, type EditorRef } from "@/components/editor/Editor";
-import { MarkdownEditor, type MarkdownEditorRef } from "@/components/editor/MarkdownEditor";
 import {
   FileTree,
   DocumentOutline,
@@ -109,9 +108,6 @@ function App() {
   const caseSensitiveFs = useEditorStore((state) => state.isCaseSensitiveFs);
   const setIsCaseSensitiveFs = useEditorStore((state) => state.setIsCaseSensitiveFs);
 
-  // Feature flag: use CodeMirror (markdown canonical) vs TipTap (HTML canonical)
-  const useMarkdownEditor = useEditorStore((state) => state.useMarkdownEditor);
-
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const storeLoadWorkspace = useWorkspaceStore((state) => state.loadWorkspace);
   const setLoading = useWorkspaceStore((state) => state.setLoading);
@@ -157,7 +153,6 @@ function App() {
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("files");
   const mainContentRef = useRef<HTMLElement | null>(null);
   const editorRef = useRef<EditorRef | null>(null);
-  const markdownEditorRef = useRef<MarkdownEditorRef | null>(null);
 
   // Search store - individual selectors for React 19 compatibility
   const documentSearchOpen = useSearchStore((s) => s.documentSearchOpen);
@@ -335,11 +330,8 @@ function App() {
         try {
           // Check if file still exists by trying to read it
           const markdownContent = await readFile(persistedTab.filePath, workspacePath);
-          // Store content based on editor mode:
-          // - CodeMirror: store markdown directly
-          // - TipTap: convert to HTML
-          const tabContent = useMarkdownEditor ? markdownContent : markdownToHtml(markdownContent);
-          const tabId = openTab(persistedTab.filePath, tabContent);
+          const htmlContent = markdownToHtml(markdownContent);
+          const tabId = openTab(persistedTab.filePath, htmlContent);
 
           // Restore pinned state
           if (persistedTab.isPinned) {
@@ -624,24 +616,22 @@ function App() {
           return;
         }
         const markdownContent = await readFile(path, workspacePath);
-        // Store content based on editor mode:
-        // - CodeMirror: store markdown directly (no conversion)
-        // - TipTap: convert to HTML
-        const editorContent = useMarkdownEditor ? markdownContent : markdownToHtml(markdownContent);
+        // Convert Markdown to HTML for TipTap editor
+        const htmlContent = markdownToHtml(markdownContent);
 
         // Open in a new tab
-        openTab(path, editorContent);
+        openTab(path, htmlContent);
 
         // Sync with editor state
-        setEditorContent(editorContent);
+        setEditorContent(htmlContent);
         setFilePath(path);
-        setContent(editorContent);
+        setContent(htmlContent);
         markSaved();
       } catch (err) {
         console.error("Failed to open file:", err);
       }
     },
-    [isDirty, filePath, activeTabId, workspacePath, setFilePath, setContent, markSaved, findTabByPath, setActiveTab, openTab, useMarkdownEditor]
+    [isDirty, filePath, activeTabId, workspacePath, setFilePath, setContent, markSaved, findTabByPath, setActiveTab, openTab]
   );
 
   // Save file (immediate save via Cmd+S)
@@ -1242,14 +1232,13 @@ function App() {
   const handleVersionRestore = useCallback(
     (content: string) => {
       // Content from version history is in markdown format
-      // - CodeMirror: use markdown directly
-      // - TipTap: convert to HTML
-      const restoredContent = useMarkdownEditor ? content : markdownToHtml(content);
-      setEditorContent(restoredContent);
-      setContent(restoredContent);
+      // Convert to HTML for the editor
+      const htmlContent = markdownToHtml(content);
+      setEditorContent(htmlContent);
+      setContent(htmlContent);
       setShowHistory(false);
     },
-    [setContent, useMarkdownEditor]
+    [setContent]
   );
 
   // Handle compare versions
@@ -1572,42 +1561,25 @@ function App() {
             "editor-wrapper",
             zenMode && "flex-1 flex justify-center pt-8"
           )} ref={editorContentRef}>
-            {/* Find/Replace Bar - supports both TipTap and CodeMirror */}
+            {/* Find/Replace Bar */}
             {documentSearchOpen && (
               <FindReplaceBar
-                editor={!useMarkdownEditor ? editorRef.current?.editor ?? null : undefined}
-                cmView={useMarkdownEditor ? markdownEditorRef.current?.view ?? null : undefined}
+                editor={editorRef.current?.editor ?? null}
                 onClose={() => {
                   closeDocumentSearch();
-                  if (!useMarkdownEditor) {
-                    editorRef.current?.editor?.commands.clearSearch();
-                  }
+                  editorRef.current?.editor?.commands.clearSearch();
                 }}
               />
             )}
-            {/* Conditionally render CodeMirror or TipTap editor */}
-            {useMarkdownEditor ? (
-              <MarkdownEditor
-                ref={markdownEditorRef}
-                initialContent={editorContent}
-                onUpdate={handleEditorUpdate}
-                placeholder="Start writing..."
-                filePath={filePath}
-                onInternalLinkClick={handleInternalLinkClick}
-                onScrollToHeading={handleScrollToHeading}
-                onBrokenLinkClick={handleBrokenLinkClick}
-              />
-            ) : (
-              <Editor
-                ref={editorRef}
-                initialContent={editorContent}
-                onUpdate={handleEditorUpdate}
-                placeholder="Start writing..."
-                onInternalLinkClick={handleInternalLinkClick}
-                onScrollToHeading={handleScrollToHeading}
-                onBrokenLinkClick={handleBrokenLinkClick}
-              />
-            )}
+            <Editor
+              ref={editorRef}
+              initialContent={editorContent}
+              onUpdate={handleEditorUpdate}
+              placeholder="Start writing..."
+              onInternalLinkClick={handleInternalLinkClick}
+              onScrollToHeading={handleScrollToHeading}
+              onBrokenLinkClick={handleBrokenLinkClick}
+            />
           </div>
         ) : (
           <WelcomeScreen

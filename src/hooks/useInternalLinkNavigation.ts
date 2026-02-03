@@ -2,17 +2,14 @@
  * Hook for handling internal link navigation
  *
  * Detects clicks on internal links and triggers navigation to the target file.
- * Updated for CodeMirror mark-based links (no longer <a> elements).
  */
 
 import { useCallback, useEffect, useMemo } from "react";
-import type { EditorView } from "@codemirror/view";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { resolveInternalLink, isInternalLink, isSameFileHeadingLink } from "@/lib/links/resolver";
 import { isWithinWorkspace, shouldScrollOnly } from "@/lib/links/linkService";
 import { joinFsPaths } from "@/lib/path/pathUtils";
-import { getLinkAtPosition } from "@/components/editor/codemirror/decorations/links";
 import type { FileEntry } from "@/lib/tauri/files";
 
 export interface UseInternalLinkNavigationOptions {
@@ -28,8 +25,6 @@ export interface UseInternalLinkNavigationOptions {
   enabled?: boolean;
   /** Current file path - used to detect same-file navigation with explicit filename */
   currentFilePath?: string | null;
-  /** CodeMirror EditorView instance for CM-state-driven link detection */
-  cmView?: EditorView | null;
 }
 
 export interface UseInternalLinkNavigationResult {
@@ -47,7 +42,6 @@ export function useInternalLinkNavigation({
   containerRef,
   enabled = true,
   currentFilePath,
-  cmView,
 }: UseInternalLinkNavigationOptions): UseInternalLinkNavigationResult {
   // Use individual selectors to avoid React 19 + Zustand snapshot caching issues
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
@@ -133,90 +127,25 @@ export function useInternalLinkNavigation({
   );
 
   // Click event listener for the container
-  // Now uses CM state to detect links instead of querying DOM for <a> elements
   useEffect(() => {
     if (!enabled || !containerRef.current) return;
 
     const handleClick = (event: MouseEvent) => {
-      // First, check for traditional <a> elements with data-internal-link
-      // This handles cases outside of CM (like rendered HTML)
       const target = event.target as HTMLElement;
-      const anchorLink = target.closest("a[data-internal-link]") as HTMLAnchorElement | null;
+      const link = target.closest("a[data-internal-link]") as HTMLAnchorElement | null;
 
-      if (anchorLink) {
-        event.preventDefault();
-        event.stopPropagation();
-        const href = anchorLink.getAttribute("href");
-        if (href) {
-          handleLinkClick(href).catch((err) => {
-            console.error("Failed to handle link click:", err);
-          });
-        }
-        return;
-      }
+      if (!link) return;
 
-      // For CM marks, we need to check if the click is on styled link text
-      // Links are now Decoration.mark with data-href attribute on the span
-      const markElement = target.closest("[data-internal-link]") as HTMLElement | null;
+      // Prevent default navigation
+      event.preventDefault();
+      event.stopPropagation();
 
-      if (markElement) {
-        const href = markElement.getAttribute("data-href");
-        if (href) {
-          event.preventDefault();
-          event.stopPropagation();
-          handleLinkClick(href).catch((err) => {
-            console.error("Failed to handle link click:", err);
-          });
-        }
-        return;
-      }
-
-      // For external links (cm-external-link), also check for data-href
-      const externalLink = target.closest(".cm-external-link[data-href]") as HTMLElement | null;
-      if (externalLink) {
-        const href = externalLink.getAttribute("data-href");
-        if (href) {
-          event.preventDefault();
-          event.stopPropagation();
-          // Open external links in default browser
-          // Try Tauri opener plugin first, fall back to window.open
-          import("@tauri-apps/plugin-opener")
-            .then(({ openUrl }) => openUrl(href))
-            .catch(() => {
-              // Not in Tauri environment or plugin not available
-              window.open(href, "_blank", "noopener,noreferrer");
-            });
-        }
-        return;
-      }
-
-      // Alternative: use CM state to find link at click position
-      // This is more reliable when marks don't have the right data attributes
-      if (cmView) {
-        const pos = cmView.posAtCoords({ x: event.clientX, y: event.clientY });
-        if (pos !== null) {
-          const linkData = getLinkAtPosition(cmView.state, pos);
-          if (linkData) {
-            if (linkData.isInternal) {
-              event.preventDefault();
-              event.stopPropagation();
-              handleLinkClick(linkData.url).catch((err) => {
-                console.error("Failed to handle link click:", err);
-              });
-            } else {
-              // External link - open in browser
-              event.preventDefault();
-              event.stopPropagation();
-              // Try Tauri opener plugin first, fall back to window.open
-              import("@tauri-apps/plugin-opener")
-                .then(({ openUrl }) => openUrl(linkData.url))
-                .catch(() => {
-                  // Not in Tauri environment or plugin not available
-                  window.open(linkData.url, "_blank", "noopener,noreferrer");
-                });
-            }
-          }
-        }
+      const href = link.getAttribute("href");
+      if (href) {
+        // Catch promise rejections to avoid unhandled rejection errors
+        handleLinkClick(href).catch((err) => {
+          console.error("Failed to handle link click:", err);
+        });
       }
     };
 
@@ -226,7 +155,7 @@ export function useInternalLinkNavigation({
     return () => {
       container.removeEventListener("click", handleClick);
     };
-  }, [enabled, containerRef, handleLinkClick, cmView]);
+  }, [enabled, containerRef, handleLinkClick]);
 
   return { handleLinkClick };
 }

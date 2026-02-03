@@ -5,13 +5,10 @@
  * - Spelling suggestions
  * - Add to Dictionary option
  * - Ignore (session only) option
- *
- * Supports both TipTap (HTML) and CodeMirror 6 (Markdown) editors.
  */
 
 import { useEffect, useState, useCallback } from "react";
 import type { Editor } from "@tiptap/react";
-import type { EditorView } from "@codemirror/view";
 import { XCircle, BookPlus, SkipForward, Check } from "lucide-react";
 import { usePositionedMenu } from "@/hooks/usePositionedMenu";
 import {
@@ -24,12 +21,6 @@ import {
 } from "@/components/ui/positioned-menu";
 import { getSpellSuggestions } from "./extensions/SpellCheck";
 import { addToPersonalDictionary } from "@/lib/spellcheck/personalDictionary";
-import {
-  replaceWord as cmReplaceWord,
-  addToIgnored as cmAddToIgnored,
-  refreshSpellCheck as cmRefreshSpellCheck,
-} from "./codemirror/extensions/spellCheck";
-import { addToPersonalDictionaryMemory } from "@/lib/spellcheck";
 
 interface SpellCheckContextMenuProps {
   /** Position to show the menu */
@@ -40,10 +31,8 @@ interface SpellCheckContextMenuProps {
   from: number;
   /** Position of the word in the document (to) */
   to: number;
-  /** TipTap editor instance (for HTML mode) */
-  editor?: Editor;
-  /** CodeMirror EditorView (for Markdown mode) */
-  cmView?: EditorView;
+  /** TipTap editor instance */
+  editor: Editor;
   /** Callback when menu should be dismissed */
   onDismiss: () => void;
 }
@@ -59,15 +48,11 @@ export function SpellCheckContextMenu({
   from,
   to,
   editor,
-  cmView,
   onDismiss,
 }: SpellCheckContextMenuProps) {
   const menuRef = usePositionedMenu({ onDismiss });
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
-
-  // Determine which editor mode we're in
-  const isCM6 = !!cmView;
 
   // Load suggestions on mount
   useEffect(() => {
@@ -78,15 +63,10 @@ export function SpellCheckContextMenu({
   // Handle suggestion click - replace word
   const handleSuggestionClick = useCallback(
     (suggestion: string) => {
-      if (isCM6 && cmView) {
-        cmReplaceWord(cmView, from, to, suggestion);
-        cmRefreshSpellCheck(cmView);
-      } else if (editor) {
-        editor.commands.replaceWord(from, to, suggestion);
-      }
+      editor.commands.replaceWord(from, to, suggestion);
       onDismiss();
     },
-    [editor, cmView, isCM6, from, to, onDismiss]
+    [editor, from, to, onDismiss]
   );
 
   // Handle Add to Dictionary
@@ -94,34 +74,21 @@ export function SpellCheckContextMenu({
     try {
       // Add to persistent dictionary
       await addToPersonalDictionary(word);
-
-      if (isCM6 && cmView) {
-        // Update in-memory dictionary and refresh decorations
-        addToPersonalDictionaryMemory(word);
-        cmRefreshSpellCheck(cmView);
-      } else if (editor) {
-        // Update in-memory (via editor command which updates decorations)
-        editor.commands.addToPersonalDictionary(word);
-      }
-
+      // Also update in-memory (via editor command which updates decorations)
+      editor.commands.addToPersonalDictionary(word);
       setFeedbackMessage("Added to dictionary");
       setTimeout(onDismiss, 1000);
     } catch (error) {
       console.error("Failed to add word to dictionary:", error);
       onDismiss();
     }
-  }, [word, editor, cmView, isCM6, onDismiss]);
+  }, [word, editor, onDismiss]);
 
   // Handle Ignore (session only)
   const handleIgnore = useCallback(() => {
-    if (isCM6 && cmView) {
-      cmAddToIgnored(cmView, word);
-      cmRefreshSpellCheck(cmView);
-    } else if (editor) {
-      editor.commands.ignoreWord(word);
-    }
+    editor.commands.ignoreWord(word);
     onDismiss();
-  }, [word, editor, cmView, isCM6, onDismiss]);
+  }, [word, editor, onDismiss]);
 
   return (
     <PositionedMenu

@@ -14,7 +14,7 @@ export interface Tab {
   filePath: string;
   /** Display name (file name without path) */
   displayName: string;
-  /** Content - HTML when useMarkdownEditor=false (TipTap), Markdown when true (CodeMirror) */
+  /** HTML content (TipTap's internal format) */
   content: string;
   /** Whether tab has unsaved changes */
   isDirty: boolean;
