@@ -13,7 +13,7 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error";
 export interface DocumentState {
   /** Current file path (null if untitled) */
   filePath: string | null;
-  /** Document content as HTML (TipTap's internal format) */
+  /** Document content - HTML when useMarkdownEditor=false (TipTap), Markdown when true (CodeMirror) */
   content: string;
   /** Whether document has unsaved changes */
   isDirty: boolean;
@@ -36,6 +36,8 @@ export interface LayoutState {
 export type FontFamily = "serif" | "sans" | "mono";
 
 export interface EditorUIState {
+  /** Feature flag: use CodeMirror 6 editor (Markdown canonical) instead of TipTap (HTML canonical) */
+  useMarkdownEditor: boolean;
   /** Whether sidebar is visible */
   sidebarOpen: boolean;
   /** Whether editor is in focus mode */
@@ -111,6 +113,7 @@ export const MIN_SIDEBAR_WIDTH = 180;
 export const MAX_SIDEBAR_WIDTH = 500;
 
 const initialUIState: EditorUIState = {
+  useMarkdownEditor: false, // Feature flag: set to true to use CodeMirror 6 editor
   sidebarOpen: true,
   focusMode: false,
   theme: "system",
@@ -217,6 +220,7 @@ export const selectDocument = (state: EditorState): DocumentState => ({
 });
 
 export const selectUIState = (state: EditorState): EditorUIState => ({
+  useMarkdownEditor: state.useMarkdownEditor,
   sidebarOpen: state.sidebarOpen,
   focusMode: state.focusMode,
   theme: state.theme,

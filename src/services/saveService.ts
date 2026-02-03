@@ -10,7 +10,7 @@
  * Pipeline:
  * 1. Validate tab exists and is dirty
  * 2. Update SaveIndicator (active doc only)
- * 3. Convert HTML → Markdown
+ * 3. Convert HTML → Markdown (TipTap only; CodeMirror content is already Markdown)
  * 4. Normalize line endings
  * 5. Write to disk
  * 6. Save version history
@@ -77,11 +77,12 @@ export async function saveDocumentPipeline(
     return { saved: false, isClean: true }; // Already clean, nothing to save
   }
 
-  // Capture HTML content snapshot at START of save
+  // Capture content snapshot at START of save
   // Used to detect if content changed during async save
-  const htmlAtSaveStart = tab.content;
+  const contentAtSaveStart = tab.content;
 
   const workspacePath = useWorkspaceStore.getState().workspacePath;
+  const useMarkdownEditor = useEditorStore.getState().useMarkdownEditor;
 
   // 1. Update SaveIndicator for active doc only
   if (isActiveDoc) {
@@ -89,9 +90,10 @@ export async function saveDocumentPipeline(
   }
 
   try {
-    // 2. Convert HTML → Markdown using the SNAPSHOT (not current tab.content)
-    // This ensures we save exactly what we captured and will compare against
-    const markdown = htmlToMarkdown(htmlAtSaveStart);
+    // 2. Get Markdown content:
+    // - CodeMirror: content is already Markdown, use directly
+    // - TipTap: convert HTML → Markdown
+    const markdown = useMarkdownEditor ? contentAtSaveStart : htmlToMarkdown(contentAtSaveStart);
 
     // 3. Normalize line endings for consistent hashing
     const normalizedMarkdown = markdown.replace(/\r\n/g, "\n");
@@ -118,10 +120,10 @@ export async function saveDocumentPipeline(
     // 7. Update hash in links store
     useLinksStore.getState().setFileHash(tab.filePath, hash);
 
-    // 8. GUARD: Check if content changed during save using EXACT HTML comparison
+    // 8. GUARD: Check if content changed during save using EXACT content comparison
     // If user edited while save was in progress, don't mark as saved
     const currentTab = useTabsStore.getState().tabs.find((t) => t.id === tabId);
-    const contentUnchanged = Boolean(currentTab && currentTab.content === htmlAtSaveStart);
+    const contentUnchanged = Boolean(currentTab && currentTab.content === contentAtSaveStart);
 
     if (contentUnchanged) {
       // Content unchanged during save - safe to mark as saved
