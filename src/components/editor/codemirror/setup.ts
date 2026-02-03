@@ -1,8 +1,11 @@
 /**
- * CodeMirror 6 Basic Setup
+ * CodeMirror 6 Setup for Jot
  *
- * Creates a minimal CM6 configuration for editing Markdown.
+ * Creates CM6 configuration for editing Markdown with WYSIWYG features.
  * Markdown is the canonical format - no conversion on load/save.
+ *
+ * Phase 1: Basic editing
+ * Phase 2: Hidden syntax, formatting commands, auto-close markers
  */
 
 import { EditorState, type Extension } from "@codemirror/state";
@@ -17,10 +20,28 @@ import { keymap } from "@codemirror/view";
 import { jotKeymap } from "./keymap";
 import { jotTheme } from "./theme";
 
+// Phase 2 extensions
+import { createHiddenSyntaxExtension, hiddenSyntaxCompartment, toggleRawView } from "./extensions/hiddenSyntax";
+import { highlightField } from "./decorations/highlight";
+import { autoCloseMarkdown } from "./extensions/autoCloseMarkdown";
+import { deleteBehavior } from "./extensions/deleteBehavior";
+
+/**
+ * Options for creating editor extensions
+ */
+export interface CreateExtensionsOptions {
+  /** Show line numbers in gutter */
+  showLineNumbers?: boolean;
+  /** Raw view mode - shows all syntax instead of WYSIWYG */
+  rawMode?: boolean;
+}
+
 /**
  * Create the base extensions for the Jot CodeMirror editor
  */
-export function createBaseExtensions(): Extension[] {
+export function createBaseExtensions(options: CreateExtensionsOptions = {}): Extension[] {
+  const { rawMode = false } = options;
+
   return [
     // Markdown language with GFM (GitHub Flavored Markdown)
     markdown({ extensions: [GFM] }),
@@ -33,6 +54,14 @@ export function createBaseExtensions(): Extension[] {
     closeBrackets(),
     highlightActiveLine(),
     highlightSelectionMatches(),
+
+    // Phase 2: WYSIWYG features (only in non-raw mode)
+    createHiddenSyntaxExtension(rawMode),
+    highlightField, // Custom ==highlight== decoration
+
+    // Phase 2: Auto-close and delete behavior (always active)
+    autoCloseMarkdown,
+    deleteBehavior,
 
     // Keymaps
     keymap.of([
@@ -49,10 +78,10 @@ export function createBaseExtensions(): Extension[] {
 }
 
 /**
- * Create extensions with optional line numbers
+ * Create extensions with optional line numbers and raw mode
  */
-export function createExtensions(options: { showLineNumbers?: boolean } = {}): Extension[] {
-  const extensions = createBaseExtensions();
+export function createExtensions(options: CreateExtensionsOptions = {}): Extension[] {
+  const extensions = createBaseExtensions(options);
 
   if (options.showLineNumbers) {
     extensions.push(lineNumbers());
@@ -60,6 +89,9 @@ export function createExtensions(options: { showLineNumbers?: boolean } = {}): E
 
   return extensions;
 }
+
+// Re-export for convenience
+export { hiddenSyntaxCompartment, toggleRawView };
 
 /**
  * Create a new CodeMirror editor state

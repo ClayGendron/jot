@@ -4,8 +4,8 @@
  * A WYSIWYG-capable markdown editor where markdown is the canonical format.
  * No conversion on load/save - what you edit is what gets stored.
  *
- * Phase 1: Basic editing with raw markdown visible.
- * Future phases will add hidden syntax decorations for true WYSIWYG.
+ * Phase 1: Basic editing
+ * Phase 2: Hidden syntax decorations for true WYSIWYG, formatting commands
  */
 
 import {
@@ -16,7 +16,7 @@ import {
   useImperativeHandle,
 } from "react";
 import { EditorView } from "@codemirror/view";
-import { createEditorState, createEditorView, createExtensions } from "./codemirror/setup";
+import { createEditorState, createEditorView, createExtensions, toggleRawView } from "./codemirror/setup";
 import { useEditorStore } from "@/stores/editorStore";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +49,8 @@ export interface MarkdownEditorRef {
  * Key differences from TipTap Editor:
  * - Markdown is the canonical format (no HTML conversion)
  * - Content is stored and edited as raw markdown
- * - Future: Hidden syntax decorations will provide WYSIWYG feel
+ * - Phase 2: Hidden syntax decorations provide WYSIWYG feel
+ * - sourceMode toggles between WYSIWYG and raw markdown view
  */
 export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>(
   function MarkdownEditor(
@@ -81,8 +82,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       if (!containerRef.current) return;
 
       // Create extensions with current settings
+      // sourceMode = true means show raw markdown (rawMode = true)
       const extensions = createExtensions({
         showLineNumbers,
+        rawMode: sourceMode,
       });
 
       // Add update listener
@@ -114,6 +117,16 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       // Only run on mount - content updates handled separately
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Handle sourceMode (raw view) toggle
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) return;
+
+      // Toggle hidden syntax based on sourceMode
+      // sourceMode = true means show raw markdown
+      toggleRawView(view, sourceMode);
+    }, [sourceMode]);
 
     // Sync external content changes (e.g., switching files)
     useEffect(() => {

@@ -7,7 +7,7 @@
 | Phase | Status | Commit | Date |
 |-------|--------|--------|------|
 | Phase 1: Foundation | **COMPLETE** | `0a6338f` | 2026-02-03 |
-| Phase 2: Hidden Syntax | Pending | - | - |
+| Phase 2: Hidden Syntax | **COMPLETE** | `01b4891` | 2026-02-03 |
 | Phase 3: Block Structure | Pending | - | - |
 | Phase 4: Links/Images | Pending | - | - |
 | Phase 5: Code/Mermaid | Pending | - | - |
@@ -315,25 +315,49 @@ function updateCell(view: EditorView, cell: CellRange, value: string) {
 
 ---
 
-### Phase 2: Hidden Syntax + Inline Formatting
+### Phase 2: Hidden Syntax + Inline Formatting ✅ COMPLETE
 **Syntax always hidden (in WYSIWYG), basic formatting works.**
 
-**Create:**
-- `codemirror/extensions/hiddenSyntax.ts` - hide all syntax markers + Compartment for toggle
-- `codemirror/extensions/autoCloseMarkdown.ts` - IDE-like `*` behavior
-- `codemirror/extensions/deleteBehavior.ts` - boundary-safe delete
-- `codemirror/commands/formatting.ts` - toggle bold/italic/etc
-- `codemirror/utils/formatActive.ts` - detect active format
-- `codemirror/decorations/highlight.ts` - custom `==...==` decoration
+> **Completed:** 2026-02-03
 
-**Features:**
-- Bold, italic, strikethrough, highlight, inline code
-- Atomic ranges prevent cursor in syntax
-- Auto-close `*` and `**` when typing
-- Raw view toggle works (shows all syntax)
-- Toolbar commands work
+**Created:** ✅
+- `codemirror/extensions/hiddenSyntax.ts` - hide all syntax markers + Compartment for toggle ✅
+- `codemirror/extensions/autoCloseMarkdown.ts` - IDE-like `*` behavior ✅
+- `codemirror/extensions/deleteBehavior.ts` - boundary-safe delete ✅
+- `codemirror/commands/formatting.ts` - toggle bold/italic/strikethrough/code/highlight ✅
+- `codemirror/utils/formatActive.ts` - detect active format at cursor ✅
+- `codemirror/decorations/highlight.ts` - custom `==...==` decoration ✅
 
-**Test:** Toggle formatting, cursor never sees syntax (unless raw mode), toolbar active states
+**Updated:** ✅
+- `codemirror/setup.ts` - integrated Phase 2 extensions ✅
+- `codemirror/keymap.ts` - added formatting keyboard shortcuts ✅
+- `MarkdownEditor.tsx` - added sourceMode toggle for raw view ✅
+
+**Features:** ✅
+- Bold, italic, strikethrough, highlight, inline code formatting
+- Atomic ranges prevent cursor from entering hidden syntax
+- Auto-close `*`, `_`, `~` when typing (IDE-like behavior)
+- Raw view toggle works via sourceMode (shows all syntax)
+- Keyboard shortcuts: Cmd+B (bold), Cmd+I (italic), Cmd+E (code), Cmd+Shift+S (strikethrough), Cmd+Shift+H (highlight)
+- Boundary-safe delete (backspace/delete markers as unit)
+
+**Tests Added:** ✅
+- `hiddenSyntax.test.ts` (20 tests)
+- `formatting.test.ts` (21 tests)
+- `formatActive.test.ts` (27 tests)
+- `highlight.test.ts` (18 tests)
+- `autoCloseMarkdown.test.ts` (14 tests)
+- `deleteBehavior.test.ts` (17 tests)
+
+**Verification:** ✅
+- All 1062 tests pass
+- TypeScript check passes
+- Rust build passes
+
+**Known Limitations (Phase 2):**
+- Toolbar buttons not yet connected to CM6 commands - done in Phase 8
+- Headings/lists/blockquotes syntax still visible - done in Phase 3
+- Find/Replace not connected - done in Phase 7
 
 ---
 
@@ -489,44 +513,59 @@ function updateCell(view: EditorView, cell: CellRange, value: string) {
 src/components/editor/
 ├── MarkdownEditor.tsx              ✅ Phase 1
 ├── codemirror/
-│   ├── setup.ts                    ✅ Phase 1
+│   ├── setup.ts                    ✅ Phase 1, updated Phase 2
 │   ├── theme.ts                    ✅ Phase 1
-│   ├── keymap.ts                   ✅ Phase 1 (placeholder)
+│   ├── keymap.ts                   ✅ Phase 1 (placeholder), updated Phase 2
 │   ├── __tests__/
 │   │   └── setup.test.ts           ✅ Phase 1
+```
+
+### Created (Phase 2) ✅
+```
+src/components/editor/codemirror/
+│   ├── extensions/
+│   │   ├── hiddenSyntax.ts         ✅ Phase 2 - hide syntax + Compartment
+│   │   ├── autoCloseMarkdown.ts    ✅ Phase 2 - IDE-like auto-close
+│   │   ├── deleteBehavior.ts       ✅ Phase 2 - boundary-safe delete
+│   ├── commands/
+│   │   └── formatting.ts           ✅ Phase 2 - toggle bold/italic/etc
+│   ├── decorations/
+│   │   └── highlight.ts            ✅ Phase 2 - custom ==...== decoration
+│   ├── utils/
+│   │   └── formatActive.ts         ✅ Phase 2 - detect active format
+│   ├── __tests__/
+│   │   ├── hiddenSyntax.test.ts    ✅ Phase 2 (20 tests)
+│   │   ├── formatting.test.ts      ✅ Phase 2 (21 tests)
+│   │   ├── formatActive.test.ts    ✅ Phase 2 (27 tests)
+│   │   ├── highlight.test.ts       ✅ Phase 2 (18 tests)
+│   │   ├── autoCloseMarkdown.test.ts ✅ Phase 2 (14 tests)
+│   │   └── deleteBehavior.test.ts  ✅ Phase 2 (17 tests)
 ```
 
 ### To Create (Future Phases)
 ```
 src/components/editor/codemirror/
 │   ├── extensions/
-│   │   ├── hiddenSyntax.ts       # + Compartment for raw toggle
-│   │   ├── autoCloseMarkdown.ts
-│   │   ├── deleteBehavior.ts
-│   │   ├── inputRules.ts         # list/heading/quote creation
-│   │   ├── internalLinkCompletion.ts
-│   │   ├── search.ts
-│   │   └── spellCheck.ts
+│   │   ├── inputRules.ts           # Phase 3 - list/heading/quote creation
+│   │   ├── internalLinkCompletion.ts # Phase 4 - [[ autocomplete
+│   │   ├── search.ts               # Phase 7 - CM6 search integration
+│   │   └── spellCheck.ts           # Phase 7 - spell check integration
 │   ├── commands/
-│   │   ├── formatting.ts
-│   │   └── insertTable.ts
+│   │   └── insertTable.ts          # Phase 6 - table creation
 │   ├── decorations/
-│   │   ├── headings.ts
-│   │   ├── lists.ts
-│   │   ├── links.ts
-│   │   ├── images.ts
-│   │   ├── blockquotes.ts
-│   │   └── highlight.ts          # custom ==...== handling
+│   │   ├── headings.ts             # Phase 3 - hide #, apply styles
+│   │   ├── lists.ts                # Phase 3 - bullets, checkboxes
+│   │   ├── links.ts                # Phase 4 - hide []() syntax
+│   │   ├── images.ts               # Phase 4 - image decoration
+│   │   └── blockquotes.ts          # Phase 3 - hide >, apply style
 │   ├── tables/
-│   │   ├── parseTable.ts
-│   │   └── updateCell.ts
+│   │   ├── parseTable.ts           # Phase 6 - parse with cell ranges
+│   │   └── updateCell.ts           # Phase 6 - minimal cell mutation
 │   ├── widgets/
-│   │   ├── CodeBlockWidget.tsx
-│   │   ├── MermaidWidget.tsx
-│   │   ├── TableWidget.tsx
-│   │   └── ImageWidget.tsx
-│   └── utils/
-│       └── formatActive.ts
+│   │   ├── CodeBlockWidget.tsx     # Phase 5 - syntax highlighted code
+│   │   ├── MermaidWidget.tsx       # Phase 5 - mermaid diagrams
+│   │   ├── TableWidget.tsx         # Phase 6 - editable table UI
+│   │   └── ImageWidget.tsx         # Phase 4 - image rendering
 ```
 
 ### Modified (Phase 1) ✅
@@ -534,6 +573,11 @@ src/components/editor/codemirror/
 - `src/stores/tabsStore.ts` - Updated content format comment ✅
 - `src/services/saveService.ts` - Skip htmlToMarkdown when flag enabled ✅
 - `src/App.tsx` - Conditional editor rendering, skip markdownToHtml when flag enabled ✅
+
+### Modified (Phase 2) ✅
+- `src/components/editor/codemirror/setup.ts` - Added Phase 2 extensions, rawMode option ✅
+- `src/components/editor/codemirror/keymap.ts` - Added formatting keyboard shortcuts ✅
+- `src/components/editor/MarkdownEditor.tsx` - Added sourceMode toggle via toggleRawView ✅
 
 ### To Modify (Future Phases)
 - `src/components/editor/EditorToolbar.tsx` - CM6 commands, raw mode toggle
