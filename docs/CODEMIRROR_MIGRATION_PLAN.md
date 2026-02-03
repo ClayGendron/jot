@@ -9,8 +9,8 @@
 | Phase 1: Foundation | **COMPLETE** | `0a6338f` | 2026-02-03 |
 | Phase 2: Hidden Syntax | **COMPLETE** | `01b4891` | 2026-02-03 |
 | Phase 3: Block Structure | **COMPLETE** | `cfc40f6` | 2026-02-03 |
-| Phase 4: Links/Images | **COMPLETE** | - | 2026-02-03 |
-| Phase 5: Code/Mermaid | Pending | - | - |
+| Phase 4: Links/Images | **COMPLETE** | `f234853` | 2026-02-03 |
+| Phase 5: Code/Mermaid | **COMPLETE** | `f6b4a1c` | 2026-02-03 |
 | Phase 6: Tables | Pending | - | - |
 | Phase 7: Search/Spell | Pending | - | - |
 | Phase 8: Toolbar/Menus | Pending | - | - |
@@ -444,21 +444,45 @@ function updateCell(view: EditorView, cell: CellRange, value: string) {
 
 ---
 
-### Phase 5: Code Blocks and Mermaid
+### Phase 5: Code Blocks and Mermaid ✅ COMPLETE
 **Syntax-highlighted code, mermaid diagrams.**
 
-**Create:**
-- `codemirror/widgets/CodeBlockWidget.tsx` - syntax highlighted container
-- `codemirror/widgets/MermaidWidget.tsx` - renders diagram
+> **Completed:** 2026-02-03 | **Commit:** `f6b4a1c`
 
-**Behavior:**
-- Code blocks: Always show highlighted code with language badge, copy button
-- Mermaid: Raw when focused (cursor inside), rendered SVG otherwise
+**Created:** ✅
+- `codemirror/decorations/codeBlocks.ts` - CodeBlockWidget with Shiki syntax highlighting ✅
+- `codemirror/decorations/mermaid.ts` - MermaidWidget with live diagram rendering ✅
 
-**Port from:**
-- `CodeBlockWithCopy.tsx` - mermaid loader, rendering logic
+**Features:** ✅
+- Code blocks: Shiki syntax highlighting (VS Code quality), language badge, copy button
+- Mermaid: Rendered SVG diagram, loading/error states, SVG/PNG export buttons
+- Theme-aware: Detects dark/light mode from document or system preferences
+- Copy button: Copies code/source to clipboard with success feedback
+- Lazy-loaded highlighter: Cached for performance, dynamically loads languages
 
-**Test:** Languages highlight, mermaid renders/edits correctly
+**Dependencies Added:** ✅
+```
+shiki@3.22.0
+```
+
+**Dependencies Removed:** ✅
+```
+lowlight
+hast-util-to-html
+```
+
+**Tests Added:** ✅
+- `codeBlocks.test.ts` (28 tests) - extraction, decorations, copy, highlighting
+- `mermaid.test.ts` (13 tests) - extraction, decorations, rendering, error handling
+
+**Verification:** ✅
+- All 1289 tests pass
+- TypeScript check passes
+- Rust build passes
+
+**Known Limitations (Phase 5):**
+- Mermaid blocks are always rendered (no "raw when focused" mode yet)
+- Code block editing requires clicking into widget (atomic range behavior)
 
 ---
 
@@ -616,6 +640,17 @@ src/components/editor/codemirror/
 │   │   └── internalLinkCompletion.test.ts ✅ Phase 4 (16 tests)
 ```
 
+### Created (Phase 5) ✅
+```
+src/components/editor/codemirror/
+│   ├── decorations/
+│   │   ├── codeBlocks.ts           ✅ Phase 5 - Shiki syntax highlighting, CodeBlockWidget
+│   │   └── mermaid.ts              ✅ Phase 5 - MermaidWidget with live rendering
+│   ├── __tests__/
+│   │   ├── codeBlocks.test.ts      ✅ Phase 5 (28 tests)
+│   │   └── mermaid.test.ts         ✅ Phase 5 (13 tests)
+```
+
 ### To Create (Future Phases)
 ```
 src/components/editor/codemirror/
@@ -628,8 +663,6 @@ src/components/editor/codemirror/
 │   │   ├── parseTable.ts           # Phase 6 - parse with cell ranges
 │   │   └── updateCell.ts           # Phase 6 - minimal cell mutation
 │   ├── widgets/
-│   │   ├── CodeBlockWidget.tsx     # Phase 5 - syntax highlighted code
-│   │   ├── MermaidWidget.tsx       # Phase 5 - mermaid diagrams
 │   │   └── TableWidget.tsx         # Phase 6 - editable table UI
 ```
 
@@ -654,6 +687,11 @@ src/components/editor/codemirror/
 - `src/components/editor/codemirror/theme.ts` - Added link and image styles with CSS variables ✅
 - `src/components/editor/MarkdownEditor.tsx` - Added internal link navigation props and hook ✅
 - `src/App.tsx` - Pass link navigation callbacks to MarkdownEditor ✅
+
+### Modified (Phase 5) ✅
+- `src/components/editor/codemirror/setup.ts` - Added codeBlockField, mermaidField, Phase 5 re-exports ✅
+- `src/components/editor/codemirror/theme.ts` - Added code block and mermaid widget styles ✅
+- `package.json` - Added shiki, removed lowlight and hast-util-to-html ✅
 
 ### To Modify (Future Phases)
 - `src/components/editor/EditorToolbar.tsx` - CM6 commands, raw mode toggle
@@ -684,6 +722,17 @@ src/components/editor/codemirror/
 }
 ```
 
+### Added (Phase 5) ✅
+```json
+{
+  "shiki": "3.22.0"
+}
+```
+
+### Removed (Phase 5) ✅
+- `lowlight` - replaced by shiki
+- `hast-util-to-html` - no longer needed
+
 ### Configure for GFM
 ```typescript
 import { markdown } from "@codemirror/lang-markdown";
@@ -698,7 +747,7 @@ Note: `==highlight==` uses **custom regex-based decoration** (not Lezer).
 - `turndown`
 
 ### Keep
-- `lowlight` - code syntax highlighting
+- `shiki` - VS Code quality syntax highlighting (Phase 5)
 - `markdown-it` - for export/copy rendering
 
 ---
