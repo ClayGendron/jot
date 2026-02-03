@@ -619,6 +619,26 @@ const baseTheme = EditorView.theme({
     backgroundColor: "var(--color-paper)",
     borderColor: "var(--color-accent)",
   },
+
+  // Phase 9: Horizontal Rules
+  ".cm-horizontal-rule": {
+    display: "block",
+    width: "100%",
+    border: "none",
+    borderTop: "1px solid var(--color-border)",
+    margin: "2em 0",
+    height: "0",
+  },
+
+  // Phase 9: Inline code (for raw syntax view)
+  ".cm-inline-code": {
+    fontFamily: "var(--font-mono)",
+    fontSize: "0.9em",
+    backgroundColor: "var(--color-paper-warm)",
+    padding: "0.15em 0.4em",
+    borderRadius: "4px",
+    color: "var(--color-accent)",
+  },
 });
 
 /**

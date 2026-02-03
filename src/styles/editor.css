@@ -487,3 +487,73 @@ body.resize-dragging * {
    (animate-in, fade-in-0, zoom-in-95, animate-spin, animate-pulse)
    via tw-animate-css. See individual components for usage.
    ========================================== */
+
+/* ==========================================
+   CodeMirror 6 Editor Styles
+   Phase 9: Styles for the CM6 markdown editor
+   ========================================== */
+
+/* Font family classes for CM6 editor */
+.cm-editor.font-serif .cm-content,
+.font-serif .cm-editor .cm-content {
+  font-family: var(--font-serif);
+}
+
+.cm-editor.font-sans .cm-content,
+.font-sans .cm-editor .cm-content {
+  font-family: var(--font-sans);
+}
+
+.cm-editor.font-mono .cm-content,
+.font-mono .cm-editor .cm-content {
+  font-family: var(--font-mono);
+}
+
+/* ==========================================
+   Focus Mode - CodeMirror styles
+   ========================================== */
+
+.focus-mode .cm-editor .cm-content {
+  padding-top: 4rem;
+}
+
+.focus-mode .cm-editor .cm-line {
+  opacity: 0.3;
+  transition: opacity var(--transition-smooth);
+}
+
+.focus-mode .cm-editor .cm-activeLine {
+  opacity: 1;
+}
+
+/* Keep widgets (code blocks, tables, etc.) visible when focused */
+.focus-mode .cm-editor .cm-line:has(.cm-code-block-widget),
+.focus-mode .cm-editor .cm-line:has(.cm-table-widget),
+.focus-mode .cm-editor .cm-line:has(.cm-mermaid-widget),
+.focus-mode .cm-editor .cm-line:has(.cm-image-widget) {
+  opacity: 1;
+}
+
+/* ==========================================
+   Zen Mode - CodeMirror styles
+   ========================================== */
+
+.zen-mode .cm-editor .cm-content {
+  max-width: 720px;
+  width: 100%;
+  padding: 3rem var(--spacing-page);
+}
+
+/* ==========================================
+   CodeMirror Spinner Animation
+   Used by Mermaid loading indicator
+   ========================================== */
+
+@keyframes cm-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

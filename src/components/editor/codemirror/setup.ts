@@ -47,6 +47,9 @@ import { mermaidField } from "./decorations/mermaid";
 // Phase 6 extensions
 import { tableField } from "./decorations/tables";
 
+// Phase 9 extensions
+import { horizontalRuleField } from "./decorations/horizontalRule";
+
 // Phase 7 extensions
 import { createSearchExtension } from "./extensions/search";
 import { createSpellCheckExtension } from "./extensions/spellCheck";
@@ -95,6 +98,9 @@ export function createBaseExtensions(options: CreateExtensionsOptions = {}): Ext
 
     // Phase 6: Tables (only in non-raw mode)
     ...(rawMode ? [] : [tableField]),
+
+    // Phase 9: Horizontal rules (only in non-raw mode)
+    ...(rawMode ? [] : [horizontalRuleField]),
 
     // Phase 7: Search (always active)
     createSearchExtension(),
@@ -154,6 +160,9 @@ export { extractMermaidData, type MermaidData } from "./decorations/mermaid";
 
 // Re-export Phase 6 utilities for tables
 export { extractTableData, type TableData, type CellData, type Alignment } from "./decorations/tables";
+
+// Re-export Phase 9 utilities for horizontal rules
+export { extractHorizontalRuleData, type HorizontalRuleData } from "./decorations/horizontalRule";
 
 // Re-export Phase 7 utilities for search and spell check
 export {

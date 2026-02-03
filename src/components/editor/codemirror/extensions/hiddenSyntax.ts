@@ -48,8 +48,8 @@ const SYNTAX_TOKEN_NAMES = new Set([
   // Code block fences (```)
   "CodeInfo",
 
-  // Horizontal rule markers (---, ***, ___)
-  "HorizontalRule",
+  // Note: HorizontalRule is NOT included here because it's replaced
+  // with a styled widget decoration in decorations/horizontalRule.ts
 ]);
 
 /**

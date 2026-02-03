@@ -14,7 +14,7 @@
 | Phase 6: Tables | **COMPLETE** | `819d7c2` | 2026-02-03 |
 | Phase 7: Search/Spell | **COMPLETE** | `630457d` | 2026-02-03 |
 | Phase 8: Toolbar/Menus | **COMPLETE** | - | 2026-02-03 |
-| Phase 9: CSS Migration | Pending | - | - |
+| Phase 9: CSS Migration | **COMPLETE** | - | 2026-02-03 |
 | Phase 10: Cleanup | Pending | - | - |
 
 ---
@@ -579,15 +579,34 @@ hast-util-to-html
 
 ---
 
-### Phase 9: CSS Migration
+### Phase 9: CSS Migration ✅ COMPLETE
 **Port styles from TipTap to CodeMirror.**
 
-**Create/Update:**
-- New CM6 styles for `.cm-editor`, `.cm-content`
-- Semantic classes: `.cm-strong`, `.cm-em`, `.cm-inline-code`, etc.
-- Port relevant styles from `editor.css`
+> **Completed:** 2026-02-03
 
-**Test:** Visual appearance matches current design
+**Created:** ✅
+- `codemirror/decorations/horizontalRule.ts` - Widget decoration for `---`/`***`/`___` ✅
+
+**Updated:** ✅
+- `codemirror/extensions/hiddenSyntax.ts` - Removed HorizontalRule from simple hide list (now uses widget) ✅
+- `codemirror/setup.ts` - Added horizontalRuleField, re-export utilities ✅
+- `codemirror/theme.ts` - Added `.cm-horizontal-rule` and `.cm-inline-code` styles ✅
+- `src/styles/editor.css` - Added CM6-specific styles ✅
+
+**Features:** ✅
+- Horizontal rule decoration: Replaces `---`, `***`, `___` with styled `<hr>` widget
+- Font family classes for CM6 (`.font-serif`, `.font-sans`, `.font-mono`)
+- Focus mode for CM6 (dims non-active lines)
+- Zen mode for CM6 (centered content, max-width)
+- Spinner animation for Mermaid loading (`@keyframes cm-spin`)
+- Inline code styles (`.cm-inline-code`)
+
+**Tests Added:** ✅
+- `horizontalRule.test.ts` (23 tests) - extraction, decorations, positions, edge cases
+
+**Verification:** ✅
+- All 1493 tests pass
+- TypeScript check passes
 
 ---
 
@@ -723,9 +742,18 @@ src/components/editor/codemirror/
 │   │   └── blocks.test.ts          ✅ Phase 8 (57 tests)
 ```
 
+### Created (Phase 9) ✅
+```
+src/components/editor/codemirror/
+│   ├── decorations/
+│   │   └── horizontalRule.ts       ✅ Phase 9 - Widget decoration for horizontal rules
+│   ├── __tests__/
+│   │   └── horizontalRule.test.ts  ✅ Phase 9 (23 tests)
+```
+
 ### To Create (Future Phases)
 ```
-(No remaining extensions - Phase 9+ focus on CSS and cleanup)
+(No remaining extensions - Phase 10 is cleanup only)
 ```
 
 ### Modified (Phase 1) ✅
@@ -771,6 +799,12 @@ src/components/editor/codemirror/
 - `src/components/editor/EditorContextMenu.tsx` - Now supports both editors via cmView prop, uses markdownToHtml for CM6 formatted copy ✅
 - `src/components/editor/MarkdownEditor.tsx` - Integrated EditorToolbar and EditorContextMenu with CM6 view ✅
 - `src/components/editor/codemirror/utils/formatActive.ts` - Added block format detection utilities ✅
+
+### Modified (Phase 9) ✅
+- `src/components/editor/codemirror/extensions/hiddenSyntax.ts` - Removed HorizontalRule from simple hide list ✅
+- `src/components/editor/codemirror/setup.ts` - Added horizontalRuleField, re-exports ✅
+- `src/components/editor/codemirror/theme.ts` - Added horizontal rule and inline code styles ✅
+- `src/styles/editor.css` - Added CM6 font family, focus mode, zen mode, and spinner styles ✅
 
 ### Delete (Phase 10)
 - `src/components/editor/Editor.tsx`
