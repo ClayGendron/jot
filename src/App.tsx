@@ -1589,6 +1589,10 @@ function App() {
                 initialContent={editorContent}
                 onUpdate={handleEditorUpdate}
                 placeholder="Start writing..."
+                filePath={filePath}
+                onInternalLinkClick={handleInternalLinkClick}
+                onScrollToHeading={handleScrollToHeading}
+                onBrokenLinkClick={handleBrokenLinkClick}
               />
             ) : (
               <Editor

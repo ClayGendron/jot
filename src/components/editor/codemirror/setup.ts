@@ -7,6 +7,7 @@
  * Phase 1: Basic editing
  * Phase 2: Hidden syntax, formatting commands, auto-close markers
  * Phase 3: Block structure (headings, lists, blockquotes), input rules
+ * Phase 4: Links and images with internal link navigation
  */
 
 import { EditorState, type Extension } from "@codemirror/state";
@@ -32,6 +33,10 @@ import { headingField } from "./decorations/headings";
 import { listField } from "./decorations/lists";
 import { blockquoteField } from "./decorations/blockquotes";
 import { inputRules } from "./extensions/inputRules";
+
+// Phase 4 extensions
+import { linkField } from "./decorations/links";
+import { imageField } from "./decorations/images";
 
 /**
  * Options for creating editor extensions
@@ -68,6 +73,9 @@ export function createBaseExtensions(options: CreateExtensionsOptions = {}): Ext
 
     // Phase 3: Block structure decorations (only in non-raw mode)
     ...(rawMode ? [] : [headingField, listField, blockquoteField]),
+
+    // Phase 4: Links and images (only in non-raw mode)
+    ...(rawMode ? [] : [linkField, imageField]),
 
     // Phase 3: Input rules (always active)
     inputRules,
@@ -110,6 +118,10 @@ export { hiddenSyntaxCompartment, toggleRawView };
 export { extractHeadingData, type HeadingData } from "./decorations/headings";
 export { extractListData, type ListItemData } from "./decorations/lists";
 export { extractBlockquoteData, type BlockquoteLineData } from "./decorations/blockquotes";
+
+// Re-export Phase 4 utilities for links and images
+export { extractLinkData, type LinkData } from "./decorations/links";
+export { extractImageData, type ImageData } from "./decorations/images";
 
 /**
  * Create a new CodeMirror editor state

@@ -266,6 +266,70 @@ const baseTheme = EditorView.theme({
     borderRadius: "2px",
     padding: "0.1em 0",
   },
+
+  // Phase 4: Links (widget styles)
+  ".cm-link": {
+    color: "var(--color-accent)",
+    textDecoration: "underline",
+    textDecorationColor: "color-mix(in srgb, var(--color-accent) 40%, transparent)",
+    textUnderlineOffset: "2px",
+    cursor: "pointer",
+    transition: "color 0.15s, text-decoration-color 0.15s",
+  },
+  ".cm-link:hover": {
+    color: "var(--color-accent)",
+    textDecorationColor: "var(--color-accent)",
+  },
+  ".cm-internal-link": {
+    // Internal links use the same accent color but could be distinguished
+    // with a subtle background on hover
+  },
+  ".cm-internal-link:hover": {
+    backgroundColor: "color-mix(in srgb, var(--color-accent-soft) 30%, transparent)",
+    borderRadius: "2px",
+  },
+  ".cm-external-link": {
+    // External links get a subtle indicator
+  },
+  ".cm-external-link::after": {
+    content: '"↗"',
+    fontSize: "0.7em",
+    marginLeft: "0.2em",
+    opacity: "0.6",
+    verticalAlign: "super",
+  },
+
+  // Phase 4: Images (widget styles)
+  ".cm-image-widget": {
+    display: "inline-block",
+    verticalAlign: "middle",
+    maxWidth: "100%",
+    margin: "0.5em 0",
+  },
+  ".cm-image": {
+    maxWidth: "100%",
+    height: "auto",
+    borderRadius: "4px",
+    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
+  },
+  ".cm-image-loaded .cm-image": {
+    // Successfully loaded image
+  },
+  ".cm-image-error": {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.5em",
+    padding: "0.5em 1em",
+    backgroundColor: "var(--color-paper-warm)",
+    border: "1px dashed var(--color-border)",
+    borderRadius: "4px",
+    color: "var(--color-ink-muted)",
+    fontFamily: "var(--font-sans)",
+    fontSize: "0.875em",
+  },
+  ".cm-image-fallback": {
+    fontStyle: "italic",
+  },
 });
 
 /**

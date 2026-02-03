@@ -6,6 +6,7 @@
  *
  * Phase 1: Basic editing
  * Phase 2: Hidden syntax decorations for true WYSIWYG, formatting commands
+ * Phase 4: Links and images with internal link navigation
  */
 
 import {
@@ -18,6 +19,7 @@ import {
 import { EditorView } from "@codemirror/view";
 import { createEditorState, createEditorView, createExtensions, toggleRawView } from "./codemirror/setup";
 import { useEditorStore } from "@/stores/editorStore";
+import { useInternalLinkNavigation } from "@/hooks/useInternalLinkNavigation";
 import { cn } from "@/lib/utils";
 
 export interface MarkdownEditorProps {
@@ -29,6 +31,14 @@ export interface MarkdownEditorProps {
   placeholder?: string;
   /** Whether to focus editor on mount */
   autofocus?: boolean;
+  /** Current file path - used for same-file heading navigation */
+  filePath?: string | null;
+  /** Callback when an internal link is clicked (cross-file navigation) */
+  onInternalLinkClick?: (path: string, heading?: string) => void;
+  /** Callback when a same-file heading link is clicked */
+  onScrollToHeading?: (headingId: string) => void;
+  /** Callback when a broken link is clicked */
+  onBrokenLinkClick?: (intendedPath: string) => void;
 }
 
 /**
@@ -59,6 +69,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       onUpdate,
       placeholder = "Start writing...",
       autofocus = true,
+      filePath,
+      onInternalLinkClick,
+      onScrollToHeading,
+      onBrokenLinkClick,
     },
     ref
   ) {
@@ -76,6 +90,24 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     const focusMode = useEditorStore((state) => state.focusMode);
     const showLineNumbers = useEditorStore((state) => state.showLineNumbers);
     const sourceMode = useEditorStore((state) => state.sourceMode);
+
+    // Handle internal link navigation (clicks on links in editor)
+    const handleInternalLinkNavigate = useCallback(
+      (path: string, heading?: string) => {
+        onInternalLinkClick?.(path, heading);
+      },
+      [onInternalLinkClick]
+    );
+
+    // Set up internal link click handling for CodeMirror
+    useInternalLinkNavigation({
+      onNavigate: handleInternalLinkNavigate,
+      onScrollToHeading,
+      onBrokenLinkClick,
+      containerRef,
+      enabled: !!onInternalLinkClick && !sourceMode,
+      currentFilePath: filePath,
+    });
 
     // Initialize CodeMirror
     useEffect(() => {
