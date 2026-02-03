@@ -456,6 +456,7 @@ function updateCell(view: EditorView, cell: CellRange, value: string) {
 **Features:** ✅
 - Code blocks: Shiki syntax highlighting (VS Code quality), language badge, copy button
 - Mermaid: Rendered SVG diagram, loading/error states, SVG/PNG export buttons
+- Mermaid focus: Raw code when cursor inside, rendered diagram when cursor outside
 - Theme-aware: Detects dark/light mode from document or system preferences
 - Copy button: Copies code/source to clipboard with success feedback
 - Lazy-loaded highlighter: Cached for performance, dynamically loads languages
@@ -481,7 +482,6 @@ hast-util-to-html
 - Rust build passes
 
 **Known Limitations (Phase 5):**
-- Mermaid blocks are always rendered (no "raw when focused" mode yet)
 - Code block editing requires clicking into widget (atomic range behavior)
 
 ---
