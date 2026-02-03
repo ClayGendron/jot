@@ -16,6 +16,13 @@ import {
   isStrikethroughActive,
   isCodeActive,
   getActiveFormats,
+  getHeadingLevel,
+  isBulletListActive,
+  isOrderedListActive,
+  isTaskListActive,
+  isBlockquoteActive,
+  isCodeBlockActive,
+  getActiveBlockFormat,
 } from "../utils/formatActive";
 
 /**
@@ -189,6 +196,230 @@ describe("Format Active Detection", () => {
       const state = createTestState("**bold***italic*", 13); // In italic
       expect(isBoldActive(state)).toBe(false);
       expect(isItalicActive(state)).toBe(true);
+    });
+  });
+});
+
+// Phase 8: Block-level format detection tests
+describe("Block Format Active Detection", () => {
+  describe("getHeadingLevel", () => {
+    it("returns 1 for H1", () => {
+      const state = createTestState("# Heading 1", 5);
+      expect(getHeadingLevel(state)).toBe(1);
+    });
+
+    it("returns 2 for H2", () => {
+      const state = createTestState("## Heading 2", 5);
+      expect(getHeadingLevel(state)).toBe(2);
+    });
+
+    it("returns 3 for H3", () => {
+      const state = createTestState("### Heading 3", 5);
+      expect(getHeadingLevel(state)).toBe(3);
+    });
+
+    it("returns 4 for H4", () => {
+      const state = createTestState("#### Heading 4", 5);
+      expect(getHeadingLevel(state)).toBe(4);
+    });
+
+    it("returns 5 for H5", () => {
+      const state = createTestState("##### Heading 5", 5);
+      expect(getHeadingLevel(state)).toBe(5);
+    });
+
+    it("returns 6 for H6", () => {
+      const state = createTestState("###### Heading 6", 5);
+      expect(getHeadingLevel(state)).toBe(6);
+    });
+
+    it("returns 0 for non-heading", () => {
+      const state = createTestState("Plain text", 5);
+      expect(getHeadingLevel(state)).toBe(0);
+    });
+
+    it("works at start of heading", () => {
+      const state = createTestState("# Heading", 2);
+      expect(getHeadingLevel(state)).toBe(1);
+    });
+
+    it("works at end of heading", () => {
+      const state = createTestState("## Heading", 10);
+      expect(getHeadingLevel(state)).toBe(2);
+    });
+
+    it("returns 0 when on different line", () => {
+      const state = createTestState("# Heading\nPlain text", 15);
+      expect(getHeadingLevel(state)).toBe(0);
+    });
+  });
+
+  describe("isBulletListActive", () => {
+    it("returns true for - bullet", () => {
+      const state = createTestState("- List item", 5);
+      expect(isBulletListActive(state)).toBe(true);
+    });
+
+    it("returns true for * bullet", () => {
+      const state = createTestState("* List item", 5);
+      expect(isBulletListActive(state)).toBe(true);
+    });
+
+    it("returns true for + bullet", () => {
+      const state = createTestState("+ List item", 5);
+      expect(isBulletListActive(state)).toBe(true);
+    });
+
+    it("returns false for plain text", () => {
+      const state = createTestState("Plain text", 5);
+      expect(isBulletListActive(state)).toBe(false);
+    });
+
+    it("returns false for ordered list", () => {
+      const state = createTestState("1. Ordered item", 5);
+      expect(isBulletListActive(state)).toBe(false);
+    });
+
+    it("returns false for task list", () => {
+      const state = createTestState("- [ ] Task item", 10);
+      expect(isBulletListActive(state)).toBe(false);
+    });
+  });
+
+  describe("isOrderedListActive", () => {
+    it("returns true for numbered list", () => {
+      const state = createTestState("1. First item", 5);
+      expect(isOrderedListActive(state)).toBe(true);
+    });
+
+    it("returns true for multi-digit number", () => {
+      const state = createTestState("42. Item forty-two", 5);
+      expect(isOrderedListActive(state)).toBe(true);
+    });
+
+    it("returns false for plain text", () => {
+      const state = createTestState("Plain text", 5);
+      expect(isOrderedListActive(state)).toBe(false);
+    });
+
+    it("returns false for bullet list", () => {
+      const state = createTestState("- Bullet item", 5);
+      expect(isOrderedListActive(state)).toBe(false);
+    });
+  });
+
+  describe("isTaskListActive", () => {
+    it("returns true for unchecked task", () => {
+      const state = createTestState("- [ ] Todo item", 10);
+      expect(isTaskListActive(state)).toBe(true);
+    });
+
+    it("returns true for checked task (lowercase)", () => {
+      const state = createTestState("- [x] Done item", 10);
+      expect(isTaskListActive(state)).toBe(true);
+    });
+
+    it("returns true for checked task (uppercase)", () => {
+      const state = createTestState("- [X] Done item", 10);
+      expect(isTaskListActive(state)).toBe(true);
+    });
+
+    it("returns false for plain text", () => {
+      const state = createTestState("Plain text", 5);
+      expect(isTaskListActive(state)).toBe(false);
+    });
+
+    it("returns false for regular bullet", () => {
+      const state = createTestState("- Bullet item", 5);
+      expect(isTaskListActive(state)).toBe(false);
+    });
+  });
+
+  describe("isBlockquoteActive", () => {
+    it("returns true for single-level quote", () => {
+      const state = createTestState("> Quoted text", 5);
+      expect(isBlockquoteActive(state)).toBe(true);
+    });
+
+    it("returns true for nested quote", () => {
+      const state = createTestState(">> Nested quote", 5);
+      expect(isBlockquoteActive(state)).toBe(true);
+    });
+
+    it("returns false for plain text", () => {
+      const state = createTestState("Plain text", 5);
+      expect(isBlockquoteActive(state)).toBe(false);
+    });
+
+    it("works at quote marker", () => {
+      const state = createTestState("> Quote", 0);
+      expect(isBlockquoteActive(state)).toBe(true);
+    });
+  });
+
+  describe("isCodeBlockActive", () => {
+    it("returns true when cursor inside code block", () => {
+      const state = createTestState("```\ncode here\n```", 7);
+      expect(isCodeBlockActive(state)).toBe(true);
+    });
+
+    it("returns true with language specifier", () => {
+      const state = createTestState("```javascript\ncode here\n```", 18);
+      expect(isCodeBlockActive(state)).toBe(true);
+    });
+
+    it("returns false for plain text", () => {
+      const state = createTestState("Plain text", 5);
+      expect(isCodeBlockActive(state)).toBe(false);
+    });
+
+    it("returns false outside code block", () => {
+      const state = createTestState("Before\n```\ncode\n```\nAfter", 22);
+      expect(isCodeBlockActive(state)).toBe(false);
+    });
+  });
+
+  describe("getActiveBlockFormat", () => {
+    it("returns heading for heading line", () => {
+      const state = createTestState("## Heading", 5);
+      const format = getActiveBlockFormat(state);
+      expect(format).toBe("heading");
+    });
+
+    it("returns bulletList for bullet line", () => {
+      const state = createTestState("- Item", 3);
+      const format = getActiveBlockFormat(state);
+      expect(format).toBe("bulletList");
+    });
+
+    it("returns orderedList for numbered line", () => {
+      const state = createTestState("1. Item", 3);
+      const format = getActiveBlockFormat(state);
+      expect(format).toBe("orderedList");
+    });
+
+    it("returns taskList for task line", () => {
+      const state = createTestState("- [ ] Task", 8);
+      const format = getActiveBlockFormat(state);
+      expect(format).toBe("taskList");
+    });
+
+    it("returns blockquote for quote line", () => {
+      const state = createTestState("> Quote", 3);
+      const format = getActiveBlockFormat(state);
+      expect(format).toBe("blockquote");
+    });
+
+    it("returns codeBlock when in code fence", () => {
+      const state = createTestState("```\ncode\n```", 5);
+      const format = getActiveBlockFormat(state);
+      expect(format).toBe("codeBlock");
+    });
+
+    it("returns paragraph for plain text", () => {
+      const state = createTestState("Plain text", 5);
+      const format = getActiveBlockFormat(state);
+      expect(format).toBe("paragraph");
     });
   });
 });

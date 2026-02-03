@@ -3,11 +3,16 @@
  *
  * Provides right-click context menu for the editor with options to copy
  * content in different formats (formatted/rich text or markdown).
+ *
+ * Phase 8: Updated to support both TipTap and CodeMirror 6 editors.
+ * For CM6, copies use markdownToHtml for formatted output (not editor DOM).
  */
 
 import { useState, useCallback } from "react";
 import type { Editor } from "@tiptap/react";
+import type { EditorView } from "@codemirror/view";
 import { copyAsFormatted, copyAsMarkdown } from "@/lib/clipboard/copyFormatted";
+import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { FileText, FileCode, Check } from "lucide-react";
 import { usePositionedMenu } from "@/hooks/usePositionedMenu";
@@ -20,8 +25,10 @@ import {
 interface EditorContextMenuProps {
   /** Position to show the menu */
   position: { x: number; y: number };
-  /** TipTap editor instance */
-  editor: Editor;
+  /** TipTap editor instance (for legacy HTML-based editing) */
+  editor?: Editor | null;
+  /** CodeMirror view instance (for markdown-based editing) */
+  cmView?: EditorView | null;
   /** Callback when menu should be dismissed */
   onDismiss: () => void;
 }
@@ -30,10 +37,12 @@ const COPY_SUCCESS_DURATION_MS = 2000;
 
 /**
  * Editor context menu with copy options
+ * Supports both TipTap (HTML) and CodeMirror 6 (Markdown) editors.
  */
 export function EditorContextMenu({
   position,
   editor,
+  cmView,
   onDismiss,
 }: EditorContextMenuProps) {
   const menuRef = usePositionedMenu({ onDismiss });
@@ -43,27 +52,52 @@ export function EditorContextMenu({
   const defaultCopyFormat = useSettingsStore((s) => s.appearance?.defaultCopyFormat ?? "formatted");
   const updateAppearance = useSettingsStore((s) => s.updateAppearance);
 
-  // Get selected content or full document
-  const getContent = useCallback(() => {
-    const { from, to } = editor.state.selection;
-    const hasSelection = from !== to;
+  // Determine which editor is active
+  const isCM = !!cmView;
+  const hasEditor = !!editor || !!cmView;
 
-    if (hasSelection) {
-      // Get selected text content
-      const plainText = editor.state.doc.textBetween(from, to, "\n");
-      // For HTML, we'll use the full document but this is a limitation
-      // A proper implementation would serialize just the selection
-      // For now, copy selection as plain text only
-      const html = `<p>${plainText.replace(/\n/g, "</p><p>")}</p>`;
-      return { html, plainText };
-    } else {
-      // Get full document
-      return {
-        html: editor.getHTML(),
-        plainText: editor.getText(),
-      };
+  // Get selected content or full document
+  const getContent = useCallback((): { html: string; markdown: string; plainText: string } => {
+    if (cmView) {
+      // CodeMirror 6: Content is markdown
+      const { from, to } = cmView.state.selection.main;
+      const hasSelection = from !== to;
+
+      if (hasSelection) {
+        // Get selected markdown
+        const markdown = cmView.state.doc.sliceString(from, to);
+        const html = markdownToHtml(markdown);
+        return { html, markdown, plainText: markdown };
+      } else {
+        // Get full document
+        const markdown = cmView.state.doc.toString();
+        const html = markdownToHtml(markdown);
+        return { html, markdown, plainText: markdown };
+      }
+    } else if (editor) {
+      // TipTap: Content is HTML
+      const { from, to } = editor.state.selection;
+      const hasSelection = from !== to;
+
+      if (hasSelection) {
+        // Get selected text content
+        const plainText = editor.state.doc.textBetween(from, to, "\n");
+        // For HTML, we create a simple paragraph-based representation
+        const html = `<p>${plainText.replace(/\n/g, "</p><p>")}</p>`;
+        // For markdown, we use the plain text (TipTap selection doesn't preserve markdown)
+        return { html, markdown: plainText, plainText };
+      } else {
+        // Get full document
+        return {
+          html: editor.getHTML(),
+          markdown: editor.getText(),
+          plainText: editor.getText(),
+        };
+      }
     }
-  }, [editor]);
+
+    return { html: "", markdown: "", plainText: "" };
+  }, [editor, cmView]);
 
   // Handle copy as formatted (rich text)
   const handleCopyFormatted = useCallback(async () => {
@@ -83,19 +117,35 @@ export function EditorContextMenu({
 
   // Handle copy as markdown
   const handleCopyMarkdown = useCallback(async () => {
-    const { html } = getContent();
-    const result = await copyAsMarkdown(html);
-
-    if (result.success) {
-      setCopyFeedback("markdown");
-      setTimeout(() => {
-        setCopyFeedback(null);
+    if (isCM) {
+      // For CM6: Copy markdown directly
+      const { markdown } = getContent();
+      try {
+        await navigator.clipboard.writeText(markdown);
+        setCopyFeedback("markdown");
+        setTimeout(() => {
+          setCopyFeedback(null);
+          onDismiss();
+        }, COPY_SUCCESS_DURATION_MS);
+      } catch {
         onDismiss();
-      }, COPY_SUCCESS_DURATION_MS);
+      }
     } else {
-      onDismiss();
+      // For TipTap: Convert HTML to markdown
+      const { html } = getContent();
+      const result = await copyAsMarkdown(html);
+
+      if (result.success) {
+        setCopyFeedback("markdown");
+        setTimeout(() => {
+          setCopyFeedback(null);
+          onDismiss();
+        }, COPY_SUCCESS_DURATION_MS);
+      } else {
+        onDismiss();
+      }
     }
-  }, [getContent, onDismiss]);
+  }, [getContent, onDismiss, isCM]);
 
   // Handle set as default
   const handleSetDefaultFormatted = useCallback(() => {
@@ -106,9 +156,18 @@ export function EditorContextMenu({
     updateAppearance({ defaultCopyFormat: "markdown" });
   }, [updateAppearance]);
 
-  const { from, to } = editor.state.selection;
-  const hasSelection = from !== to;
+  // Determine if there's a selection
+  const hasSelection = cmView
+    ? cmView.state.selection.main.from !== cmView.state.selection.main.to
+    : editor
+      ? editor.state.selection.from !== editor.state.selection.to
+      : false;
+
   const copyLabel = hasSelection ? "Copy Selection" : "Copy All";
+
+  if (!hasEditor) {
+    return null;
+  }
 
   return (
     <PositionedMenu

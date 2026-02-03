@@ -13,7 +13,7 @@
 | Phase 5: Code/Mermaid | **COMPLETE** | `f6b4a1c` | 2026-02-03 |
 | Phase 6: Tables | **COMPLETE** | `819d7c2` | 2026-02-03 |
 | Phase 7: Search/Spell | **COMPLETE** | `630457d` | 2026-02-03 |
-| Phase 8: Toolbar/Menus | Pending | - | - |
+| Phase 8: Toolbar/Menus | **COMPLETE** | - | 2026-02-03 |
 | Phase 9: CSS Migration | Pending | - | - |
 | Phase 10: Cleanup | Pending | - | - |
 
@@ -548,16 +548,34 @@ hast-util-to-html
 
 ---
 
-### Phase 8: Toolbar + Context Menus
+### Phase 8: Toolbar + Context Menus ✅ COMPLETE
 **Connect toolbar to CM6, finalize context menus.**
 
-**Update:**
-- `EditorToolbar.tsx` - call CM6 commands, use `isFormatActive()`
-- `EditorContextMenu.tsx` - adapt for CM6 view
-- Keep raw mode toggle button (replaces source mode)
-- "Copy as formatted": use `markdownToHtml(selectedMarkdown)`, not editor DOM
+> **Completed:** 2026-02-03
 
-**Test:** All toolbar buttons work, active states correct, raw mode toggle works
+**Created:** ✅
+- `codemirror/commands/blocks.ts` - Block-level commands: headings, lists, blockquotes, code blocks, HR, links, images ✅
+
+**Updated:** ✅
+- `codemirror/utils/formatActive.ts` - Added block format detection: getHeadingLevel, isBulletListActive, isOrderedListActive, isTaskListActive, isBlockquoteActive, isCodeBlockActive, getActiveBlockFormat ✅
+- `EditorToolbar.tsx` - Now supports both TipTap (editor prop) and CM6 (cmView prop), uses appropriate commands and formatActive utilities ✅
+- `EditorContextMenu.tsx` - Now supports both TipTap and CM6, uses markdownToHtml for copy-as-formatted ✅
+- `MarkdownEditor.tsx` - Integrated toolbar and context menu ✅
+
+**Features:** ✅
+- All toolbar buttons work with CM6: bold, italic, strikethrough, highlight, code, headings, lists, blockquotes, code blocks, horizontal rules, tables, links, images
+- Active state detection for all formats (inline and block-level)
+- Raw mode toggle works via sourceMode
+- "Copy as formatted" uses markdownToHtml(selectedMarkdown), not editor DOM
+- "Copy as markdown" copies selection directly from CM6
+
+**Tests Added:** ✅
+- `blocks.test.ts` (57 tests) - Block commands: headings, lists, blockquotes, code blocks, HR, links, images
+- `formatActive.test.ts` - Extended with 40 tests for block format detection
+
+**Verification:** ✅
+- All 1470 tests pass
+- TypeScript check passes
 
 ---
 
@@ -696,9 +714,18 @@ src/components/editor/codemirror/
 │   │   └── spellCheck.test.ts      ✅ Phase 7 (16 tests)
 ```
 
+### Created (Phase 8) ✅
+```
+src/components/editor/codemirror/
+│   ├── commands/
+│   │   └── blocks.ts               ✅ Phase 8 - Block-level commands (headings, lists, quotes, etc.)
+│   ├── __tests__/
+│   │   └── blocks.test.ts          ✅ Phase 8 (57 tests)
+```
+
 ### To Create (Future Phases)
 ```
-(No remaining extensions - Phase 8+ focus on updates to existing files)
+(No remaining extensions - Phase 9+ focus on CSS and cleanup)
 ```
 
 ### Modified (Phase 1) ✅
@@ -739,9 +766,11 @@ src/components/editor/codemirror/
 - `src/components/editor/SpellCheckContextMenu.tsx` - Added `cmView` prop for CM6 support ✅
 - `src/App.tsx` - Pass CM6 view to FindReplaceBar when useMarkdownEditor enabled ✅
 
-### To Modify (Future Phases)
-- `src/components/editor/EditorToolbar.tsx` - CM6 commands, raw mode toggle
-- `src/components/editor/EditorContextMenu.tsx` - copy uses markdownToHtml
+### Modified (Phase 8) ✅
+- `src/components/editor/EditorToolbar.tsx` - Now supports both TipTap and CM6 via conditional props, uses CM6 block commands and format detection ✅
+- `src/components/editor/EditorContextMenu.tsx` - Now supports both editors via cmView prop, uses markdownToHtml for CM6 formatted copy ✅
+- `src/components/editor/MarkdownEditor.tsx` - Integrated EditorToolbar and EditorContextMenu with CM6 view ✅
+- `src/components/editor/codemirror/utils/formatActive.ts` - Added block format detection utilities ✅
 
 ### Delete (Phase 10)
 - `src/components/editor/Editor.tsx`

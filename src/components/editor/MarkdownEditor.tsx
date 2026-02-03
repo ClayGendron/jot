@@ -7,6 +7,7 @@
  * Phase 1: Basic editing
  * Phase 2: Hidden syntax decorations for true WYSIWYG, formatting commands
  * Phase 4: Links and images with internal link navigation
+ * Phase 8: Integrated toolbar with CM6 commands
  */
 
 import {
@@ -15,12 +16,15 @@ import {
   useCallback,
   forwardRef,
   useImperativeHandle,
+  useState,
 } from "react";
 import { EditorView } from "@codemirror/view";
 import { createEditorState, createEditorView, createExtensions, toggleRawView } from "./codemirror/setup";
 import { useEditorStore } from "@/stores/editorStore";
 import { useInternalLinkNavigation } from "@/hooks/useInternalLinkNavigation";
 import { cn } from "@/lib/utils";
+import { EditorToolbar } from "./EditorToolbar";
+import { EditorContextMenu } from "./EditorContextMenu";
 
 export interface MarkdownEditorProps {
   /** Initial markdown content */
@@ -80,6 +84,14 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     const viewRef = useRef<EditorView | null>(null);
     const onUpdateRef = useRef(onUpdate);
 
+    // Track view state for toolbar reactivity
+    const [view, setView] = useState<EditorView | null>(null);
+
+    // Context menu state
+    const [contextMenu, setContextMenu] = useState<{
+      position: { x: number; y: number };
+    } | null>(null);
+
     // Keep callback ref updated without recreating editor
     useEffect(() => {
       onUpdateRef.current = onUpdate;
@@ -130,21 +142,23 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
 
       // Create editor state and view
       const state = createEditorState(initialContent, [...extensions, updateListener]);
-      const view = createEditorView(state, containerRef.current);
-      viewRef.current = view;
+      const editorView = createEditorView(state, containerRef.current);
+      viewRef.current = editorView;
+      setView(editorView);
 
       // Focus if requested
       if (autofocus) {
         // Small delay to ensure DOM is ready
         requestAnimationFrame(() => {
-          view.focus();
+          editorView.focus();
         });
       }
 
       // Cleanup on unmount
       return () => {
-        view.destroy();
+        editorView.destroy();
         viewRef.current = null;
+        setView(null);
       };
       // Only run on mount - content updates handled separately
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -196,6 +210,25 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
       });
     }, []);
 
+    // Handle context menu (right-click)
+    const handleContextMenu = useCallback(
+      (event: React.MouseEvent) => {
+        // Only show context menu in WYSIWYG mode
+        if (sourceMode) return;
+
+        event.preventDefault();
+        setContextMenu({
+          position: { x: event.clientX, y: event.clientY },
+        });
+      },
+      [sourceMode]
+    );
+
+    // Dismiss context menu
+    const handleDismissContextMenu = useCallback(() => {
+      setContextMenu(null);
+    }, []);
+
     // Expose ref API
     useImperativeHandle(
       ref,
@@ -210,18 +243,33 @@ export const MarkdownEditor = forwardRef<MarkdownEditorRef, MarkdownEditorProps>
     return (
       <div
         className={cn(
-          "markdown-editor flex-1 overflow-y-auto",
-          `font-${fontFamily}`,
+          "markdown-editor flex flex-col h-screen bg-[var(--color-paper)]",
           focusMode && "focus-mode",
           sourceMode && "source-mode-active"
         )}
         data-testid="markdown-editor-container"
+        onContextMenu={handleContextMenu}
       >
+        <EditorToolbar cmView={view} />
         <div
-          ref={containerRef}
-          className="cm-wrapper min-h-full"
-          data-placeholder={placeholder}
-        />
+          className={cn(
+            "flex-1 overflow-y-auto",
+            `font-${fontFamily}`
+          )}
+        >
+          <div
+            ref={containerRef}
+            className="cm-wrapper min-h-full"
+            data-placeholder={placeholder}
+          />
+        </div>
+        {contextMenu && (
+          <EditorContextMenu
+            position={contextMenu.position}
+            cmView={view}
+            onDismiss={handleDismissContextMenu}
+          />
+        )}
       </div>
     );
   }
