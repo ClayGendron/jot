@@ -47,6 +47,10 @@ import { mermaidField } from "./decorations/mermaid";
 // Phase 6 extensions
 import { tableField } from "./decorations/tables";
 
+// Phase 7 extensions
+import { createSearchExtension } from "./extensions/search";
+import { createSpellCheckExtension } from "./extensions/spellCheck";
+
 /**
  * Options for creating editor extensions
  */
@@ -91,6 +95,12 @@ export function createBaseExtensions(options: CreateExtensionsOptions = {}): Ext
 
     // Phase 6: Tables (only in non-raw mode)
     ...(rawMode ? [] : [tableField]),
+
+    // Phase 7: Search (always active)
+    createSearchExtension(),
+
+    // Phase 7: Spell check (always active, provides decorations)
+    createSpellCheckExtension(),
 
     // Phase 3: Input rules (always active)
     inputRules,
@@ -144,6 +154,29 @@ export { extractMermaidData, type MermaidData } from "./decorations/mermaid";
 
 // Re-export Phase 6 utilities for tables
 export { extractTableData, type TableData, type CellData, type Alignment } from "./decorations/tables";
+
+// Re-export Phase 7 utilities for search and spell check
+export {
+  setSearchQuery,
+  findNext,
+  findPrevious,
+  replaceOne,
+  replaceAll,
+  clearSearch,
+  getSearchState,
+  type SearchQueryParams,
+  type SearchState,
+} from "./extensions/search";
+
+export {
+  getSpellErrors,
+  addToIgnored,
+  clearIgnored,
+  replaceWord,
+  refreshSpellCheck,
+  getSpellErrorAt,
+  type SpellError,
+} from "./extensions/spellCheck";
 
 /**
  * Create a new CodeMirror editor state

@@ -92,6 +92,13 @@ const baseTheme = EditorView.theme({
     backgroundColor: "color-mix(in srgb, var(--color-highlight) 50%, transparent)",
   },
 
+  // Spell check errors
+  ".spell-error": {
+    textDecoration: "underline wavy var(--color-error, #dc2626)",
+    textDecorationSkipInk: "none",
+    cursor: "pointer",
+  },
+
   // Panels (search, etc.)
   ".cm-panels": {
     backgroundColor: "var(--color-paper-warm)",

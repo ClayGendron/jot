@@ -12,7 +12,7 @@
 | Phase 4: Links/Images | **COMPLETE** | `f234853` | 2026-02-03 |
 | Phase 5: Code/Mermaid | **COMPLETE** | `f6b4a1c` | 2026-02-03 |
 | Phase 6: Tables | **COMPLETE** | `819d7c2` | 2026-02-03 |
-| Phase 7: Search/Spell | Pending | - | - |
+| Phase 7: Search/Spell | **COMPLETE** | `630457d` | 2026-02-03 |
 | Phase 8: Toolbar/Menus | Pending | - | - |
 | Phase 9: CSS Migration | Pending | - | - |
 | Phase 10: Cleanup | Pending | - | - |
@@ -517,18 +517,34 @@ hast-util-to-html
 
 ---
 
-### Phase 7: Search, Replace, Spell Check
+### Phase 7: Search, Replace, Spell Check ✅ COMPLETE
 **Port remaining features.**
 
-**Create:**
-- `codemirror/extensions/search.ts` - use `@codemirror/search`
-- `codemirror/extensions/spellCheck.ts` - adapt SymSpell integration
+> **Completed:** 2026-02-03
 
-**Update:**
-- `FindReplaceBar.tsx` - use CM6 search API
-- `SpellCheckContextMenu.tsx` - adapt for CM6 view
+**Created:** ✅
+- `codemirror/extensions/search.ts` - CM6 search wrapper with match counting, navigation, replace ✅
+- `codemirror/extensions/spellCheck.ts` - SymSpell integration with decorations and ignore support ✅
 
-**Test:** Cmd+F works, spell errors underlined, suggestions work
+**Updated:** ✅
+- `FindReplaceBar.tsx` - supports both TipTap and CM6 via `cmView` prop ✅
+- `SpellCheckContextMenu.tsx` - supports both TipTap and CM6 via `cmView` prop ✅
+- `codemirror/setup.ts` - integrated search and spell check extensions ✅
+- `codemirror/theme.ts` - added `.spell-error` styling (wavy red underline) ✅
+- `App.tsx` - passes CM6 view to FindReplaceBar when useMarkdownEditor enabled ✅
+
+**Features:** ✅
+- Find/Replace: search term, case sensitivity, regex mode, navigation, replace one/all
+- Spell Check: misspelled word decorations, code block exclusion, ignore session, add to dictionary
+- Context Menu: spelling suggestions, add to dictionary, ignore
+
+**Tests Added:** ✅
+- `search.test.ts` (26 tests) - find, replace, navigation, case sensitivity, regex
+- `spellCheck.test.ts` (16 tests) - errors, code exclusion, ignore, replace
+
+**Verification:** ✅
+- All 1373 tests pass
+- TypeScript check passes
 
 ---
 
@@ -669,12 +685,20 @@ src/components/editor/codemirror/
 │   │   └── tables.test.ts          ✅ Phase 6 (39 tests)
 ```
 
-### To Create (Future Phases)
+### Created (Phase 7) ✅
 ```
 src/components/editor/codemirror/
 │   ├── extensions/
-│   │   ├── search.ts               # Phase 7 - CM6 search integration
-│   │   └── spellCheck.ts           # Phase 7 - spell check integration
+│   │   ├── search.ts               ✅ Phase 7 - CM6 search wrapper with match tracking
+│   │   └── spellCheck.ts           ✅ Phase 7 - SymSpell integration with decorations
+│   ├── __tests__/
+│   │   ├── search.test.ts          ✅ Phase 7 (26 tests)
+│   │   └── spellCheck.test.ts      ✅ Phase 7 (16 tests)
+```
+
+### To Create (Future Phases)
+```
+(No remaining extensions - Phase 8+ focus on updates to existing files)
 ```
 
 ### Modified (Phase 1) ✅
@@ -708,10 +732,16 @@ src/components/editor/codemirror/
 - `src/components/editor/codemirror/setup.ts` - Added tableField, Phase 6 re-exports (TableData, CellData, Alignment) ✅
 - `src/components/editor/codemirror/theme.ts` - Added table widget styles ✅
 
+### Modified (Phase 7) ✅
+- `src/components/editor/codemirror/setup.ts` - Added search and spellCheck extensions, Phase 7 re-exports ✅
+- `src/components/editor/codemirror/theme.ts` - Added `.spell-error` styling (wavy red underline) ✅
+- `src/components/search/FindReplaceBar.tsx` - Added `cmView` prop for CM6 support ✅
+- `src/components/editor/SpellCheckContextMenu.tsx` - Added `cmView` prop for CM6 support ✅
+- `src/App.tsx` - Pass CM6 view to FindReplaceBar when useMarkdownEditor enabled ✅
+
 ### To Modify (Future Phases)
 - `src/components/editor/EditorToolbar.tsx` - CM6 commands, raw mode toggle
 - `src/components/editor/EditorContextMenu.tsx` - copy uses markdownToHtml
-- `src/components/search/FindReplaceBar.tsx` - CM6 search
 
 ### Delete (Phase 10)
 - `src/components/editor/Editor.tsx`

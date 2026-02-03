@@ -3,6 +3,8 @@
  *
  * Floating search bar for in-document find and replace.
  * Positioned at top-right of the editor, appears when Cmd+F is pressed.
+ *
+ * Supports both TipTap (HTML) and CodeMirror 6 (Markdown) editors.
  */
 
 import { useEffect, useRef, useCallback } from "react";
@@ -15,11 +17,21 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Editor } from "@tiptap/react";
+import type { EditorView } from "@codemirror/view";
 import { useSearchStore } from "@/stores/searchStore";
 import type { SearchAndReplaceStorage } from "@/components/editor/extensions/SearchAndReplace";
+import {
+  setSearchQuery as cmSetSearchQuery,
+  findNext as cmFindNext,
+  findPrevious as cmFindPrevious,
+  replaceOne as cmReplaceOne,
+  replaceAll as cmReplaceAll,
+  clearSearch as cmClearSearch,
+  getSearchState as cmGetSearchState,
+} from "@/components/editor/codemirror/extensions/search";
 
 /**
- * Helper to safely access SearchAndReplace storage from editor
+ * Helper to safely access SearchAndReplace storage from TipTap editor
  */
 function getSearchStorage(editor: Editor | null): SearchAndReplaceStorage | null {
   if (!editor) return null;
@@ -27,13 +39,20 @@ function getSearchStorage(editor: Editor | null): SearchAndReplaceStorage | null
 }
 
 interface FindReplaceBarProps {
-  editor: Editor | null;
+  /** TipTap editor instance (for HTML mode) */
+  editor?: Editor | null;
+  /** CodeMirror EditorView (for Markdown mode) */
+  cmView?: EditorView | null;
+  /** Callback when bar should close */
   onClose: () => void;
 }
 
-export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
+export function FindReplaceBar({ editor, cmView, onClose }: FindReplaceBarProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
+
+  // Determine which editor mode we're in
+  const isCM6 = !!cmView;
 
   // Individual selectors to avoid React 19 + Zustand issues
   const searchTerm = useSearchStore((s) => s.documentSearchTerm);
@@ -55,9 +74,9 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
     searchInputRef.current?.select();
   }, []);
 
-  // Update search when term, case sensitivity, or regex mode changes
+  // Update search when term, case sensitivity, or regex mode changes - TipTap
   useEffect(() => {
-    if (!editor) return;
+    if (isCM6 || !editor) return;
 
     if (!searchTerm) {
       editor.commands.clearSearch();
@@ -76,11 +95,33 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
       const current = total > 0 ? storage.resultIndex + 1 : 0;
       setMatchInfo(current, total);
     }
-  }, [editor, searchTerm, caseSensitive, useRegex, setMatchInfo]);
+  }, [editor, searchTerm, caseSensitive, useRegex, setMatchInfo, isCM6]);
 
-  // Sync match counts when document changes (decorations update on edit)
+  // Update search when term, case sensitivity, or regex mode changes - CM6
   useEffect(() => {
-    if (!editor || !searchTerm) return;
+    if (!isCM6 || !cmView) return;
+
+    if (!searchTerm) {
+      cmClearSearch(cmView);
+      setMatchInfo(0, 0);
+      return;
+    }
+
+    cmSetSearchQuery(cmView, {
+      search: searchTerm,
+      replace: replaceTerm,
+      caseSensitive,
+      regexp: useRegex,
+    });
+
+    // Update match counts from CM6 state
+    const state = cmGetSearchState(cmView);
+    setMatchInfo(state.currentMatch, state.matchCount);
+  }, [cmView, searchTerm, replaceTerm, caseSensitive, useRegex, setMatchInfo, isCM6]);
+
+  // Sync match counts when document changes - TipTap
+  useEffect(() => {
+    if (isCM6 || !editor || !searchTerm) return;
 
     const updateMatchCounts = () => {
       const storage = getSearchStorage(editor);
@@ -97,26 +138,44 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
     return () => {
       editor.off("update", updateMatchCounts);
     };
-  }, [editor, searchTerm, setMatchInfo]);
+  }, [editor, searchTerm, setMatchInfo, isCM6]);
 
-  // Navigation handlers (defined before handleKeyDown which uses them)
+  // Sync match counts when document changes - CM6
+  useEffect(() => {
+    if (!isCM6 || !cmView || !searchTerm) return;
+
+    // CM6 doesn't have an event system like TipTap
+    // We update counts in the handlers instead
+  }, [cmView, searchTerm, isCM6]);
+
+  // Navigation handlers
   const handleNext = useCallback(() => {
-    if (!editor) return;
-    editor.commands.nextSearchResult();
-    const storage = getSearchStorage(editor);
-    if (storage && storage.results.length > 0) {
-      setMatchInfo(storage.resultIndex + 1, storage.results.length);
+    if (isCM6 && cmView) {
+      cmFindNext(cmView);
+      const state = cmGetSearchState(cmView);
+      setMatchInfo(state.currentMatch, state.matchCount);
+    } else if (editor) {
+      editor.commands.nextSearchResult();
+      const storage = getSearchStorage(editor);
+      if (storage && storage.results.length > 0) {
+        setMatchInfo(storage.resultIndex + 1, storage.results.length);
+      }
     }
-  }, [editor, setMatchInfo]);
+  }, [editor, cmView, isCM6, setMatchInfo]);
 
   const handlePrevious = useCallback(() => {
-    if (!editor) return;
-    editor.commands.previousSearchResult();
-    const storage = getSearchStorage(editor);
-    if (storage && storage.results.length > 0) {
-      setMatchInfo(storage.resultIndex + 1, storage.results.length);
+    if (isCM6 && cmView) {
+      cmFindPrevious(cmView);
+      const state = cmGetSearchState(cmView);
+      setMatchInfo(state.currentMatch, state.matchCount);
+    } else if (editor) {
+      editor.commands.previousSearchResult();
+      const storage = getSearchStorage(editor);
+      if (storage && storage.results.length > 0) {
+        setMatchInfo(storage.resultIndex + 1, storage.results.length);
+      }
     }
-  }, [editor, setMatchInfo]);
+  }, [editor, cmView, isCM6, setMatchInfo]);
 
   // Handle keyboard navigation
   const handleKeyDown = useCallback(
@@ -144,60 +203,67 @@ export function FindReplaceBar({ editor, onClose }: FindReplaceBarProps) {
   );
 
   const handleReplace = useCallback(() => {
-    if (!editor) return;
-    editor.commands.setReplaceTerm(replaceTerm);
-    editor.commands.replace();
+    if (isCM6 && cmView) {
+      // Update replace term first
+      cmSetSearchQuery(cmView, {
+        search: searchTerm,
+        replace: replaceTerm,
+        caseSensitive,
+        regexp: useRegex,
+      });
+      cmReplaceOne(cmView);
+      const state = cmGetSearchState(cmView);
+      setMatchInfo(state.currentMatch, state.matchCount);
+    } else if (editor) {
+      editor.commands.setReplaceTerm(replaceTerm);
+      editor.commands.replace();
 
-    // Update match counts
-    const storage = getSearchStorage(editor);
-    if (storage) {
-      const total = storage.results.length;
-      const current = total > 0 ? storage.resultIndex + 1 : 0;
-      setMatchInfo(current, total);
+      // Update match counts
+      const storage = getSearchStorage(editor);
+      if (storage) {
+        const total = storage.results.length;
+        const current = total > 0 ? storage.resultIndex + 1 : 0;
+        setMatchInfo(current, total);
+      }
     }
-  }, [editor, replaceTerm, setMatchInfo]);
+  }, [editor, cmView, isCM6, searchTerm, replaceTerm, caseSensitive, useRegex, setMatchInfo]);
 
   const handleReplaceAll = useCallback(() => {
-    if (!editor) return;
-    editor.commands.setReplaceTerm(replaceTerm);
-    editor.commands.replaceAll();
-    setMatchInfo(0, 0);
-  }, [editor, replaceTerm, setMatchInfo]);
+    if (isCM6 && cmView) {
+      // Update replace term first
+      cmSetSearchQuery(cmView, {
+        search: searchTerm,
+        replace: replaceTerm,
+        caseSensitive,
+        regexp: useRegex,
+      });
+      cmReplaceAll(cmView);
+      setMatchInfo(0, 0);
+    } else if (editor) {
+      editor.commands.setReplaceTerm(replaceTerm);
+      editor.commands.replaceAll();
+      setMatchInfo(0, 0);
+    }
+  }, [editor, cmView, isCM6, searchTerm, replaceTerm, caseSensitive, useRegex, setMatchInfo]);
 
   const handleToggleCaseSensitive = useCallback(() => {
     toggleCaseSensitive();
-    if (editor && searchTerm) {
-      // Re-run search with new case sensitivity
-      editor.commands.setCaseSensitive(!caseSensitive);
-      const storage = getSearchStorage(editor);
-      if (storage) {
-        const total = storage.results.length;
-        const current = total > 0 ? storage.resultIndex + 1 : 0;
-        setMatchInfo(current, total);
-      }
-    }
-  }, [editor, searchTerm, caseSensitive, toggleCaseSensitive, setMatchInfo]);
+    // The search will update via the useEffect when caseSensitive changes
+  }, [toggleCaseSensitive]);
 
   const handleToggleUseRegex = useCallback(() => {
     toggleUseRegex();
-    if (editor && searchTerm) {
-      // Re-run search with new regex mode
-      editor.commands.setUseRegex(!useRegex);
-      const storage = getSearchStorage(editor);
-      if (storage) {
-        const total = storage.results.length;
-        const current = total > 0 ? storage.resultIndex + 1 : 0;
-        setMatchInfo(current, total);
-      }
-    }
-  }, [editor, searchTerm, useRegex, toggleUseRegex, setMatchInfo]);
+    // The search will update via the useEffect when useRegex changes
+  }, [toggleUseRegex]);
 
   const handleClose = useCallback(() => {
-    if (editor) {
+    if (isCM6 && cmView) {
+      cmClearSearch(cmView);
+    } else if (editor) {
       editor.commands.clearSearch();
     }
     onClose();
-  }, [editor, onClose]);
+  }, [editor, cmView, isCM6, onClose]);
 
   return (
     <div

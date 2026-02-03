@@ -1572,13 +1572,16 @@ function App() {
             "editor-wrapper",
             zenMode && "flex-1 flex justify-center pt-8"
           )} ref={editorContentRef}>
-            {/* Find/Replace Bar - only for TipTap editor currently */}
-            {documentSearchOpen && !useMarkdownEditor && (
+            {/* Find/Replace Bar - supports both TipTap and CodeMirror */}
+            {documentSearchOpen && (
               <FindReplaceBar
-                editor={editorRef.current?.editor ?? null}
+                editor={!useMarkdownEditor ? editorRef.current?.editor ?? null : undefined}
+                cmView={useMarkdownEditor ? markdownEditorRef.current?.view ?? null : undefined}
                 onClose={() => {
                   closeDocumentSearch();
-                  editorRef.current?.editor?.commands.clearSearch();
+                  if (!useMarkdownEditor) {
+                    editorRef.current?.editor?.commands.clearSearch();
+                  }
                 }}
               />
             )}
