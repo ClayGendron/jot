@@ -42,28 +42,41 @@ describe("Formatting Handlers", () => {
       expect(testView.view.state.selection.main.head).toBe(8); // After "**bold**"
     });
 
-    it("returns false when in middle of bold content far from end", () => {
-      testView = createTestView("**content in |the middle**", { hidesSyntax: false });
+    it("removes bold when in middle of bold content", () => {
+      testView = createTestView("**con|tent**", { hidesSyntax: false });
 
       const handled = toggleBoldOrEscape(testView.view);
 
-      expect(handled).toBe(false);
+      expect(handled).toBe(true);
+      // Bold markers removed, content preserved
+      expect(testView.view.state.doc.toString()).toBe("content");
+      // Cursor position adjusted (was at offset 3 within content, stays at 3)
+      expect(testView.view.state.selection.main.head).toBe(3);
     });
 
-    it("returns false when not in bold", () => {
+    it("inserts empty bold markers when not in bold", () => {
       testView = createTestView("tex|t", { hidesSyntax: false });
 
       const handled = toggleBoldOrEscape(testView.view);
 
-      expect(handled).toBe(false);
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("tex****t");
+      // Cursor between markers
+      expect(testView.view.state.selection.main.head).toBe(5);
     });
 
-    it("returns false when in italic (not bold)", () => {
-      testView = createTestView("*italic|*", { hidesSyntax: false });
+    it("wraps selection in bold", () => {
+      // Select "italic" text
+      testView = createTestView("*italic*", { hidesSyntax: false });
+      // Manually set selection from position 1 to 7 (the word "italic")
+      testView.view.dispatch({
+        selection: { anchor: 1, head: 7 },
+      });
 
       const handled = toggleBoldOrEscape(testView.view);
 
-      expect(handled).toBe(false);
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("***italic***");
     });
   });
 
@@ -78,28 +91,41 @@ describe("Formatting Handlers", () => {
       expect(testView.view.state.selection.main.head).toBe(8);
     });
 
-    it("returns false when in middle of italic content", () => {
+    it("removes italic when in middle of italic content", () => {
       testView = createTestView("*ita|lic*", { hidesSyntax: false });
 
       const handled = toggleItalicOrEscape(testView.view);
 
-      expect(handled).toBe(false);
+      expect(handled).toBe(true);
+      // Italic markers removed, content preserved
+      expect(testView.view.state.doc.toString()).toBe("italic");
+      // Cursor position adjusted (was at offset 3 within content, stays at 3)
+      expect(testView.view.state.selection.main.head).toBe(3);
     });
 
-    it("returns false when not in italic", () => {
+    it("inserts empty italic markers when not in italic", () => {
       testView = createTestView("tex|t", { hidesSyntax: false });
 
       const handled = toggleItalicOrEscape(testView.view);
 
-      expect(handled).toBe(false);
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("tex**t");
+      // Cursor between markers
+      expect(testView.view.state.selection.main.head).toBe(4);
     });
 
-    it("returns false when in bold (not italic)", () => {
-      testView = createTestView("**bold|**", { hidesSyntax: false });
+    it("wraps selection in italic", () => {
+      // Select "bold" text
+      testView = createTestView("**bold**", { hidesSyntax: false });
+      // Manually set selection from position 2 to 6 (the word "bold")
+      testView.view.dispatch({
+        selection: { anchor: 2, head: 6 },
+      });
 
       const handled = toggleItalicOrEscape(testView.view);
 
-      expect(handled).toBe(false);
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("***bold***");
     });
   });
 

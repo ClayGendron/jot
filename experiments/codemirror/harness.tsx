@@ -495,15 +495,109 @@ function escapeFormatting(view: EditorView): boolean {
 }
 
 /**
+ * Remove bold formatting, preserving content
+ */
+function removeBoldFormatting(view: EditorView, ctx: FormattingContext): boolean {
+  const content = view.state.doc.sliceString(ctx.contentFrom, ctx.contentTo);
+  const cursorOffset = view.state.selection.main.head - ctx.contentFrom;
+
+  view.dispatch({
+    changes: { from: ctx.from, to: ctx.to, insert: content },
+    selection: { anchor: ctx.from + Math.max(0, Math.min(cursorOffset, content.length)) },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Wrap selection in bold markers
+ */
+function wrapSelectionInBold(view: EditorView, from: number, to: number): boolean {
+  const selectedText = view.state.doc.sliceString(from, to);
+  view.dispatch({
+    changes: { from, to, insert: `**${selectedText}**` },
+    selection: { anchor: from + 2, head: from + 2 + selectedText.length },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Insert empty bold markers with cursor between
+ */
+function insertEmptyBold(view: EditorView, pos: number): boolean {
+  view.dispatch({
+    changes: { from: pos, to: pos, insert: "****" },
+    selection: { anchor: pos + 2 },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
  * Toggle bold - but if at end of bold, escape instead
  */
 function toggleBoldOrEscape(view: EditorView): boolean {
   const ctx = getFormattingContext(view.state);
+  const sel = view.state.selection.main;
+
+  // If at end of bold, escape
   if (ctx?.type === "strong" && isAtEndOfFormatting(view.state, ctx)) {
     return escapeFormatting(view);
   }
-  // TODO: implement actual toggle bold (for now, return false to let default handle)
-  return false;
+
+  // If inside bold (not at end), remove formatting
+  if (ctx?.type === "strong") {
+    return removeBoldFormatting(view, ctx);
+  }
+
+  // If has selection, wrap it
+  if (!sel.empty) {
+    return wrapSelectionInBold(view, sel.from, sel.to);
+  }
+
+  // Empty cursor - insert empty markers
+  return insertEmptyBold(view, sel.head);
+}
+
+/**
+ * Remove italic formatting, preserving content
+ */
+function removeItalicFormatting(view: EditorView, ctx: FormattingContext): boolean {
+  const content = view.state.doc.sliceString(ctx.contentFrom, ctx.contentTo);
+  const cursorOffset = view.state.selection.main.head - ctx.contentFrom;
+
+  view.dispatch({
+    changes: { from: ctx.from, to: ctx.to, insert: content },
+    selection: { anchor: ctx.from + Math.max(0, Math.min(cursorOffset, content.length)) },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Wrap selection in italic markers
+ */
+function wrapSelectionInItalic(view: EditorView, from: number, to: number): boolean {
+  const selectedText = view.state.doc.sliceString(from, to);
+  view.dispatch({
+    changes: { from, to, insert: `*${selectedText}*` },
+    selection: { anchor: from + 1, head: from + 1 + selectedText.length },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Insert empty italic markers with cursor between
+ */
+function insertEmptyItalic(view: EditorView, pos: number): boolean {
+  view.dispatch({
+    changes: { from: pos, to: pos, insert: "**" },
+    selection: { anchor: pos + 1 },
+    scrollIntoView: true,
+  });
+  return true;
 }
 
 /**
@@ -511,12 +605,227 @@ function toggleBoldOrEscape(view: EditorView): boolean {
  */
 function toggleItalicOrEscape(view: EditorView): boolean {
   const ctx = getFormattingContext(view.state);
+  const sel = view.state.selection.main;
+
+  // If at end of italic, escape
   if (ctx?.type === "emphasis" && isAtEndOfFormatting(view.state, ctx)) {
     return escapeFormatting(view);
   }
-  // TODO: implement actual toggle italic
-  return false;
+
+  // If inside italic (not at end), remove formatting
+  if (ctx?.type === "emphasis") {
+    return removeItalicFormatting(view, ctx);
+  }
+
+  // If has selection, wrap it
+  if (!sel.empty) {
+    return wrapSelectionInItalic(view, sel.from, sel.to);
+  }
+
+  // Empty cursor - insert empty markers
+  return insertEmptyItalic(view, sel.head);
 }
+
+/**
+ * Remove code formatting, preserving content
+ */
+function removeCodeFormatting(view: EditorView, ctx: FormattingContext): boolean {
+  const content = view.state.doc.sliceString(ctx.contentFrom, ctx.contentTo);
+  const cursorOffset = view.state.selection.main.head - ctx.contentFrom;
+
+  view.dispatch({
+    changes: { from: ctx.from, to: ctx.to, insert: content },
+    selection: { anchor: ctx.from + Math.max(0, Math.min(cursorOffset, content.length)) },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Wrap selection in code markers
+ */
+function wrapSelectionInCode(view: EditorView, from: number, to: number): boolean {
+  const selectedText = view.state.doc.sliceString(from, to);
+  view.dispatch({
+    changes: { from, to, insert: `\`${selectedText}\`` },
+    selection: { anchor: from + 1, head: from + 1 + selectedText.length },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Insert empty code markers with cursor between
+ */
+function insertEmptyCode(view: EditorView, pos: number): boolean {
+  view.dispatch({
+    changes: { from: pos, to: pos, insert: "``" },
+    selection: { anchor: pos + 1 },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Toggle inline code - but if at end of code, escape instead
+ */
+function toggleCodeOrEscape(view: EditorView): boolean {
+  const ctx = getFormattingContext(view.state);
+  const sel = view.state.selection.main;
+
+  // If at end of code, escape
+  if (ctx?.type === "code" && isAtEndOfFormatting(view.state, ctx)) {
+    return escapeFormatting(view);
+  }
+
+  // If inside code (not at end), remove formatting
+  if (ctx?.type === "code") {
+    return removeCodeFormatting(view, ctx);
+  }
+
+  // If has selection, wrap it
+  if (!sel.empty) {
+    return wrapSelectionInCode(view, sel.from, sel.to);
+  }
+
+  // Empty cursor - insert empty markers
+  return insertEmptyCode(view, sel.head);
+}
+
+/**
+ * Remove strikethrough formatting, preserving content
+ * Also removes any ZWSP characters that were inserted
+ */
+function removeStrikethroughFormatting(view: EditorView, ctx: FormattingContext): boolean {
+  const ZWSP = "\u200B";
+  let content = view.state.doc.sliceString(ctx.contentFrom, ctx.contentTo);
+  // Remove ZWSP characters from content
+  content = content.replace(new RegExp(ZWSP, "g"), "");
+  const cursorOffset = view.state.selection.main.head - ctx.contentFrom;
+
+  view.dispatch({
+    changes: { from: ctx.from, to: ctx.to, insert: content },
+    selection: { anchor: ctx.from + Math.max(0, Math.min(cursorOffset, content.length)) },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Wrap selection in strikethrough markers
+ */
+function wrapSelectionInStrikethrough(view: EditorView, from: number, to: number): boolean {
+  const selectedText = view.state.doc.sliceString(from, to);
+  view.dispatch({
+    changes: { from, to, insert: `~~${selectedText}~~` },
+    selection: { anchor: from + 2, head: from + 2 + selectedText.length },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Insert empty strikethrough markers with cursor between
+ * Uses ZWSP to prevent Lezer from parsing ~~~~ as a code fence
+ */
+function insertEmptyStrikethrough(view: EditorView, pos: number): boolean {
+  const ZWSP = "\u200B";
+  view.dispatch({
+    changes: { from: pos, to: pos, insert: `~~${ZWSP}~~` },
+    selection: { anchor: pos + 2 },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Toggle strikethrough - but if at end of strikethrough, escape instead
+ */
+function toggleStrikethroughOrEscape(view: EditorView): boolean {
+  const ctx = getFormattingContext(view.state);
+  const sel = view.state.selection.main;
+
+  // If at end of strikethrough, escape
+  if (ctx?.type === "strikethrough" && isAtEndOfFormatting(view.state, ctx)) {
+    return escapeFormatting(view);
+  }
+
+  // If inside strikethrough (not at end), remove formatting
+  if (ctx?.type === "strikethrough") {
+    return removeStrikethroughFormatting(view, ctx);
+  }
+
+  // If has selection, wrap it
+  if (!sel.empty) {
+    return wrapSelectionInStrikethrough(view, sel.from, sel.to);
+  }
+
+  // Empty cursor - insert empty markers
+  return insertEmptyStrikethrough(view, sel.head);
+}
+
+/**
+ * Set heading level for current line
+ * - Same level: toggle off (remove heading)
+ * - Different level: change to new level
+ * - Plain text: add heading markers
+ * - List/blockquote: don't convert (return false)
+ */
+function setHeadingLevel(view: EditorView, level: 1 | 2 | 3 | 4 | 5 | 6): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  const lineText = line.text;
+
+  // Don't convert list items or blockquotes
+  if (getListInfo(line)) return false;
+  if (getBlockquoteInfo(line)) return false;
+
+  // Check for existing heading
+  const headingMatch = lineText.match(/^(#{1,6})\s/);
+
+  if (headingMatch) {
+    const existingLevel = headingMatch[1].length;
+    const existingMarkerLength = headingMatch[0].length;
+    const cursorOffsetFromContent = pos - (line.from + existingMarkerLength);
+
+    if (existingLevel === level) {
+      // Same level - toggle off (remove heading)
+      view.dispatch({
+        changes: { from: line.from, to: line.from + existingMarkerLength, insert: "" },
+        selection: { anchor: line.from + Math.max(0, cursorOffsetFromContent) },
+        scrollIntoView: true,
+      });
+    } else {
+      // Different level - change heading level
+      const newMarker = "#".repeat(level) + " ";
+      view.dispatch({
+        changes: { from: line.from, to: line.from + existingMarkerLength, insert: newMarker },
+        selection: { anchor: line.from + newMarker.length + Math.max(0, cursorOffsetFromContent) },
+        scrollIntoView: true,
+      });
+    }
+    return true;
+  }
+
+  // Plain text - add heading
+  const cursorOffsetFromLineStart = pos - line.from;
+  const newMarker = "#".repeat(level) + " ";
+  view.dispatch({
+    changes: { from: line.from, to: line.from, insert: newMarker },
+    selection: { anchor: line.from + newMarker.length + cursorOffsetFromLineStart },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+// Heading level wrapper functions for keymap
+function setHeading1(view: EditorView): boolean { return setHeadingLevel(view, 1); }
+function setHeading2(view: EditorView): boolean { return setHeadingLevel(view, 2); }
+function setHeading3(view: EditorView): boolean { return setHeadingLevel(view, 3); }
+function setHeading4(view: EditorView): boolean { return setHeadingLevel(view, 4); }
+function setHeading5(view: EditorView): boolean { return setHeadingLevel(view, 5); }
+function setHeading6(view: EditorView): boolean { return setHeadingLevel(view, 6); }
 
 /**
  * Check if cursor is right after a closing marker (for backspace handling)
@@ -2937,6 +3246,41 @@ const formattingEscapeKeymap = keymap.of([
     key: "Mod-k",
     run: handleLinkCommand,
   },
+  // Cmd+`: toggle inline code or escape
+  {
+    key: "Mod-`",
+    run: toggleCodeOrEscape,
+  },
+  // Cmd+Shift+S: toggle strikethrough or escape
+  {
+    key: "Mod-Shift-s",
+    run: toggleStrikethroughOrEscape,
+  },
+  // Cmd+1-6: set heading level
+  {
+    key: "Mod-1",
+    run: setHeading1,
+  },
+  {
+    key: "Mod-2",
+    run: setHeading2,
+  },
+  {
+    key: "Mod-3",
+    run: setHeading3,
+  },
+  {
+    key: "Mod-4",
+    run: setHeading4,
+  },
+  {
+    key: "Mod-5",
+    run: setHeading5,
+  },
+  {
+    key: "Mod-6",
+    run: setHeading6,
+  },
   // Tab: indent list or escape formatting
   {
     key: "Tab",
@@ -4932,7 +5276,16 @@ export {
   // Formatting handlers
   toggleBoldOrEscape,
   toggleItalicOrEscape,
+  toggleCodeOrEscape,
+  toggleStrikethroughOrEscape,
   escapeFormatting,
+  setHeadingLevel,
+  setHeading1,
+  setHeading2,
+  setHeading3,
+  setHeading4,
+  setHeading5,
+  setHeading6,
 
   // Link handlers
   handleArrowRightFromLinkText,
