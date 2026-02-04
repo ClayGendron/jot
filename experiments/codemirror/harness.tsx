@@ -2572,6 +2572,176 @@ function removeLink() {
   view.focus();
 }
 
+// ===========================================
+// LINK CONTEXT MENU STATE
+// ===========================================
+
+/**
+ * State for the link context menu
+ */
+interface LinkContextMenuState {
+  isOpen: boolean;
+  x: number;
+  y: number;
+  linkContext: LinkContext | null;
+  view: EditorView | null;
+}
+
+let linkContextMenuState: LinkContextMenuState = {
+  isOpen: false,
+  x: 0,
+  y: 0,
+  linkContext: null,
+  view: null,
+};
+
+/**
+ * Callbacks for when context menu state changes
+ */
+type LinkContextMenuCallback = (state: LinkContextMenuState) => void;
+const linkContextMenuCallbacks: LinkContextMenuCallback[] = [];
+
+function subscribeLinkContextMenu(callback: LinkContextMenuCallback) {
+  linkContextMenuCallbacks.push(callback);
+  return () => {
+    const index = linkContextMenuCallbacks.indexOf(callback);
+    if (index > -1) linkContextMenuCallbacks.splice(index, 1);
+  };
+}
+
+function notifyLinkContextMenuChange() {
+  linkContextMenuCallbacks.forEach(cb => cb(linkContextMenuState));
+}
+
+/**
+ * Open the link context menu
+ */
+function openLinkContextMenu(x: number, y: number, linkContext: LinkContext, view: EditorView) {
+  linkContextMenuState = {
+    isOpen: true,
+    x,
+    y,
+    linkContext,
+    view,
+  };
+  notifyLinkContextMenuChange();
+}
+
+/**
+ * Close the link context menu
+ */
+function closeLinkContextMenu() {
+  linkContextMenuState = {
+    isOpen: false,
+    x: 0,
+    y: 0,
+    linkContext: null,
+    view: null,
+  };
+  notifyLinkContextMenuChange();
+}
+
+/**
+ * Handle "Edit Link" from context menu
+ */
+function handleContextMenuEditLink() {
+  const { view, linkContext } = linkContextMenuState;
+  if (!view || !linkContext) return;
+
+  closeLinkContextMenu();
+  openLinkEditor(view, linkContext, "edit");
+}
+
+/**
+ * Handle "Remove Link" from context menu
+ */
+function handleContextMenuRemoveLink() {
+  const { view, linkContext } = linkContextMenuState;
+  if (!view || !linkContext) return;
+
+  view.dispatch({
+    changes: { from: linkContext.from, to: linkContext.to, insert: linkContext.text },
+    selection: { anchor: linkContext.from + linkContext.text.length },
+    scrollIntoView: true,
+  });
+
+  closeLinkContextMenu();
+  view.focus();
+}
+
+/**
+ * Handle "Copy Link URL" from context menu
+ */
+function handleContextMenuCopyLink() {
+  const { view, linkContext } = linkContextMenuState;
+  if (!view || !linkContext) return;
+
+  navigator.clipboard.writeText(linkContext.url).catch(() => {
+    // Silently fail if clipboard access is denied
+  });
+
+  closeLinkContextMenu();
+  view.focus();
+}
+
+/**
+ * Handle "Open Link" from context menu
+ */
+function handleContextMenuOpenLink() {
+  const { view, linkContext } = linkContextMenuState;
+  if (!view || !linkContext) return;
+
+  if (linkContext.url) {
+    window.open(linkContext.url, "_blank", "noopener,noreferrer");
+  }
+
+  closeLinkContextMenu();
+  view.focus();
+}
+
+/**
+ * Get link context at a specific document position
+ */
+function getLinkContextAtPos(state: EditorState, pos: number): LinkContext | null {
+  const doc = state.doc;
+  const text = doc.toString();
+  const linkRegex = /\[([^\]]*)\]\(([^)]*)\)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = linkRegex.exec(text)) !== null) {
+    const from = match.index;
+    const to = match.index + match[0].length;
+
+    if (pos >= from && pos <= to) {
+      const bracketOpen = from;
+      const bracketClose = from + 1 + match[1].length;
+      const parenOpen = bracketClose + 1;
+      const parenClose = to - 1;
+      const textFrom = bracketOpen + 1;
+      const textTo = bracketClose;
+      const urlFrom = parenOpen + 1;
+      const urlTo = parenClose;
+
+      return {
+        from,
+        to,
+        textFrom,
+        textTo,
+        urlFrom,
+        urlTo,
+        bracketOpen,
+        bracketClose,
+        parenOpen,
+        parenClose,
+        url: match[2],
+        text: match[1],
+      };
+    }
+  }
+
+  return null;
+}
+
 /**
  * Handle Cmd+K command for links
  * - On existing link: open editor to edit URL
@@ -3889,6 +4059,88 @@ const theme = EditorView.theme({
 });
 
 // ===========================================
+// LINK CONTEXT MENU COMPONENT
+// ===========================================
+
+function LinkContextMenu() {
+  const [state, setState] = useState<LinkContextMenuState>(linkContextMenuState);
+
+  useEffect(() => {
+    return subscribeLinkContextMenu((newState) => {
+      setState(newState);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!state.isOpen) return;
+
+    // Close menu on any click outside or Escape key
+    const handleClick = () => closeLinkContextMenu();
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        closeLinkContextMenu();
+        state.view?.focus();
+      }
+    };
+
+    // Use setTimeout to avoid closing immediately from the right-click
+    setTimeout(() => {
+      document.addEventListener("click", handleClick);
+      document.addEventListener("keydown", handleKeyDown);
+    }, 0);
+
+    return () => {
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [state.isOpen, state.view]);
+
+  if (!state.isOpen || !state.linkContext) return null;
+
+  return (
+    <div
+      className="link-context-menu"
+      style={{ left: state.x, top: state.y }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {state.linkContext.url && (
+        <button
+          className="link-context-menu-item"
+          onClick={handleContextMenuOpenLink}
+        >
+          <span className="link-context-menu-icon">↗</span>
+          Open Link
+        </button>
+      )}
+      {state.linkContext.url && (
+        <button
+          className="link-context-menu-item"
+          onClick={handleContextMenuCopyLink}
+        >
+          <span className="link-context-menu-icon">⧉</span>
+          Copy Link URL
+        </button>
+      )}
+      <button
+        className="link-context-menu-item"
+        onClick={handleContextMenuEditLink}
+      >
+        <span className="link-context-menu-icon">✎</span>
+        Edit Link
+      </button>
+      <div className="link-context-menu-separator" />
+      <button
+        className="link-context-menu-item danger"
+        onClick={handleContextMenuRemoveLink}
+      >
+        <span className="link-context-menu-icon">✕</span>
+        Remove Link
+      </button>
+    </div>
+  );
+}
+
+// ===========================================
 // LINK EDITOR POPUP COMPONENT
 // ===========================================
 
@@ -4040,7 +4292,24 @@ function Editor({ initialContent, hidesSyntax, onChange }: EditorProps) {
 
     viewRef.current = view;
 
+    // Handle right-click for link context menu
+    const handleContextMenu = (e: MouseEvent) => {
+      // Get the position in the document from the click coordinates
+      const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+      if (pos === null) return;
+
+      // Check if there's a link at this position
+      const linkCtx = getLinkContextAtPos(view.state, pos);
+      if (linkCtx) {
+        e.preventDefault();
+        openLinkContextMenu(e.clientX, e.clientY, linkCtx, view);
+      }
+    };
+
+    containerRef.current.addEventListener("contextmenu", handleContextMenu);
+
     return () => {
+      containerRef.current?.removeEventListener("contextmenu", handleContextMenu);
       view.destroy();
     };
   }, [initialContent, hidesSyntax]);
@@ -4100,6 +4369,7 @@ function App() {
   return (
     <div className="harness">
       <LinkEditorPopup />
+      <LinkContextMenu />
       <header className="harness-header">
         <h1>CodeMirror Experiment 1: Hidden Syntax</h1>
         <p>Test that text remains editable when syntax markers are hidden (no atomicRanges)</p>
@@ -4294,6 +4564,9 @@ function App() {
           </li>
           <li>
             <strong>Edit with Cmd+K:</strong> Place cursor in link, press Cmd+K to edit URL
+          </li>
+          <li>
+            <strong>Right-click on link:</strong> Shows context menu with Open, Copy, Edit, Remove options
           </li>
           <li>
             <strong>Backspace at start:</strong> Removes link syntax, keeps text
@@ -4526,6 +4799,56 @@ function App() {
         .link-editor-button.danger:hover {
           background: #fff5f5;
         }
+
+        /* Link Context Menu */
+        .link-context-menu {
+          position: fixed;
+          background: white;
+          border-radius: 8px;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.1);
+          padding: 4px;
+          min-width: 180px;
+          z-index: 1001;
+        }
+
+        .link-context-menu-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          width: 100%;
+          padding: 8px 12px;
+          border: none;
+          background: none;
+          cursor: pointer;
+          font-size: 14px;
+          text-align: left;
+          border-radius: 4px;
+          color: #333;
+        }
+
+        .link-context-menu-item:hover {
+          background: #f5f5f5;
+        }
+
+        .link-context-menu-item.danger {
+          color: #dc3545;
+        }
+
+        .link-context-menu-item.danger:hover {
+          background: #fff5f5;
+        }
+
+        .link-context-menu-icon {
+          width: 16px;
+          text-align: center;
+          opacity: 0.7;
+        }
+
+        .link-context-menu-separator {
+          height: 1px;
+          background: #eee;
+          margin: 4px 0;
+        }
       `}</style>
     </div>
   );
@@ -4634,6 +4957,16 @@ export {
   applyLink,
   removeLink,
   subscribeLinkEditor,
+
+  // Link context menu
+  openLinkContextMenu,
+  closeLinkContextMenu,
+  handleContextMenuEditLink,
+  handleContextMenuRemoveLink,
+  handleContextMenuCopyLink,
+  handleContextMenuOpenLink,
+  subscribeLinkContextMenu,
+  getLinkContextAtPos,
 
   // Utility functions
   getFormattingContext,

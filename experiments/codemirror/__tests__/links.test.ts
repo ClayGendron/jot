@@ -10,6 +10,7 @@ import { GFM } from "@lezer/markdown";
 import {
   getLinkContext,
   getLinkContextAfterClosing,
+  getLinkContextAtPos,
   isAtEndOfLinkText,
   isAtStartOfLinkText,
   isInHiddenLinkPortion,
@@ -314,6 +315,41 @@ describe("handleLinkCommand", () => {
     expect(handled).toBe(true);
     // The editor popup is opened but content doesn't change
     expect(view.state.doc.toString()).toBe(content);
+    view.destroy();
+  });
+});
+
+describe("getLinkContextAtPos", () => {
+  it("returns link context at a specific position", () => {
+    const content = "text [link](https://example.com) more";
+    const view = createEditorWithCursor(content, 0);
+    const ctx = getLinkContextAtPos(view.state, 8); // Inside "link"
+    expect(ctx).not.toBeNull();
+    expect(ctx?.text).toBe("link");
+    expect(ctx?.url).toBe("https://example.com");
+    view.destroy();
+  });
+
+  it("returns null when position is not in a link", () => {
+    const content = "text [link](https://example.com) more";
+    const view = createEditorWithCursor(content, 0);
+    const ctx = getLinkContextAtPos(view.state, 2); // In "text"
+    expect(ctx).toBeNull();
+    view.destroy();
+  });
+
+  it("returns context at link boundaries", () => {
+    const content = "[link](url)";
+    const view = createEditorWithCursor(content, 0);
+
+    // At start
+    const ctxStart = getLinkContextAtPos(view.state, 0);
+    expect(ctxStart).not.toBeNull();
+
+    // At end
+    const ctxEnd = getLinkContextAtPos(view.state, 11);
+    expect(ctxEnd).not.toBeNull();
+
     view.destroy();
   });
 });
