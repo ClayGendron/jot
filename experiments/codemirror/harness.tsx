@@ -140,6 +140,209 @@ interface FormattingContext {
   closingMarkerTo: number; // Where closing marker ends
 }
 
+// ===========================================
+// LINK CONTEXT
+// ===========================================
+
+/**
+ * Link context interface for [text](url) links
+ * Tracks all positions needed for navigation and editing
+ */
+interface LinkContext {
+  from: number;           // Start of entire link [text](url)
+  to: number;             // End of entire link
+  textFrom: number;       // Start of text (after [)
+  textTo: number;         // End of text (before ])
+  urlFrom: number;        // Start of URL (after ()
+  urlTo: number;          // End of URL (before ))
+  bracketOpen: number;    // Position of [
+  bracketClose: number;   // Position of ]
+  parenOpen: number;      // Position of (
+  parenClose: number;     // Position of )
+  url: string;            // The URL string
+  text: string;           // The link text
+}
+
+/**
+ * Find the link context at cursor position
+ * Returns info about the link if cursor is anywhere inside [text](url)
+ */
+function getLinkContext(state: EditorState): LinkContext | null {
+  const pos = state.selection.main.head;
+  let result: LinkContext | null = null;
+
+  syntaxTree(state).iterate({
+    enter(node) {
+      // Check for Link node
+      if (node.name === "Link" && pos >= node.from && pos <= node.to) {
+        let bracketOpen = -1;
+        let bracketClose = -1;
+        let parenOpen = -1;
+        let parenClose = -1;
+        let urlFrom = -1;
+        let urlTo = -1;
+
+        // Iterate through child nodes to find marks and URL
+        node.node.cursor().iterate((child) => {
+          if (child.name === "LinkMark") {
+            const markText = state.doc.sliceString(child.from, child.to);
+            if (markText === "[") {
+              bracketOpen = child.from;
+            } else if (markText === "]") {
+              bracketClose = child.from;
+            } else if (markText === "(") {
+              parenOpen = child.from;
+            } else if (markText === ")") {
+              parenClose = child.from;
+            }
+          }
+          if (child.name === "URL") {
+            urlFrom = child.from;
+            urlTo = child.to;
+          }
+        });
+
+        // If we found all parts, construct the context
+        if (bracketOpen !== -1 && bracketClose !== -1 && parenOpen !== -1 && parenClose !== -1) {
+          const textFrom = bracketOpen + 1;
+          const textTo = bracketClose;
+          // URL might be empty if no URL node found
+          if (urlFrom === -1) {
+            urlFrom = parenOpen + 1;
+            urlTo = parenClose;
+          }
+
+          result = {
+            from: node.from,
+            to: node.to,
+            textFrom,
+            textTo,
+            urlFrom,
+            urlTo,
+            bracketOpen,
+            bracketClose,
+            parenOpen,
+            parenClose,
+            url: state.doc.sliceString(urlFrom, urlTo),
+            text: state.doc.sliceString(textFrom, textTo),
+          };
+        }
+      }
+    },
+  });
+
+  // Regex fallback for links the parser might miss
+  if (!result) {
+    const doc = state.doc;
+    const text = doc.toString();
+    const linkRegex = /\[([^\]]*)\]\(([^)]*)\)/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = linkRegex.exec(text)) !== null) {
+      const from = match.index;
+      const to = match.index + match[0].length;
+
+      if (pos >= from && pos <= to) {
+        const bracketOpen = from;
+        const bracketClose = from + 1 + match[1].length;
+        const parenOpen = bracketClose + 1;
+        const parenClose = to - 1;
+        const textFrom = bracketOpen + 1;
+        const textTo = bracketClose;
+        const urlFrom = parenOpen + 1;
+        const urlTo = parenClose;
+
+        result = {
+          from,
+          to,
+          textFrom,
+          textTo,
+          urlFrom,
+          urlTo,
+          bracketOpen,
+          bracketClose,
+          parenOpen,
+          parenClose,
+          url: match[2],
+          text: match[1],
+        };
+        break;
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Check if cursor is at the end of link text (right before ])
+ */
+function isAtEndOfLinkText(state: EditorState, ctx: LinkContext): boolean {
+  const pos = state.selection.main.head;
+  return pos === ctx.textTo;
+}
+
+/**
+ * Check if cursor is at the start of link text (right after [)
+ */
+function isAtStartOfLinkText(state: EditorState, ctx: LinkContext): boolean {
+  const pos = state.selection.main.head;
+  return pos === ctx.textFrom;
+}
+
+/**
+ * Check if cursor is inside the hidden ](url) portion
+ */
+function isInHiddenLinkPortion(state: EditorState, ctx: LinkContext): boolean {
+  const pos = state.selection.main.head;
+  // Hidden portion: ] ( url )
+  // That's from bracketClose to parenClose (inclusive of parenClose)
+  return pos > ctx.textTo && pos <= ctx.parenClose;
+}
+
+/**
+ * Find link context when cursor is right after the closing )
+ */
+function getLinkContextAfterClosing(state: EditorState): LinkContext | null {
+  const pos = state.selection.main.head;
+  const doc = state.doc;
+  const text = doc.toString();
+  const linkRegex = /\[([^\]]*)\]\(([^)]*)\)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = linkRegex.exec(text)) !== null) {
+    const to = match.index + match[0].length;
+    if (pos === to) {
+      const from = match.index;
+      const bracketOpen = from;
+      const bracketClose = from + 1 + match[1].length;
+      const parenOpen = bracketClose + 1;
+      const parenClose = to - 1;
+      const textFrom = bracketOpen + 1;
+      const textTo = bracketClose;
+      const urlFrom = parenOpen + 1;
+      const urlTo = parenClose;
+
+      return {
+        from,
+        to,
+        textFrom,
+        textTo,
+        urlFrom,
+        urlTo,
+        bracketOpen,
+        bracketClose,
+        parenOpen,
+        parenClose,
+        url: match[2],
+        text: match[1],
+      };
+    }
+  }
+
+  return null;
+}
+
 /**
  * Find the formatting context at cursor position
  * Returns info about the formatted region if cursor is inside one
@@ -516,6 +719,77 @@ function handleBackspaceAtClosingMarker(view: EditorView): boolean {
     });
     return true;
   }
+}
+
+/**
+ * Handle backspace when cursor is right after link closing )
+ * [link](url)| → backspace → [link|(url) (delete last char of text)
+ */
+function handleBackspaceAfterLink(view: EditorView): boolean {
+  const ctx = getLinkContextAfterClosing(view.state);
+  if (!ctx) return false;
+
+  if (ctx.textTo > ctx.textFrom) {
+    // There's text to delete - delete last char and move cursor inside
+    view.dispatch({
+      changes: { from: ctx.textTo - 1, to: ctx.textTo, insert: "" },
+      selection: { anchor: ctx.textTo - 1 },
+      scrollIntoView: true,
+    });
+    return true;
+  } else {
+    // No text left - delete entire link
+    view.dispatch({
+      changes: { from: ctx.from, to: ctx.to, insert: "" },
+      selection: { anchor: ctx.from },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+}
+
+/**
+ * Handle backspace at start of link text
+ * [|link](url) → backspace → |link (removes link syntax, keeps text)
+ */
+function handleBackspaceAtLinkTextStart(view: EditorView): boolean {
+  const ctx = getLinkContext(view.state);
+  if (!ctx) return false;
+
+  if (!isAtStartOfLinkText(view.state, ctx)) return false;
+
+  // Remove the link syntax but keep the text
+  const linkText = ctx.text;
+  view.dispatch({
+    changes: { from: ctx.from, to: ctx.to, insert: linkText },
+    selection: { anchor: ctx.from },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Handle delete at end of link text
+ * [link|](url) → delete → skip over hidden ](url), effectively exit link
+ */
+function handleDeleteAtLinkTextEnd(view: EditorView): boolean {
+  const ctx = getLinkContext(view.state);
+  if (!ctx) return false;
+
+  if (!isAtEndOfLinkText(view.state, ctx)) return false;
+
+  // Delete skips over the hidden ](url) and deletes the next char after the link
+  const nextPos = ctx.to;
+  const doc = view.state.doc;
+  if (nextPos < doc.length) {
+    view.dispatch({
+      changes: { from: nextPos, to: nextPos + 1, insert: "" },
+      selection: { anchor: ctx.textTo },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+  return false;
 }
 
 // ===========================================
@@ -2093,6 +2367,243 @@ function handleArrowLeftAtStart(view: EditorView): boolean {
   return true;
 }
 
+// ===========================================
+// LINK NAVIGATION HANDLERS
+// ===========================================
+
+/**
+ * Handle right arrow at end of link text - skip over hidden ](url) portion
+ * [link|](url) → [link](url)|
+ */
+function handleArrowRightFromLinkText(view: EditorView): boolean {
+  const ctx = getLinkContext(view.state);
+  if (!ctx) return false;
+
+  if (!isAtEndOfLinkText(view.state, ctx)) return false;
+
+  // Skip over ](url) to after )
+  view.dispatch({
+    selection: { anchor: ctx.to },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Handle left arrow from after link - skip into link text
+ * [link](url)|text → [link|](url)text
+ */
+function handleArrowLeftAfterLink(view: EditorView): boolean {
+  const ctx = getLinkContextAfterClosing(view.state);
+  if (!ctx) return false;
+
+  // Skip to end of link text (before ])
+  view.dispatch({
+    selection: { anchor: ctx.textTo },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Handle left arrow at start of link text - skip over [
+ * [|link](url) → |[link](url)
+ */
+function handleArrowLeftFromLinkTextStart(view: EditorView): boolean {
+  const ctx = getLinkContext(view.state);
+  if (!ctx) return false;
+
+  if (!isAtStartOfLinkText(view.state, ctx)) return false;
+
+  // Skip over [ to before link
+  view.dispatch({
+    selection: { anchor: ctx.from },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Handle right arrow into link - skip [ to reach link text
+ * |[link](url) → [|link](url)
+ */
+function handleArrowRightIntoLink(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const doc = state.doc;
+  const text = doc.toString();
+
+  // Check if next char is [ starting a link
+  if (pos < text.length && text[pos] === "[") {
+    // Check if this is actually a link
+    const linkRegex = /\[([^\]]*)\]\(([^)]*)\)/g;
+    let match: RegExpExecArray | null;
+    while ((match = linkRegex.exec(text)) !== null) {
+      if (match.index === pos) {
+        // This is a link starting at cursor
+        view.dispatch({
+          selection: { anchor: pos + 1 }, // Skip [
+          scrollIntoView: true,
+        });
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// ===========================================
+// LINK EDITOR STATE
+// ===========================================
+
+/**
+ * State for the link editor popup
+ */
+interface LinkEditorState {
+  isOpen: boolean;
+  linkContext: LinkContext | null;
+  view: EditorView | null;
+  mode: "edit" | "create";
+  selectedText?: string;
+}
+
+let linkEditorState: LinkEditorState = {
+  isOpen: false,
+  linkContext: null,
+  view: null,
+  mode: "create",
+};
+
+/**
+ * Callbacks for when link editor state changes
+ */
+type LinkEditorCallback = (state: LinkEditorState) => void;
+const linkEditorCallbacks: LinkEditorCallback[] = [];
+
+function subscribeLinkEditor(callback: LinkEditorCallback) {
+  linkEditorCallbacks.push(callback);
+  return () => {
+    const index = linkEditorCallbacks.indexOf(callback);
+    if (index > -1) linkEditorCallbacks.splice(index, 1);
+  };
+}
+
+function notifyLinkEditorChange() {
+  linkEditorCallbacks.forEach(cb => cb(linkEditorState));
+}
+
+/**
+ * Open the link editor popup
+ */
+function openLinkEditor(view: EditorView, ctx: LinkContext | null, mode: "edit" | "create", selectedText?: string) {
+  linkEditorState = {
+    isOpen: true,
+    linkContext: ctx,
+    view,
+    mode,
+    selectedText,
+  };
+  notifyLinkEditorChange();
+}
+
+/**
+ * Close the link editor popup
+ */
+function closeLinkEditor() {
+  linkEditorState = {
+    isOpen: false,
+    linkContext: null,
+    view: null,
+    mode: "create",
+  };
+  notifyLinkEditorChange();
+}
+
+/**
+ * Apply link from the editor
+ */
+function applyLink(url: string) {
+  const { view, linkContext, mode, selectedText } = linkEditorState;
+  if (!view) return;
+
+  if (mode === "edit" && linkContext) {
+    // Edit existing link URL
+    view.dispatch({
+      changes: { from: linkContext.urlFrom, to: linkContext.urlTo, insert: url },
+      selection: { anchor: linkContext.textTo },
+      scrollIntoView: true,
+    });
+  } else if (mode === "create" && selectedText) {
+    // Wrap selection in link
+    const sel = view.state.selection.main;
+    view.dispatch({
+      changes: { from: sel.from, to: sel.to, insert: `[${selectedText}](${url})` },
+      selection: { anchor: sel.from + selectedText.length + 3 + url.length + 1 },
+      scrollIntoView: true,
+    });
+  } else {
+    // Create new empty link at cursor
+    const pos = view.state.selection.main.head;
+    view.dispatch({
+      changes: { from: pos, to: pos, insert: `[](${url})` },
+      selection: { anchor: pos + 1 }, // Inside the []
+      scrollIntoView: true,
+    });
+  }
+
+  closeLinkEditor();
+  view.focus();
+}
+
+/**
+ * Remove link (keep text)
+ */
+function removeLink() {
+  const { view, linkContext } = linkEditorState;
+  if (!view || !linkContext) return;
+
+  view.dispatch({
+    changes: { from: linkContext.from, to: linkContext.to, insert: linkContext.text },
+    selection: { anchor: linkContext.from + linkContext.text.length },
+    scrollIntoView: true,
+  });
+
+  closeLinkEditor();
+  view.focus();
+}
+
+/**
+ * Handle Cmd+K command for links
+ * - On existing link: open editor to edit URL
+ * - With selection: wrap selection in link
+ * - Empty cursor: create new link at cursor
+ */
+function handleLinkCommand(view: EditorView): boolean {
+  const ctx = getLinkContext(view.state);
+  const sel = view.state.selection.main;
+
+  if (ctx) {
+    // Cursor is inside a link - edit it
+    openLinkEditor(view, ctx, "edit");
+    return true;
+  }
+
+  if (!sel.empty) {
+    // Has selection - wrap in link
+    const selectedText = view.state.doc.sliceString(sel.from, sel.to);
+    openLinkEditor(view, null, "create", selectedText);
+    return true;
+  }
+
+  // Empty cursor - create new empty link
+  view.dispatch({
+    changes: { from: sel.head, to: sel.head, insert: "[]()" },
+    selection: { anchor: sel.head + 1 },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
 /**
  * Find all formatted regions that are fully covered by a selection range
  * and return expanded ranges that include the markers
@@ -2221,25 +2732,25 @@ function handleDeleteWithSelection(view: EditorView): boolean {
  * Create keymap for formatting escape commands
  */
 const formattingEscapeKeymap = keymap.of([
-  // Backspace: handle lists, blockquotes, paragraph merging, headings, empty formatting, selection, then skip over invisible closing markers
+  // Backspace: handle lists, blockquotes, paragraph merging, headings, empty formatting, selection, links, then skip over invisible closing markers
   {
     key: "Backspace",
-    run: (view) => handleBackspaceInList(view) || handleBackspaceInBlockquote(view) || handleBackspaceAtParagraphStart(view) || handleBackspaceAtHeadingStart(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleBackspaceAtClosingMarker(view),
+    run: (view) => handleBackspaceInList(view) || handleBackspaceInBlockquote(view) || handleBackspaceAtParagraphStart(view) || handleBackspaceAtHeadingStart(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleBackspaceAfterLink(view) || handleBackspaceAtLinkTextStart(view) || handleBackspaceAtClosingMarker(view),
   },
-  // Delete: handle end of line (merge with content below), empty formatting, selection, then skip over invisible markers
+  // Delete: handle end of line (merge with content below), empty formatting, selection, links, then skip over invisible markers
   {
     key: "Delete",
-    run: (view) => handleDeleteAtEndOfLine(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleDeleteAtOpeningMarker(view) || handleDeleteAtEndOfContent(view),
+    run: (view) => handleDeleteAtEndOfLine(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleDeleteAtLinkTextEnd(view) || handleDeleteAtOpeningMarker(view) || handleDeleteAtEndOfContent(view),
   },
-  // Arrow Right: skip over invisible markers, heading markers, list markers, blockquote markers, and blank lines
+  // Arrow Right: skip over invisible markers, heading markers, list markers, blockquote markers, links, and blank lines
   {
     key: "ArrowRight",
-    run: (view) => handleArrowRight(view) || handleArrowRightAtEnd(view) || handleArrowRightIntoHeading(view) || handleArrowRightIntoList(view) || handleArrowRightIntoBlockquote(view) || handleArrowRightOverBlankLines(view),
+    run: (view) => handleArrowRight(view) || handleArrowRightAtEnd(view) || handleArrowRightFromLinkText(view) || handleArrowRightIntoLink(view) || handleArrowRightIntoHeading(view) || handleArrowRightIntoList(view) || handleArrowRightIntoBlockquote(view) || handleArrowRightOverBlankLines(view),
   },
-  // Arrow Left: skip over invisible markers, heading markers, list markers, blockquote markers, and blank lines
+  // Arrow Left: skip over invisible markers, heading markers, list markers, blockquote markers, links, and blank lines
   {
     key: "ArrowLeft",
-    run: (view) => handleArrowLeft(view) || handleArrowLeftAtStart(view) || handleArrowLeftFromHeadingStart(view) || handleArrowLeftFromListStart(view) || handleArrowLeftFromBlockquoteStart(view) || handleArrowLeftOverBlankLines(view),
+    run: (view) => handleArrowLeft(view) || handleArrowLeftAtStart(view) || handleArrowLeftAfterLink(view) || handleArrowLeftFromLinkTextStart(view) || handleArrowLeftFromHeadingStart(view) || handleArrowLeftFromListStart(view) || handleArrowLeftFromBlockquoteStart(view) || handleArrowLeftOverBlankLines(view),
   },
   // Cmd+B: toggle bold or escape
   {
@@ -2250,6 +2761,11 @@ const formattingEscapeKeymap = keymap.of([
   {
     key: "Mod-i",
     run: toggleItalicOrEscape,
+  },
+  // Cmd+K: create or edit link
+  {
+    key: "Mod-k",
+    run: handleLinkCommand,
   },
   // Tab: indent list or escape formatting
   {
@@ -2526,6 +3042,16 @@ const formattingInputHandler = EditorView.inputHandler.of(
       return true;
     }
 
+    // Auto-close [ → [|]()  for links
+    if (text === "[") {
+      view.dispatch({
+        changes: { from, to, insert: "[]()" },
+        selection: { anchor: from + 1 },
+        scrollIntoView: true,
+      });
+      return true;
+    }
+
     // First ~ just inserts normally (no auto-close for single ~)
     // The ~~ auto-close is handled at the top of this function
 
@@ -2655,6 +3181,35 @@ function buildHiddenSyntax(state: EditorState) {
           }
         }
       }
+
+      // Handle Link nodes - hide [ and ](url) portions, keep text visible
+      if (node.name === "Link") {
+        let bracketOpen = -1;
+        let bracketClose = -1;
+        let parenClose = -1;
+
+        node.node.cursor().iterate((child) => {
+          if (child.name === "LinkMark") {
+            const markText = doc.sliceString(child.from, child.to);
+            if (markText === "[") {
+              bracketOpen = child.from;
+            } else if (markText === "]") {
+              bracketClose = child.from;
+            } else if (markText === ")") {
+              parenClose = child.from;
+            }
+          }
+        });
+
+        // Hide [ at start
+        if (bracketOpen !== -1) {
+          rangesToHide.push({ from: bracketOpen, to: bracketOpen + 1 });
+        }
+        // Hide ](url) portion - from ] to after )
+        if (bracketClose !== -1 && parenClose !== -1) {
+          rangesToHide.push({ from: bracketClose, to: parenClose + 1 });
+        }
+      }
     },
   });
 
@@ -2713,6 +3268,23 @@ function buildHiddenSyntax(state: EditorState) {
     }
     if (!isAlreadyCollected(closeFrom, closeTo)) {
       rangesToHide.push({ from: closeFrom, to: closeTo });
+    }
+  }
+
+  // Link markers: [text](url) - hide [ and ](url)
+  const linkRegex = /\[([^\]]*)\]\(([^)]*)\)/g;
+  while ((match = linkRegex.exec(text)) !== null) {
+    const bracketOpen = match.index;
+    const bracketClose = match.index + 1 + match[1].length;
+    const parenClose = match.index + match[0].length - 1;
+
+    // Hide opening [
+    if (!isAlreadyCollected(bracketOpen, bracketOpen + 1)) {
+      rangesToHide.push({ from: bracketOpen, to: bracketOpen + 1 });
+    }
+    // Hide ](url) portion
+    if (!isAlreadyCollected(bracketClose, parenClose + 1)) {
+      rangesToHide.push({ from: bracketClose, to: parenClose + 1 });
     }
   }
 
@@ -2882,8 +3454,9 @@ const pendingFormatTheme = EditorView.updateListener.of((update) => {
 });
 
 /**
- * Extension that ensures cursor can never be inside heading, list, or blockquote markers.
- * If cursor ends up before content start, move it to content start.
+ * Extension that ensures cursor can never be inside heading, list, blockquote markers,
+ * or hidden link portions (the ](url) part).
+ * If cursor ends up in a hidden region, move it to an appropriate position.
  */
 const cursorGuard = EditorView.updateListener.of((update) => {
   if (!update.selectionSet) return;
@@ -2892,37 +3465,48 @@ const cursorGuard = EditorView.updateListener.of((update) => {
   const pos = state.selection.main.head;
   const line = state.doc.lineAt(pos);
 
-  let contentStart: number | null = null;
+  let newPos: number | null = null;
+
+  // Check if cursor is inside hidden link portion
+  const linkCtx = getLinkContext(state);
+  if (linkCtx && isInHiddenLinkPortion(state, linkCtx)) {
+    // Move cursor to end of link text (textTo)
+    newPos = linkCtx.textTo;
+  }
 
   // Check if this is a heading line
-  const headingMatch = line.text.match(/^(#{1,6})\s/);
-  if (headingMatch) {
-    contentStart = line.from + headingMatch[0].length;
+  if (newPos === null) {
+    const headingMatch = line.text.match(/^(#{1,6})\s/);
+    if (headingMatch && pos < line.from + headingMatch[0].length) {
+      newPos = line.from + headingMatch[0].length;
+    }
   }
 
   // Check if this is a list item line
-  const listMatch = line.text.match(/^(\s*)([-*+]|\d+\.)\s/);
-  if (listMatch) {
-    contentStart = line.from + listMatch[0].length;
+  if (newPos === null) {
+    const listMatch = line.text.match(/^(\s*)([-*+]|\d+\.)\s/);
+    if (listMatch && pos < line.from + listMatch[0].length) {
+      newPos = line.from + listMatch[0].length;
+    }
   }
 
   // Check if this is a blockquote line
-  const quoteInfo = getBlockquoteInfo(line);
-  if (quoteInfo) {
-    contentStart = quoteInfo.contentStart;
+  if (newPos === null) {
+    const quoteInfo = getBlockquoteInfo(line);
+    if (quoteInfo && pos < quoteInfo.contentStart) {
+      newPos = quoteInfo.contentStart;
+    }
   }
 
-  if (contentStart === null) return;
+  if (newPos === null) return;
 
-  // If cursor is before content start, move it
-  if (pos < contentStart) {
-    // Use requestAnimationFrame to avoid dispatch during update
-    requestAnimationFrame(() => {
-      update.view.dispatch({
-        selection: { anchor: contentStart! },
-      });
+  // Move cursor to the appropriate position
+  // Use requestAnimationFrame to avoid dispatch during update
+  requestAnimationFrame(() => {
+    update.view.dispatch({
+      selection: { anchor: newPos! },
     });
-  }
+  });
 });
 
 // ===========================================
@@ -2933,6 +3517,7 @@ const boldMark = Decoration.mark({ class: "cm-strong" });
 const italicMark = Decoration.mark({ class: "cm-em" });
 const codeMark = Decoration.mark({ class: "cm-inline-code" });
 const strikethroughMark = Decoration.mark({ class: "cm-strikethrough" });
+const linkMark = Decoration.mark({ class: "cm-link" });
 
 // Heading marks for different levels
 const h1Mark = Decoration.mark({ class: "cm-h1" });
@@ -3054,6 +3639,27 @@ function buildStyleDecorations(state: EditorState) {
         }
       }
 
+      // Link - style the text portion (between [ and ])
+      if (node.name === "Link") {
+        let textFrom = node.from;
+        let textTo = node.from;
+
+        node.node.cursor().iterate((child) => {
+          if (child.name === "LinkMark") {
+            const markText = state.doc.sliceString(child.from, child.to);
+            if (markText === "[") {
+              textFrom = child.to; // After [
+            } else if (markText === "]") {
+              textTo = child.from; // Before ]
+            }
+          }
+        });
+
+        if (textFrom < textTo) {
+          rangesToDecorate.push({ from: textFrom, to: textTo, decoration: linkMark });
+        }
+      }
+
       // ATX Headings (# through ######)
       if (node.name === "ATXHeading1" || node.name === "ATXHeading2" ||
           node.name === "ATXHeading3" || node.name === "ATXHeading4" ||
@@ -3147,6 +3753,16 @@ function buildStyleDecorations(state: EditorState) {
     }
   }
 
+  // Links: [text](url) - style the text portion
+  const linkStyleRegex = /\[([^\]]*)\]\([^)]*\)/g;
+  while ((match = linkStyleRegex.exec(text)) !== null) {
+    const textFrom = match.index + 1; // After [
+    const textTo = match.index + 1 + match[1].length; // Before ]
+    if (!isAlreadyCollected(textFrom, textTo) && textFrom < textTo) {
+      rangesToDecorate.push({ from: textFrom, to: textTo, decoration: linkMark });
+    }
+  }
+
   // Sort ranges by 'from' position (required by RangeSetBuilder)
   rangesToDecorate.sort((a, b) => a.from - b.from);
 
@@ -3197,6 +3813,11 @@ const theme = EditorView.theme({
   },
   ".cm-strikethrough": {
     textDecoration: "line-through",
+  },
+  ".cm-link": {
+    color: "#0066cc",
+    textDecoration: "underline",
+    cursor: "pointer",
   },
   // Heading styles
   ".cm-h1": {
@@ -3268,6 +3889,104 @@ const theme = EditorView.theme({
 });
 
 // ===========================================
+// LINK EDITOR POPUP COMPONENT
+// ===========================================
+
+function LinkEditorPopup() {
+  const [state, setState] = useState<LinkEditorState>(linkEditorState);
+  const [url, setUrl] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return subscribeLinkEditor((newState) => {
+      setState(newState);
+      if (newState.isOpen) {
+        setUrl(newState.linkContext?.url || "");
+        // Focus input after a short delay to ensure it's rendered
+        setTimeout(() => inputRef.current?.focus(), 0);
+      }
+    });
+  }, []);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    applyLink(url);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      closeLinkEditor();
+      state.view?.focus();
+    }
+  };
+
+  if (!state.isOpen) return null;
+
+  return (
+    <div
+      className="link-editor-overlay"
+      onClick={() => {
+        closeLinkEditor();
+        state.view?.focus();
+      }}
+    >
+      <div className="link-editor-popup" onClick={(e) => e.stopPropagation()}>
+        <form onSubmit={handleSubmit}>
+          <div className="link-editor-header">
+            {state.mode === "edit" ? "Edit Link" : "Insert Link"}
+          </div>
+          {state.selectedText && (
+            <div className="link-editor-text">
+              Text: <strong>{state.selectedText}</strong>
+            </div>
+          )}
+          {state.linkContext && (
+            <div className="link-editor-text">
+              Text: <strong>{state.linkContext.text}</strong>
+            </div>
+          )}
+          <input
+            ref={inputRef}
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="https://example.com"
+            className="link-editor-input"
+          />
+          <div className="link-editor-buttons">
+            <button type="submit" className="link-editor-button primary">
+              {state.mode === "edit" ? "Update" : "Insert"}
+            </button>
+            {state.mode === "edit" && (
+              <button
+                type="button"
+                className="link-editor-button danger"
+                onClick={() => {
+                  removeLink();
+                }}
+              >
+                Remove Link
+              </button>
+            )}
+            <button
+              type="button"
+              className="link-editor-button"
+              onClick={() => {
+                closeLinkEditor();
+                state.view?.focus();
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ===========================================
 // EDITOR COMPONENT
 // ===========================================
 
@@ -3337,6 +4056,7 @@ const FIXTURES = [
   { name: "headings.md", label: "Headings" },
   { name: "lists.md", label: "Lists" },
   { name: "blockquotes.md", label: "Blockquotes" },
+  { name: "links.md", label: "Links" },
   { name: "bold-asterisks.md", label: "Bold (**)" },
   { name: "bold-underscores.md", label: "Bold (__)" },
   { name: "italic-asterisks.md", label: "Italic (*)" },
@@ -3379,6 +4099,7 @@ function App() {
 
   return (
     <div className="harness">
+      <LinkEditorPopup />
       <header className="harness-header">
         <h1>CodeMirror Experiment 1: Hidden Syntax</h1>
         <p>Test that text remains editable when syntax markers are hidden (no atomicRanges)</p>
@@ -3555,6 +4276,32 @@ function App() {
             <strong>Remove:</strong> Backspace at start of list item removes marker
           </li>
         </ul>
+
+        <h3>Links (NEW)</h3>
+        <p>Links display styled text with hidden URL syntax:</p>
+        <ul>
+          <li>
+            <strong>Display:</strong> Link text shows styled (blue, underlined), URL hidden
+          </li>
+          <li>
+            <strong>Auto-close:</strong> Type [ to create [|]() (cursor in text position)
+          </li>
+          <li>
+            <strong>Navigation:</strong> Arrow keys skip over hidden ](url) portion
+          </li>
+          <li>
+            <strong>Create with Cmd+K:</strong> Select text, press Cmd+K to wrap in link
+          </li>
+          <li>
+            <strong>Edit with Cmd+K:</strong> Place cursor in link, press Cmd+K to edit URL
+          </li>
+          <li>
+            <strong>Backspace at start:</strong> Removes link syntax, keeps text
+          </li>
+          <li>
+            <strong>Backspace after link:</strong> Deletes last char of link text
+          </li>
+        </ul>
       </div>
 
       <style>{`
@@ -3691,6 +4438,94 @@ function App() {
         .harness-tests li {
           margin-bottom: 8px;
         }
+
+        /* Link Editor Popup */
+        .link-editor-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+
+        .link-editor-popup {
+          background: white;
+          border-radius: 8px;
+          padding: 20px;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+          min-width: 400px;
+        }
+
+        .link-editor-header {
+          font-size: 16px;
+          font-weight: 600;
+          margin-bottom: 12px;
+        }
+
+        .link-editor-text {
+          font-size: 14px;
+          color: #666;
+          margin-bottom: 12px;
+        }
+
+        .link-editor-input {
+          width: 100%;
+          padding: 8px 12px;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+          font-size: 14px;
+          margin-bottom: 16px;
+          box-sizing: border-box;
+        }
+
+        .link-editor-input:focus {
+          outline: none;
+          border-color: #007aff;
+          box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
+        }
+
+        .link-editor-buttons {
+          display: flex;
+          gap: 8px;
+          justify-content: flex-end;
+        }
+
+        .link-editor-button {
+          padding: 8px 16px;
+          border: 1px solid #ccc;
+          border-radius: 4px;
+          background: white;
+          cursor: pointer;
+          font-size: 14px;
+        }
+
+        .link-editor-button:hover {
+          background: #f5f5f5;
+        }
+
+        .link-editor-button.primary {
+          background: #007aff;
+          color: white;
+          border-color: #007aff;
+        }
+
+        .link-editor-button.primary:hover {
+          background: #0066dd;
+        }
+
+        .link-editor-button.danger {
+          color: #dc3545;
+          border-color: #dc3545;
+        }
+
+        .link-editor-button.danger:hover {
+          background: #fff5f5;
+        }
       `}</style>
     </div>
   );
@@ -3776,6 +4611,30 @@ export {
   toggleItalicOrEscape,
   escapeFormatting,
 
+  // Link handlers
+  handleArrowRightFromLinkText,
+  handleArrowLeftAfterLink,
+  handleArrowLeftFromLinkTextStart,
+  handleArrowRightIntoLink,
+  handleBackspaceAfterLink,
+  handleBackspaceAtLinkTextStart,
+  handleDeleteAtLinkTextEnd,
+  handleLinkCommand,
+
+  // Link utilities
+  getLinkContext,
+  getLinkContextAfterClosing,
+  isAtEndOfLinkText,
+  isAtStartOfLinkText,
+  isInHiddenLinkPortion,
+
+  // Link editor state
+  openLinkEditor,
+  closeLinkEditor,
+  applyLink,
+  removeLink,
+  subscribeLinkEditor,
+
   // Utility functions
   getFormattingContext,
   getFormattingContextAfterClosing,
@@ -3786,4 +4645,5 @@ export {
 
   // Types
   type FormattingContext,
+  type LinkContext,
 };
