@@ -1,0 +1,519 @@
+/**
+ * Integration tests for list handlers
+ *
+ * Tests cover:
+ * - handleEnterInList: Continue/exit list on Enter
+ * - handleBackspaceInList: Remove marker or merge on Backspace
+ * - handleTabInList: Indent list item
+ * - handleShiftTabInList: Outdent list item
+ * - handleArrowLeftFromListStart: Skip to previous line
+ * - handleArrowRightIntoList: Skip to content start
+ * - getListInfo: Parse list markers
+ * - getNextOrderNumber: Get next number for ordered list
+ * - isAtListContentStart: Check if cursor at list content start
+ */
+
+import { describe, it, expect, afterEach } from "vitest";
+import { createTestView, getDocWithCursor, type TestView } from "./testUtils";
+import {
+  handleEnterInList,
+  handleBackspaceInList,
+  handleTabInList,
+  handleShiftTabInList,
+  handleArrowLeftFromListStart,
+  handleArrowRightIntoList,
+  getListInfo,
+  getNextOrderNumber,
+  isAtListContentStart,
+} from "../harness";
+
+describe("List Handlers", () => {
+  let testView: TestView;
+
+  afterEach(() => {
+    testView?.destroy();
+  });
+
+  describe("handleEnterInList", () => {
+    it("continues unordered list with -", () => {
+      testView = createTestView("- Item|");
+
+      const handled = handleEnterInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("- Item\n- |");
+    });
+
+    it("continues unordered list with *", () => {
+      testView = createTestView("* Item|");
+
+      const handled = handleEnterInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("* Item\n* |");
+    });
+
+    it("continues unordered list with +", () => {
+      testView = createTestView("+ Item|");
+
+      const handled = handleEnterInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("+ Item\n+ |");
+    });
+
+    it("continues ordered list with next number", () => {
+      testView = createTestView("1. First|");
+
+      const handled = handleEnterInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("1. First\n2. |");
+    });
+
+    it("continues ordered list from higher number", () => {
+      testView = createTestView("5. Fifth|");
+
+      const handled = handleEnterInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("5. Fifth\n6. |");
+    });
+
+    it("exits list on empty item", () => {
+      testView = createTestView("- Item\n- |");
+
+      const handled = handleEnterInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("- Item\n\n|");
+    });
+
+    it("exits ordered list on empty item", () => {
+      testView = createTestView("1. Item\n2. |");
+
+      const handled = handleEnterInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("1. Item\n\n|");
+    });
+
+    it("preserves indentation", () => {
+      testView = createTestView("  - Nested|");
+
+      const handled = handleEnterInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("  - Nested\n  - |");
+    });
+
+    it("splits list item in middle", () => {
+      testView = createTestView("- Hel|lo");
+
+      const handled = handleEnterInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("- Hel\n- |lo");
+    });
+
+    it("returns false for non-list line", () => {
+      testView = createTestView("Regular text|");
+
+      const handled = handleEnterInList(testView.view);
+
+      expect(handled).toBe(false);
+    });
+
+    it("inserts new line above when at content start", () => {
+      testView = createTestView("- |Item");
+
+      const handled = handleEnterInList(testView.view);
+
+      expect(handled).toBe(true);
+      // Should insert empty list item above
+      expect(getDocWithCursor(testView.view)).toBe("- \n- |Item");
+    });
+  });
+
+  describe("handleBackspaceInList", () => {
+    it("removes marker on empty list item", () => {
+      testView = createTestView("- |");
+
+      const handled = handleBackspaceInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("|");
+    });
+
+    it("removes marker and keeps content", () => {
+      testView = createTestView("- |Content");
+
+      const handled = handleBackspaceInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("|Content");
+    });
+
+    it("merges with previous list item", () => {
+      testView = createTestView("- Line 1\n- |Line 2");
+
+      const handled = handleBackspaceInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("- Line 1|Line 2");
+    });
+
+    it("returns false when not at content start", () => {
+      testView = createTestView("- Hel|lo");
+
+      const handled = handleBackspaceInList(testView.view);
+
+      expect(handled).toBe(false);
+    });
+
+    it("removes marker on first line", () => {
+      testView = createTestView("- |First content");
+
+      const handled = handleBackspaceInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("|First content");
+    });
+
+    it("merges with content above when previous line is blank", () => {
+      testView = createTestView("Content\n\n- |Item");
+
+      const handled = handleBackspaceInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("Content|Item");
+    });
+
+    it("returns false for non-list line", () => {
+      testView = createTestView("|Regular");
+
+      const handled = handleBackspaceInList(testView.view);
+
+      expect(handled).toBe(false);
+    });
+  });
+
+  describe("handleTabInList", () => {
+    it("adds 2 spaces of indentation", () => {
+      testView = createTestView("- |Item");
+
+      const handled = handleTabInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.line(1).text).toBe("  - Item");
+    });
+
+    it("adds indentation to already indented list", () => {
+      testView = createTestView("  - |Item");
+
+      const handled = handleTabInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.line(1).text).toBe("    - Item");
+    });
+
+    it("moves cursor correctly after indent", () => {
+      testView = createTestView("- |Item");
+
+      handleTabInList(testView.view);
+
+      // Cursor should move forward by 2 (the indent amount)
+      expect(testView.view.state.selection.main.head).toBe(4); // "  - |"
+    });
+
+    it("returns false for non-list line", () => {
+      testView = createTestView("|Regular");
+
+      const handled = handleTabInList(testView.view);
+
+      expect(handled).toBe(false);
+    });
+
+    it("works for ordered lists", () => {
+      testView = createTestView("1. |Item");
+
+      const handled = handleTabInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.line(1).text).toBe("  1. Item");
+    });
+  });
+
+  describe("handleShiftTabInList", () => {
+    it("removes up to 2 spaces of indentation", () => {
+      testView = createTestView("  - |Item");
+
+      const handled = handleShiftTabInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.line(1).text).toBe("- Item");
+    });
+
+    it("removes only available indentation", () => {
+      testView = createTestView(" - |Item"); // Only 1 space
+
+      const handled = handleShiftTabInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.line(1).text).toBe("- Item");
+    });
+
+    it("returns false with no indentation", () => {
+      testView = createTestView("- |Item");
+
+      const handled = handleShiftTabInList(testView.view);
+
+      expect(handled).toBe(false);
+    });
+
+    it("removes from deeply indented list", () => {
+      testView = createTestView("    - |Item");
+
+      const handled = handleShiftTabInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.line(1).text).toBe("  - Item");
+    });
+  });
+
+  describe("handleArrowRightIntoList", () => {
+    it("skips to content start when at line start", () => {
+      testView = createTestView("|- Item", { hidesSyntax: false });
+
+      const handled = handleArrowRightIntoList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.selection.main.head).toBe(2); // After "- "
+    });
+
+    it("returns false when not at line start", () => {
+      testView = createTestView("- It|em", { hidesSyntax: false });
+
+      const handled = handleArrowRightIntoList(testView.view);
+
+      expect(handled).toBe(false);
+    });
+
+    it("returns false for non-list line", () => {
+      testView = createTestView("|Regular", { hidesSyntax: false });
+
+      const handled = handleArrowRightIntoList(testView.view);
+
+      expect(handled).toBe(false);
+    });
+
+    it("handles indented list", () => {
+      testView = createTestView("|  - Item", { hidesSyntax: false });
+
+      const handled = handleArrowRightIntoList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.selection.main.head).toBe(4); // After "  - "
+    });
+
+    it("handles ordered list", () => {
+      testView = createTestView("|1. Item", { hidesSyntax: false });
+
+      const handled = handleArrowRightIntoList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.selection.main.head).toBe(3); // After "1. "
+    });
+  });
+
+  describe("handleArrowLeftFromListStart", () => {
+    it("goes to end of previous line", () => {
+      testView = createTestView("Previous\n- |Content");
+
+      const handled = handleArrowLeftFromListStart(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.selection.main.head).toBe(8); // End of "Previous"
+    });
+
+    it("returns false when not at content start", () => {
+      testView = createTestView("- Con|tent");
+
+      const handled = handleArrowLeftFromListStart(testView.view);
+
+      expect(handled).toBe(false);
+    });
+
+    it("returns false on first line", () => {
+      testView = createTestView("- |First");
+
+      const handled = handleArrowLeftFromListStart(testView.view);
+
+      expect(handled).toBe(false);
+    });
+
+    it("skips blank lines", () => {
+      testView = createTestView("Content\n\n- |Item");
+
+      const handled = handleArrowLeftFromListStart(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.selection.main.head).toBe(7); // End of "Content"
+    });
+  });
+
+  describe("getListInfo", () => {
+    it("detects unordered list with -", () => {
+      testView = createTestView("- Item|");
+      const line = testView.view.state.doc.line(1);
+
+      const info = getListInfo(line);
+
+      expect(info).not.toBe(null);
+      expect(info!.isListItem).toBe(true);
+      expect(info!.marker).toBe("-");
+      expect(info!.isOrdered).toBe(false);
+      expect(info!.contentStart).toBe(2);
+    });
+
+    it("detects unordered list with *", () => {
+      testView = createTestView("* Item|");
+      const line = testView.view.state.doc.line(1);
+
+      const info = getListInfo(line);
+
+      expect(info).not.toBe(null);
+      expect(info!.marker).toBe("*");
+      expect(info!.isOrdered).toBe(false);
+    });
+
+    it("detects unordered list with +", () => {
+      testView = createTestView("+ Item|");
+      const line = testView.view.state.doc.line(1);
+
+      const info = getListInfo(line);
+
+      expect(info).not.toBe(null);
+      expect(info!.marker).toBe("+");
+    });
+
+    it("detects ordered list", () => {
+      testView = createTestView("1. Item|");
+      const line = testView.view.state.doc.line(1);
+
+      const info = getListInfo(line);
+
+      expect(info).not.toBe(null);
+      expect(info!.isOrdered).toBe(true);
+      expect(info!.orderNumber).toBe(1);
+      expect(info!.marker).toBe("1.");
+    });
+
+    it("detects ordered list with higher numbers", () => {
+      testView = createTestView("42. Item|");
+      const line = testView.view.state.doc.line(1);
+
+      const info = getListInfo(line);
+
+      expect(info).not.toBe(null);
+      expect(info!.orderNumber).toBe(42);
+    });
+
+    it("detects indented list", () => {
+      testView = createTestView("  - Item|");
+      const line = testView.view.state.doc.line(1);
+
+      const info = getListInfo(line);
+
+      expect(info).not.toBe(null);
+      expect(info!.indent).toBe("  ");
+      expect(info!.contentStart).toBe(4);
+    });
+
+    it("returns null for non-list", () => {
+      testView = createTestView("Regular|");
+      const line = testView.view.state.doc.line(1);
+
+      const info = getListInfo(line);
+
+      expect(info).toBe(null);
+    });
+
+    it("returns null for line starting with dash but no space", () => {
+      testView = createTestView("-NoSpace|");
+      const line = testView.view.state.doc.line(1);
+
+      const info = getListInfo(line);
+
+      expect(info).toBe(null);
+    });
+  });
+
+  describe("getNextOrderNumber", () => {
+    it("returns next number for ordered list", () => {
+      testView = createTestView("1. Item|");
+
+      const nextNum = getNextOrderNumber(testView.view.state, 1);
+
+      expect(nextNum).toBe(2);
+    });
+
+    it("returns next number for higher starting point", () => {
+      testView = createTestView("5. Item|");
+
+      const nextNum = getNextOrderNumber(testView.view.state, 1);
+
+      expect(nextNum).toBe(6);
+    });
+
+    it("returns 1 for unordered list", () => {
+      testView = createTestView("- Item|");
+
+      const nextNum = getNextOrderNumber(testView.view.state, 1);
+
+      expect(nextNum).toBe(1);
+    });
+
+    it("returns 1 for non-list line", () => {
+      testView = createTestView("Regular|");
+
+      const nextNum = getNextOrderNumber(testView.view.state, 1);
+
+      expect(nextNum).toBe(1);
+    });
+  });
+
+  describe("isAtListContentStart", () => {
+    it("returns true when at content start", () => {
+      testView = createTestView("- |Item");
+
+      const result = isAtListContentStart(testView.view.state);
+
+      expect(result).toBe(true);
+    });
+
+    it("returns false when in middle of content", () => {
+      testView = createTestView("- It|em");
+
+      const result = isAtListContentStart(testView.view.state);
+
+      expect(result).toBe(false);
+    });
+
+    it("returns false when at end of content", () => {
+      testView = createTestView("- Item|");
+
+      const result = isAtListContentStart(testView.view.state);
+
+      expect(result).toBe(false);
+    });
+
+    it("returns false for non-list line", () => {
+      testView = createTestView("|Regular");
+
+      const result = isAtListContentStart(testView.view.state);
+
+      expect(result).toBe(false);
+    });
+  });
+});

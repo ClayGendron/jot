@@ -11,12 +11,96 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { EditorState, StateField, RangeSetBuilder, EditorSelection } from "@codemirror/state";
-import { EditorView, Decoration, keymap } from "@codemirror/view";
+import { EditorState, StateField, RangeSetBuilder, EditorSelection, Prec } from "@codemirror/state";
+import { EditorView, Decoration, keymap, WidgetType } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { syntaxTree } from "@codemirror/language";
 import { GFM } from "@lezer/markdown";
+
+// ===========================================
+// LIST MARKER WIDGETS
+// ===========================================
+
+/**
+ * Widget that renders a bullet point for unordered lists
+ * Note: Indentation comes from preserved whitespace before the marker,
+ * so we don't need to add margin-left here.
+ */
+class BulletWidget extends WidgetType {
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-list-bullet";
+    span.textContent = "•";
+    span.style.marginRight = "6px";
+    span.style.color = "#666";
+    return span;
+  }
+
+  eq(_other: BulletWidget) {
+    return true; // All bullets are the same
+  }
+}
+
+/**
+ * Widget that renders a number for ordered lists
+ * Note: Indentation comes from preserved whitespace before the marker.
+ */
+class NumberWidget extends WidgetType {
+  constructor(readonly num: number) {
+    super();
+  }
+
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-list-number";
+    span.textContent = `${this.num}.`;
+    span.style.marginRight = "6px";
+    span.style.color = "#666";
+    return span;
+  }
+
+  eq(other: NumberWidget) {
+    return other.num === this.num;
+  }
+}
+
+// ===========================================
+// BLOCKQUOTE WIDGETS
+// ===========================================
+
+/**
+ * Widget that renders a blockquote bar indicator
+ * The bar appears on the left side to indicate a blockquote
+ */
+class BlockquoteBarWidget extends WidgetType {
+  constructor(readonly level: number = 1) {
+    super();
+  }
+
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-blockquote-bar";
+    // Create nested bars for nested blockquotes
+    for (let i = 0; i < this.level; i++) {
+      const bar = document.createElement("span");
+      bar.className = "cm-blockquote-bar-segment";
+      bar.style.display = "inline-block";
+      bar.style.width = "3px";
+      bar.style.height = "1.2em";
+      bar.style.backgroundColor = "#6b7280";
+      bar.style.marginRight = i < this.level - 1 ? "8px" : "12px";
+      bar.style.verticalAlign = "text-bottom";
+      bar.style.borderRadius = "1px";
+      span.appendChild(bar);
+    }
+    return span;
+  }
+
+  eq(other: BlockquoteBarWidget) {
+    return other.level === this.level;
+  }
+}
 
 // ===========================================
 // PENDING ESCAPE STATE
@@ -434,6 +518,597 @@ function handleBackspaceAtClosingMarker(view: EditorView): boolean {
   }
 }
 
+// ===========================================
+// LIST HANDLING
+// ===========================================
+
+/**
+ * List marker patterns:
+ * - Unordered: -, *, + followed by space
+ * - Ordered: 1., 2., etc. followed by space
+ */
+const LIST_MARKER_REGEX = /^(\s*)([-*+]|\d+\.)\s/;
+
+/**
+ * Get list info for a line
+ */
+function getListInfo(line: { text: string; from: number }): {
+  isListItem: boolean;
+  indent: string;
+  marker: string;
+  markerWithSpace: string;
+  contentStart: number;
+  isOrdered: boolean;
+  orderNumber: number | null;
+} | null {
+  const match = line.text.match(LIST_MARKER_REGEX);
+  if (!match) return null;
+
+  const indent = match[1];
+  const marker = match[2];
+  const markerWithSpace = match[0];
+  const isOrdered = /^\d+\.$/.test(marker);
+  const orderNumber = isOrdered ? parseInt(marker) : null;
+
+  return {
+    isListItem: true,
+    indent,
+    marker,
+    markerWithSpace,
+    contentStart: line.from + markerWithSpace.length,
+    isOrdered,
+    orderNumber,
+  };
+}
+
+/**
+ * Check if cursor is at the start of list item content
+ */
+function isAtListContentStart(state: EditorState): boolean {
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  const listInfo = getListInfo(line);
+  if (!listInfo) return false;
+  return pos === listInfo.contentStart;
+}
+
+/**
+ * Get the next order number for an ordered list
+ */
+function getNextOrderNumber(state: EditorState, lineNumber: number): number {
+  const line = state.doc.line(lineNumber);
+  const listInfo = getListInfo(line);
+  if (listInfo?.isOrdered && listInfo.orderNumber !== null) {
+    return listInfo.orderNumber + 1;
+  }
+  return 1;
+}
+
+/**
+ * Handle Enter in list - auto-continue or exit
+ */
+function handleEnterInList(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  const listInfo = getListInfo(line);
+
+  if (!listInfo) return false;
+
+  // Check if list item content is empty (just the marker)
+  const content = line.text.slice(listInfo.markerWithSpace.length);
+
+  if (content.trim() === "") {
+    // Empty list item - exit list with proper paragraph spacing
+    if (line.number <= 1) {
+      // First line - just remove the marker, cursor at line start
+      view.dispatch({
+        changes: { from: line.from, to: line.to, insert: "" },
+        selection: { anchor: line.from },
+        scrollIntoView: true,
+      });
+    } else {
+      // Not first line - remove the empty list item line and replace with blank line
+      // Before: "- Previous item\n- |"
+      // After:  "- Previous item\n\n|" (blank line for paragraph spacing)
+      const prevLine = state.doc.line(line.number - 1);
+      view.dispatch({
+        changes: { from: prevLine.to, to: line.to, insert: "\n\n" },
+        selection: { anchor: prevLine.to + 2 },
+        scrollIntoView: true,
+      });
+    }
+    return true;
+  }
+
+  // At end of list item - create new list item
+  if (pos === line.to) {
+    let newMarker: string;
+    if (listInfo.isOrdered) {
+      const nextNum = getNextOrderNumber(state, line.number);
+      newMarker = `${listInfo.indent}${nextNum}. `;
+    } else {
+      newMarker = `${listInfo.indent}${listInfo.marker} `;
+    }
+
+    view.dispatch({
+      changes: { from: pos, to: pos, insert: `\n${newMarker}` },
+      selection: { anchor: pos + 1 + newMarker.length },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // In middle of list item - split into two list items
+  if (pos > listInfo.contentStart && pos < line.to) {
+    const afterCursor = line.text.slice(pos - line.from);
+    let newMarker: string;
+    if (listInfo.isOrdered) {
+      const nextNum = getNextOrderNumber(state, line.number);
+      newMarker = `${listInfo.indent}${nextNum}. `;
+    } else {
+      newMarker = `${listInfo.indent}${listInfo.marker} `;
+    }
+
+    view.dispatch({
+      changes: { from: pos, to: line.to, insert: `\n${newMarker}${afterCursor}` },
+      selection: { anchor: pos + 1 + newMarker.length },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // At start of content - insert new list item above
+  if (pos === listInfo.contentStart) {
+    const marker = listInfo.markerWithSpace;
+    view.dispatch({
+      changes: { from: line.from, to: line.from, insert: `${marker}\n` },
+      selection: { anchor: listInfo.contentStart + marker.length + 1 },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Handle Backspace at start of list item - exit list or merge
+ */
+function handleBackspaceInList(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+
+  if (!state.selection.main.empty) return false;
+
+  const line = state.doc.lineAt(pos);
+  const listInfo = getListInfo(line);
+
+  if (!listInfo) return false;
+
+  // Only handle if at start of content
+  if (pos !== listInfo.contentStart) return false;
+
+  // Check if list item content is empty
+  const content = line.text.slice(listInfo.markerWithSpace.length);
+  const isEmptyListItem = content.trim() === "";
+
+  // If empty list item, just remove the marker (don't merge)
+  // This handles the case: user types "-" then backspaces
+  if (isEmptyListItem) {
+    view.dispatch({
+      changes: { from: line.from, to: listInfo.contentStart, insert: "" },
+      selection: { anchor: line.from },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // List item has content - handle merging with previous line
+  if (line.number <= 1) {
+    // First line - just remove the list marker, keep content
+    view.dispatch({
+      changes: { from: line.from, to: listInfo.contentStart, insert: "" },
+      selection: { anchor: line.from },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // Check line above
+  const prevLine = state.doc.line(line.number - 1);
+  const prevListInfo = getListInfo(prevLine);
+
+  if (prevListInfo) {
+    // Previous line is also a list item - merge into it
+    view.dispatch({
+      changes: { from: prevLine.to, to: listInfo.contentStart, insert: "" },
+      selection: { anchor: prevLine.to },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  if (prevLine.text.trim() === "") {
+    // Previous line is blank - find content above and merge
+    let targetLineNum = line.number - 1;
+    while (targetLineNum >= 1) {
+      const targetLine = state.doc.line(targetLineNum);
+      if (targetLine.text.trim() !== "") {
+        view.dispatch({
+          changes: { from: targetLine.to, to: listInfo.contentStart, insert: "" },
+          selection: { anchor: targetLine.to },
+          scrollIntoView: true,
+        });
+        return true;
+      }
+      targetLineNum--;
+    }
+    // All blank above - just remove marker
+    view.dispatch({
+      changes: { from: line.from, to: listInfo.contentStart, insert: "" },
+      selection: { anchor: line.from },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // Previous line has content - merge with it
+  view.dispatch({
+    changes: { from: prevLine.to, to: listInfo.contentStart, insert: "" },
+    selection: { anchor: prevLine.to },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Handle Tab in list - indent list item
+ */
+function handleTabInList(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  const listInfo = getListInfo(line);
+
+  if (!listInfo) return false;
+
+  // Add two spaces of indentation
+  view.dispatch({
+    changes: { from: line.from, to: line.from, insert: "  " },
+    selection: { anchor: pos + 2 },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Handle Shift+Tab in list - outdent list item
+ */
+function handleShiftTabInList(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  const listInfo = getListInfo(line);
+
+  if (!listInfo) return false;
+
+  // Remove up to two spaces of indentation
+  const indent = listInfo.indent;
+  if (indent.length === 0) return false;
+
+  const spacesToRemove = Math.min(2, indent.length);
+  view.dispatch({
+    changes: { from: line.from, to: line.from + spacesToRemove, insert: "" },
+    selection: { anchor: pos - spacesToRemove },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Handle ArrowLeft from list content start - go to previous line
+ */
+function handleArrowLeftFromListStart(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  const listInfo = getListInfo(line);
+
+  if (!listInfo) return false;
+  if (pos !== listInfo.contentStart) return false;
+  if (line.number <= 1) return false;
+
+  // Find previous content line (skip blank lines)
+  let targetLineNum = line.number - 1;
+  while (targetLineNum >= 1) {
+    const targetLine = state.doc.line(targetLineNum);
+    if (targetLine.text.trim() !== "") {
+      view.dispatch({
+        selection: { anchor: targetLine.to },
+        scrollIntoView: true,
+      });
+      return true;
+    }
+    targetLineNum--;
+  }
+
+  return false;
+}
+
+/**
+ * Handle ArrowRight into list - skip to content start
+ */
+function handleArrowRightIntoList(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+
+  // Only handle if at start of line
+  if (pos !== line.from) return false;
+
+  const listInfo = getListInfo(line);
+  if (!listInfo) return false;
+
+  // Skip to content start
+  view.dispatch({
+    selection: { anchor: listInfo.contentStart },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+// ===========================================
+// BLOCKQUOTE HANDLING
+// ===========================================
+
+/**
+ * Blockquote marker pattern:
+ * One or more > at the start of a line, optionally followed by space
+ * Supports nested blockquotes: >, > >, > > >, etc.
+ */
+const BLOCKQUOTE_REGEX = /^((?:>\s*)+)/;
+
+/**
+ * Get blockquote info for a line
+ */
+function getBlockquoteInfo(line: { text: string; from: number }): {
+  isBlockquote: boolean;
+  level: number;
+  marker: string;
+  contentStart: number;
+} | null {
+  const match = line.text.match(BLOCKQUOTE_REGEX);
+  if (!match) return null;
+
+  const marker = match[1];
+  // Count the number of > characters to determine nesting level
+  const level = (marker.match(/>/g) || []).length;
+
+  return {
+    isBlockquote: true,
+    level,
+    marker,
+    contentStart: line.from + marker.length,
+  };
+}
+
+/**
+ * Handle Enter in blockquote - continue the blockquote or exit
+ */
+function handleEnterInBlockquote(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  const quoteInfo = getBlockquoteInfo(line);
+
+  if (!quoteInfo) return false;
+
+  // Check if blockquote content is empty (just the markers)
+  const content = line.text.slice(quoteInfo.marker.length);
+
+  if (content.trim() === "") {
+    // Empty blockquote line - exit blockquote with proper paragraph spacing
+    if (line.number <= 1) {
+      // First line - just remove the marker
+      view.dispatch({
+        changes: { from: line.from, to: line.to, insert: "" },
+        selection: { anchor: line.from },
+        scrollIntoView: true,
+      });
+    } else {
+      // Not first line - remove empty blockquote and add blank line
+      const prevLine = state.doc.line(line.number - 1);
+      view.dispatch({
+        changes: { from: prevLine.to, to: line.to, insert: "\n\n" },
+        selection: { anchor: prevLine.to + 2 },
+        scrollIntoView: true,
+      });
+    }
+    return true;
+  }
+
+  // At end of blockquote line - create new blockquote line
+  if (pos === line.to) {
+    // Use the same marker for continuation
+    const newMarker = quoteInfo.marker;
+
+    view.dispatch({
+      changes: { from: pos, to: pos, insert: `\n${newMarker}` },
+      selection: { anchor: pos + 1 + newMarker.length },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // In middle of blockquote - split into two blockquote lines
+  if (pos > quoteInfo.contentStart && pos < line.to) {
+    const afterCursor = line.text.slice(pos - line.from);
+    const newMarker = quoteInfo.marker;
+
+    view.dispatch({
+      changes: { from: pos, to: line.to, insert: `\n${newMarker}${afterCursor}` },
+      selection: { anchor: pos + 1 + newMarker.length },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // At start of content - insert new blockquote line above
+  if (pos === quoteInfo.contentStart) {
+    const marker = quoteInfo.marker;
+    view.dispatch({
+      changes: { from: line.from, to: line.from, insert: `${marker}\n` },
+      selection: { anchor: quoteInfo.contentStart + marker.length + 1 },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Handle Backspace at start of blockquote content - exit blockquote or merge
+ */
+function handleBackspaceInBlockquote(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+
+  if (!state.selection.main.empty) return false;
+
+  const line = state.doc.lineAt(pos);
+  const quoteInfo = getBlockquoteInfo(line);
+
+  if (!quoteInfo) return false;
+
+  // Only handle if at start of content
+  if (pos !== quoteInfo.contentStart) return false;
+
+  // Check if blockquote content is empty
+  const content = line.text.slice(quoteInfo.marker.length);
+  const isEmptyBlockquote = content.trim() === "";
+
+  // If empty blockquote, just remove the marker
+  if (isEmptyBlockquote) {
+    view.dispatch({
+      changes: { from: line.from, to: quoteInfo.contentStart, insert: "" },
+      selection: { anchor: line.from },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // Blockquote has content - remove marker and keep content
+  if (line.number <= 1) {
+    // First line - just remove the blockquote marker
+    view.dispatch({
+      changes: { from: line.from, to: quoteInfo.contentStart, insert: "" },
+      selection: { anchor: line.from },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // Check line above
+  const prevLine = state.doc.line(line.number - 1);
+  const prevQuoteInfo = getBlockquoteInfo(prevLine);
+
+  if (prevQuoteInfo) {
+    // Previous line is also a blockquote - merge into it
+    view.dispatch({
+      changes: { from: prevLine.to, to: quoteInfo.contentStart, insert: " " },
+      selection: { anchor: prevLine.to },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  if (prevLine.text.trim() === "") {
+    // Previous line is blank - find content above and merge
+    let targetLineNum = line.number - 1;
+    while (targetLineNum >= 1) {
+      const targetLine = state.doc.line(targetLineNum);
+      if (targetLine.text.trim() !== "") {
+        view.dispatch({
+          changes: { from: targetLine.to, to: quoteInfo.contentStart, insert: "" },
+          selection: { anchor: targetLine.to },
+          scrollIntoView: true,
+        });
+        return true;
+      }
+      targetLineNum--;
+    }
+    // All blank above - just remove marker
+    view.dispatch({
+      changes: { from: line.from, to: quoteInfo.contentStart, insert: "" },
+      selection: { anchor: line.from },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // Previous line has content - merge with it
+  view.dispatch({
+    changes: { from: prevLine.to, to: quoteInfo.contentStart, insert: "" },
+    selection: { anchor: prevLine.to },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Handle ArrowLeft from blockquote content start - go to previous line
+ */
+function handleArrowLeftFromBlockquoteStart(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  const quoteInfo = getBlockquoteInfo(line);
+
+  if (!quoteInfo) return false;
+  if (pos !== quoteInfo.contentStart) return false;
+  if (line.number <= 1) return false;
+
+  // Find previous content line (skip blank lines)
+  let targetLineNum = line.number - 1;
+  while (targetLineNum >= 1) {
+    const targetLine = state.doc.line(targetLineNum);
+    if (targetLine.text.trim() !== "") {
+      view.dispatch({
+        selection: { anchor: targetLine.to },
+        scrollIntoView: true,
+      });
+      return true;
+    }
+    targetLineNum--;
+  }
+
+  return false;
+}
+
+/**
+ * Handle ArrowRight into blockquote - skip to content start
+ */
+function handleArrowRightIntoBlockquote(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+
+  // Only handle if at start of line
+  if (pos !== line.from) return false;
+
+  const quoteInfo = getBlockquoteInfo(line);
+  if (!quoteInfo) return false;
+
+  // Skip to content start
+  view.dispatch({
+    selection: { anchor: quoteInfo.contentStart },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
 /**
  * Handle Enter - insert blank line for proper markdown paragraph separation
  *
@@ -452,6 +1127,18 @@ function handleEnter(view: EditorView): boolean {
   // Skip if line is empty (already a blank line, just add one newline)
   if (line.text.trim() === "") {
     return false; // Let default behavior handle
+  }
+
+  // Check if we're in a list - handle first
+  const listInfo = getListInfo(line);
+  if (listInfo) {
+    return handleEnterInList(view);
+  }
+
+  // Check if we're in a blockquote
+  const quoteInfo = getBlockquoteInfo(line);
+  if (quoteInfo) {
+    return handleEnterInBlockquote(view);
   }
 
   // Check if we're in a heading
@@ -850,9 +1537,37 @@ function handleDeleteAtLineStart(view: EditorView): boolean {
 }
 
 /**
- * Handle Delete at end of line before heading - merge heading into current line
+ * Get the content start position for any line (handles headings, lists, blockquotes)
+ * Returns the position where actual content starts, after any markers
  */
-function handleDeleteBeforeHeading(view: EditorView): boolean {
+function getContentStartForLine(line: { from: number; text: string }): number {
+  // Check for heading: # ## ### etc.
+  const headingMatch = line.text.match(/^(#{1,6})\s/);
+  if (headingMatch) {
+    return line.from + headingMatch[0].length;
+  }
+
+  // Check for blockquote: > or > > etc.
+  const quoteInfo = getBlockquoteInfo(line);
+  if (quoteInfo) {
+    return quoteInfo.contentStart;
+  }
+
+  // Check for list item: - * + or 1. 2. etc.
+  const listInfo = getListInfo(line);
+  if (listInfo) {
+    return listInfo.contentStart;
+  }
+
+  // No markers, content starts at line start
+  return line.from;
+}
+
+/**
+ * Handle Delete at end of line - merge with next content, removing any markers
+ * This handles headings, blockquotes, lists, etc.
+ */
+function handleDeleteAtEndOfLine(view: EditorView): boolean {
   const state = view.state;
   const pos = state.selection.main.head;
   const line = state.doc.lineAt(pos);
@@ -868,11 +1583,8 @@ function handleDeleteBeforeHeading(view: EditorView): boolean {
   while (targetLineNum <= state.doc.lines) {
     const targetLine = state.doc.line(targetLineNum);
     if (targetLine.text.trim() !== "") {
-      // Found content line - check if it's a heading
-      const headingMatch = targetLine.text.match(/^(#{1,6})\s/);
-      const targetContentStart = headingMatch
-        ? targetLine.from + headingMatch[0].length
-        : targetLine.from;
+      // Found content line - get content start (after any markers)
+      const targetContentStart = getContentStartForLine(targetLine);
 
       // Delete from current position to start of target content
       view.dispatch({
@@ -1509,25 +2221,25 @@ function handleDeleteWithSelection(view: EditorView): boolean {
  * Create keymap for formatting escape commands
  */
 const formattingEscapeKeymap = keymap.of([
-  // Backspace: handle paragraph merging, headings, empty formatting, selection, then skip over invisible closing markers
+  // Backspace: handle lists, blockquotes, paragraph merging, headings, empty formatting, selection, then skip over invisible closing markers
   {
     key: "Backspace",
-    run: (view) => handleBackspaceAtParagraphStart(view) || handleBackspaceAtHeadingStart(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleBackspaceAtClosingMarker(view),
+    run: (view) => handleBackspaceInList(view) || handleBackspaceInBlockquote(view) || handleBackspaceAtParagraphStart(view) || handleBackspaceAtHeadingStart(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleBackspaceAtClosingMarker(view),
   },
   // Delete: handle end of line (merge with content below), empty formatting, selection, then skip over invisible markers
   {
     key: "Delete",
-    run: (view) => handleDeleteBeforeHeading(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleDeleteAtOpeningMarker(view) || handleDeleteAtEndOfContent(view),
+    run: (view) => handleDeleteAtEndOfLine(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleDeleteAtOpeningMarker(view) || handleDeleteAtEndOfContent(view),
   },
-  // Arrow Right: skip over invisible markers, heading markers, and blank lines
+  // Arrow Right: skip over invisible markers, heading markers, list markers, blockquote markers, and blank lines
   {
     key: "ArrowRight",
-    run: (view) => handleArrowRight(view) || handleArrowRightAtEnd(view) || handleArrowRightIntoHeading(view) || handleArrowRightOverBlankLines(view),
+    run: (view) => handleArrowRight(view) || handleArrowRightAtEnd(view) || handleArrowRightIntoHeading(view) || handleArrowRightIntoList(view) || handleArrowRightIntoBlockquote(view) || handleArrowRightOverBlankLines(view),
   },
-  // Arrow Left: skip over invisible markers, heading markers, and blank lines
+  // Arrow Left: skip over invisible markers, heading markers, list markers, blockquote markers, and blank lines
   {
     key: "ArrowLeft",
-    run: (view) => handleArrowLeft(view) || handleArrowLeftAtStart(view) || handleArrowLeftFromHeadingStart(view) || handleArrowLeftOverBlankLines(view),
+    run: (view) => handleArrowLeft(view) || handleArrowLeftAtStart(view) || handleArrowLeftFromHeadingStart(view) || handleArrowLeftFromListStart(view) || handleArrowLeftFromBlockquoteStart(view) || handleArrowLeftOverBlankLines(view),
   },
   // Cmd+B: toggle bold or escape
   {
@@ -1539,10 +2251,15 @@ const formattingEscapeKeymap = keymap.of([
     key: "Mod-i",
     run: toggleItalicOrEscape,
   },
-  // Tab: escape any formatting
+  // Tab: indent list or escape formatting
   {
     key: "Tab",
-    run: escapeFormatting,
+    run: (view) => handleTabInList(view) || escapeFormatting(view),
+  },
+  // Shift+Tab: outdent list
+  {
+    key: "Shift-Tab",
+    run: handleShiftTabInList,
   },
   // Enter: new paragraph (double newline for proper markdown)
   {
@@ -1583,9 +2300,6 @@ const formattingInputHandler = EditorView.inputHandler.of(
     const prevChar = from > 0 ? doc.sliceString(from - 1, from) : "";
     const nextChar = doc.sliceString(from, from + 1);
 
-    // Debug: log all input
-    console.log("[INPUT]", { text, from, to, prevChar, nextChar, doc: doc.toString() });
-
     // ===========================================
     // HANDLE PENDING ESCAPE (second char of sequence)
     // ===========================================
@@ -1594,20 +2308,10 @@ const formattingInputHandler = EditorView.inputHandler.of(
       const pending = pendingEscape;
       clearPendingEscape();
 
-      console.log("[PENDING ESCAPE]", {
-        text,
-        from,
-        pendingChar: pending.char,
-        pendingPos: pending.pos,
-        formattingEnd: pending.formattingEnd,
-        matches: text === pending.char && from === pending.pos
-      });
-
       // Check if this completes the escape sequence
       // Allow for position to be off by a small amount due to potential race conditions
       if (text === pending.char && Math.abs(from - pending.pos) <= 1) {
         // Second char matches! Complete the escape
-        console.log("[PENDING ESCAPE] Completing escape, moving to", pending.formattingEnd);
         view.dispatch({
           selection: { anchor: pending.formattingEnd },
           scrollIntoView: true,
@@ -1615,7 +2319,6 @@ const formattingInputHandler = EditorView.inputHandler.of(
         return true;
       } else {
         // Different char or position - insert the pending char first, then handle this one
-        console.log("[PENDING ESCAPE] Failed match, inserting pending char");
         view.dispatch({
           changes: { from: pending.pos, to: pending.pos, insert: pending.char },
         });
@@ -1655,15 +2358,6 @@ const formattingInputHandler = EditorView.inputHandler.of(
     // ===========================================
 
     const ctx = getFormattingContext(view.state);
-    const cursorPos = view.state.selection.main.head;
-    console.log("[ESCAPE] Context check:", {
-      ctx,
-      text,
-      cursorPos,
-      isAtEnd: ctx ? isAtEndOfFormatting(view.state, ctx) : null,
-      contentTo: ctx?.contentTo,
-      docSlice: view.state.doc.sliceString(Math.max(0, cursorPos - 5), cursorPos + 5)
-    });
 
     if (ctx && isAtEndOfFormatting(view.state, ctx)) {
       // BOLD: Need ** to escape - hold first *, wait for second
@@ -1746,6 +2440,63 @@ const formattingInputHandler = EditorView.inputHandler.of(
     // Strikethrough requires ~~ so we only auto-close on second ~
 
     // ===========================================
+    // LISTS: Create list item when typing marker at start of line
+    // Must come BEFORE auto-close to take priority
+    // ===========================================
+
+    // Unordered list markers (-, *, +)
+    if (text === "-" || text === "*" || text === "+") {
+      const line = doc.lineAt(from);
+      const lineStart = line.from;
+      const textBeforeCursor = doc.sliceString(lineStart, from);
+
+      // At start of line (possibly with indentation) - create list item
+      if (/^\s*$/.test(textBeforeCursor)) {
+        view.dispatch({
+          changes: { from, to, insert: `${text} ` },
+          selection: { anchor: from + 2 },
+          scrollIntoView: true,
+        });
+        return true;
+      }
+    }
+
+    // Ordered list: typing "." after a number at line start (e.g., "1." → "1. ")
+    if (text === ".") {
+      const line = doc.lineAt(from);
+      const lineStart = line.from;
+      const textBeforeCursor = doc.sliceString(lineStart, from);
+
+      // Check if there's a number at the start of line
+      const orderedMatch = textBeforeCursor.match(/^(\s*)(\d+)$/);
+      if (orderedMatch) {
+        view.dispatch({
+          changes: { from, to, insert: ". " },
+          selection: { anchor: from + 2 },
+          scrollIntoView: true,
+        });
+        return true;
+      }
+    }
+
+    // Blockquote: typing ">" at start of line creates "> |"
+    if (text === ">") {
+      const line = doc.lineAt(from);
+      const lineStart = line.from;
+      const textBeforeCursor = doc.sliceString(lineStart, from);
+
+      // At start of line (possibly with existing > markers for nesting) - create blockquote
+      if (/^(>\s*)*$/.test(textBeforeCursor)) {
+        view.dispatch({
+          changes: { from, to, insert: "> " },
+          selection: { anchor: from + 2 },
+          scrollIntoView: true,
+        });
+        return true;
+      }
+    }
+
+    // ===========================================
     // AUTO-CLOSE: Outside formatting, auto-pair markers
     // ===========================================
 
@@ -1796,9 +2547,16 @@ const formattingInputHandler = EditorView.inputHandler.of(
         // and our decorations will hide the markers
         return false;
       }
+
+      // Check if line starts with list marker (-, *, +, or 1., 2., etc.)
+      const listMatch = textBeforeCursor.match(/^(\s*)([-*+]|\d+\.)$/);
+      if (listMatch) {
+        // User typed space after list marker - confirms the list item
+        // Let it happen naturally, parser will recognize it
+        return false;
+      }
     }
 
-    console.log("[INPUT] Returning false, letting CodeMirror handle");
     return false;
   }
 );
@@ -1815,46 +2573,86 @@ const hiddenDecoration = Decoration.replace({});
  * KEY INSIGHT: We use Decoration.replace() but do NOT add atomicRanges.
  * This hides the markers visually but keeps the text editable.
  *
+ * For list markers, we use widget decorations to show bullets/numbers.
+ *
  * Uses BOTH parser AND regex fallback to hide markers the parser misses.
  */
 function buildHiddenSyntax(state: EditorState) {
-  const builder = new RangeSetBuilder<Decoration>();
   const doc = state.doc;
 
-  // Track ranges we've already hidden
-  const hiddenRanges: Array<{ from: number; to: number }> = [];
+  // Collect all ranges to hide, then sort before adding to builder
+  // RangeSetBuilder requires ranges in sorted order
+  const rangesToHide: Array<{ from: number; to: number }> = [];
+
+  // List markers get widget decorations instead of being hidden
+  const listMarkers: Array<{ from: number; to: number; isOrdered: boolean; num: number }> = [];
+
+  // Blockquote markers get widget decorations showing the bar
+  const blockquoteMarkers: Array<{ from: number; to: number; level: number }> = [];
+
+  // Track which lines we've already processed for blockquotes (to handle nested)
+  const processedBlockquoteLines = new Set<number>();
 
   syntaxTree(state).iterate({
     enter(node) {
       // Hide emphasis marks (* or _)
       if (node.name === "EmphasisMark") {
-        builder.add(node.from, node.to, hiddenDecoration);
-        hiddenRanges.push({ from: node.from, to: node.to });
+        rangesToHide.push({ from: node.from, to: node.to });
       }
 
       // Hide code marks (`)
       if (node.name === "CodeMark") {
-        builder.add(node.from, node.to, hiddenDecoration);
-        hiddenRanges.push({ from: node.from, to: node.to });
+        rangesToHide.push({ from: node.from, to: node.to });
       }
 
       // For strikethrough, we need to find the ~~ markers
       if (node.name === "StrikethroughMark") {
-        builder.add(node.from, node.to, hiddenDecoration);
-        hiddenRanges.push({ from: node.from, to: node.to });
+        rangesToHide.push({ from: node.from, to: node.to });
       }
 
       // Hide header marks (# symbols and trailing space)
       if (node.name === "HeaderMark") {
-        // Hide the # symbols
-        builder.add(node.from, node.to, hiddenDecoration);
-        hiddenRanges.push({ from: node.from, to: node.to });
+        rangesToHide.push({ from: node.from, to: node.to });
 
         // Also hide the trailing space after the header mark
         const nextChar = doc.sliceString(node.to, node.to + 1);
         if (nextChar === " ") {
-          builder.add(node.to, node.to + 1, hiddenDecoration);
-          hiddenRanges.push({ from: node.to, to: node.to + 1 });
+          rangesToHide.push({ from: node.to, to: node.to + 1 });
+        }
+      }
+
+      // Replace list marks with widget decorations
+      if (node.name === "ListMark") {
+        const markText = doc.sliceString(node.from, node.to);
+
+        // Determine if ordered or unordered
+        const isOrdered = /^\d+\.$/.test(markText);
+        const num = isOrdered ? parseInt(markText) : 0;
+
+        // Include the trailing space in the replacement range
+        const nextChar = doc.sliceString(node.to, node.to + 1);
+        const to = nextChar === " " ? node.to + 1 : node.to;
+
+        listMarkers.push({ from: node.from, to, isOrdered, num });
+      }
+
+      // Handle QuoteMark nodes from the parser
+      if (node.name === "QuoteMark") {
+        const line = doc.lineAt(node.from);
+
+        // Only process each line once (multiple QuoteMarks on same line = nested)
+        if (!processedBlockquoteLines.has(line.number)) {
+          processedBlockquoteLines.add(line.number);
+
+          // Get the full blockquote info for this line
+          const quoteInfo = getBlockquoteInfo(line);
+          if (quoteInfo) {
+            blockquoteMarkers.push({
+              from: line.from,
+              to: quoteInfo.contentStart,
+              level: quoteInfo.level,
+            });
+          }
         }
       }
     },
@@ -1866,8 +2664,8 @@ function buildHiddenSyntax(state: EditorState) {
 
   const text = doc.toString();
 
-  const isAlreadyHidden = (from: number, to: number) =>
-    hiddenRanges.some((r) => r.from === from && r.to === to);
+  const isAlreadyCollected = (from: number, to: number) =>
+    rangesToHide.some((r) => r.from === from && r.to === to);
 
   // Bold markers: **
   const boldRegex = /\*\*(.+?)\*\*/g;
@@ -1878,11 +2676,11 @@ function buildHiddenSyntax(state: EditorState) {
     const closeFrom = match.index + 2 + match[1].length;
     const closeTo = closeFrom + 2;
 
-    if (!isAlreadyHidden(openFrom, openTo)) {
-      builder.add(openFrom, openTo, hiddenDecoration);
+    if (!isAlreadyCollected(openFrom, openTo)) {
+      rangesToHide.push({ from: openFrom, to: openTo });
     }
-    if (!isAlreadyHidden(closeFrom, closeTo)) {
-      builder.add(closeFrom, closeTo, hiddenDecoration);
+    if (!isAlreadyCollected(closeFrom, closeTo)) {
+      rangesToHide.push({ from: closeFrom, to: closeTo });
     }
   }
 
@@ -1894,11 +2692,11 @@ function buildHiddenSyntax(state: EditorState) {
     const closeFrom = match.index + 1 + match[1].length;
     const closeTo = closeFrom + 1;
 
-    if (!isAlreadyHidden(openFrom, openTo)) {
-      builder.add(openFrom, openTo, hiddenDecoration);
+    if (!isAlreadyCollected(openFrom, openTo)) {
+      rangesToHide.push({ from: openFrom, to: openTo });
     }
-    if (!isAlreadyHidden(closeFrom, closeTo)) {
-      builder.add(closeFrom, closeTo, hiddenDecoration);
+    if (!isAlreadyCollected(closeFrom, closeTo)) {
+      rangesToHide.push({ from: closeFrom, to: closeTo });
     }
   }
 
@@ -1910,11 +2708,62 @@ function buildHiddenSyntax(state: EditorState) {
     const closeFrom = match.index + 2 + match[1].length;
     const closeTo = closeFrom + 2;
 
-    if (!isAlreadyHidden(openFrom, openTo)) {
-      builder.add(openFrom, openTo, hiddenDecoration);
+    if (!isAlreadyCollected(openFrom, openTo)) {
+      rangesToHide.push({ from: openFrom, to: openTo });
     }
-    if (!isAlreadyHidden(closeFrom, closeTo)) {
-      builder.add(closeFrom, closeTo, hiddenDecoration);
+    if (!isAlreadyCollected(closeFrom, closeTo)) {
+      rangesToHide.push({ from: closeFrom, to: closeTo });
+    }
+  }
+
+  // Blockquote markers: lines starting with > (regex fallback)
+  // Process each line for blockquote markers
+  for (let i = 1; i <= doc.lines; i++) {
+    if (processedBlockquoteLines.has(i)) continue;
+
+    const line = doc.line(i);
+    const quoteInfo = getBlockquoteInfo(line);
+    if (quoteInfo) {
+      blockquoteMarkers.push({
+        from: line.from,
+        to: quoteInfo.contentStart,
+        level: quoteInfo.level,
+      });
+    }
+  }
+
+  // Combine all decorations with their types for sorting
+  type DecorationEntry =
+    | { from: number; to: number; type: "hide" }
+    | { from: number; to: number; type: "list"; isOrdered: boolean; num: number }
+    | { from: number; to: number; type: "blockquote"; level: number };
+
+  const allDecorations: DecorationEntry[] = [
+    ...rangesToHide.map(r => ({ ...r, type: "hide" as const })),
+    ...listMarkers.map(m => ({ ...m, type: "list" as const })),
+    ...blockquoteMarkers.map(b => ({ ...b, type: "blockquote" as const })),
+  ];
+
+  // Sort by 'from' position (required by RangeSetBuilder)
+  allDecorations.sort((a, b) => a.from - b.from);
+
+  // Now add to builder in sorted order
+  const builder = new RangeSetBuilder<Decoration>();
+  for (const entry of allDecorations) {
+    if (entry.type === "hide") {
+      builder.add(entry.from, entry.to, hiddenDecoration);
+    } else if (entry.type === "list") {
+      // List marker - use widget decoration
+      const listEntry = entry as { from: number; to: number; type: "list"; isOrdered: boolean; num: number };
+      const widget = listEntry.isOrdered
+        ? new NumberWidget(listEntry.num)
+        : new BulletWidget();
+      builder.add(entry.from, entry.to, Decoration.replace({ widget }));
+    } else if (entry.type === "blockquote") {
+      // Blockquote marker - use widget decoration with bar
+      const quoteEntry = entry as { from: number; to: number; type: "blockquote"; level: number };
+      const widget = new BlockquoteBarWidget(quoteEntry.level);
+      builder.add(entry.from, entry.to, Decoration.replace({ widget }));
     }
   }
 
@@ -2033,8 +2882,8 @@ const pendingFormatTheme = EditorView.updateListener.of((update) => {
 });
 
 /**
- * Extension that ensures cursor can never be inside heading markers.
- * If cursor ends up at line.from of a heading, move it to content start.
+ * Extension that ensures cursor can never be inside heading, list, or blockquote markers.
+ * If cursor ends up before content start, move it to content start.
  */
 const cursorGuard = EditorView.updateListener.of((update) => {
   if (!update.selectionSet) return;
@@ -2043,18 +2892,34 @@ const cursorGuard = EditorView.updateListener.of((update) => {
   const pos = state.selection.main.head;
   const line = state.doc.lineAt(pos);
 
+  let contentStart: number | null = null;
+
   // Check if this is a heading line
   const headingMatch = line.text.match(/^(#{1,6})\s/);
-  if (!headingMatch) return;
+  if (headingMatch) {
+    contentStart = line.from + headingMatch[0].length;
+  }
 
-  const contentStart = line.from + headingMatch[0].length;
+  // Check if this is a list item line
+  const listMatch = line.text.match(/^(\s*)([-*+]|\d+\.)\s/);
+  if (listMatch) {
+    contentStart = line.from + listMatch[0].length;
+  }
+
+  // Check if this is a blockquote line
+  const quoteInfo = getBlockquoteInfo(line);
+  if (quoteInfo) {
+    contentStart = quoteInfo.contentStart;
+  }
+
+  if (contentStart === null) return;
 
   // If cursor is before content start, move it
   if (pos < contentStart) {
     // Use requestAnimationFrame to avoid dispatch during update
     requestAnimationFrame(() => {
       update.view.dispatch({
-        selection: { anchor: contentStart },
+        selection: { anchor: contentStart! },
       });
     });
   }
@@ -2077,6 +2942,10 @@ const h4Mark = Decoration.mark({ class: "cm-h4" });
 const h5Mark = Decoration.mark({ class: "cm-h5" });
 const h6Mark = Decoration.mark({ class: "cm-h6" });
 
+// List marks
+const ulMark = Decoration.mark({ class: "cm-list-ul" });
+const olMark = Decoration.mark({ class: "cm-list-ol" });
+
 /**
  * Build style decorations (bold, italic, etc.)
  * These mark the content (not the syntax) with styling classes
@@ -2085,22 +2954,20 @@ const h6Mark = Decoration.mark({ class: "cm-h6" });
  * (like trailing whitespace: **bold **)
  */
 function buildStyleDecorations(state: EditorState) {
-  const builder = new RangeSetBuilder<Decoration>();
   const doc = state.doc;
 
-  // Track ranges we've already decorated (to avoid duplicates from regex fallback)
-  const decoratedRanges: Array<{ from: number; to: number }> = [];
+  // Collect all ranges with their decorations, then sort before adding to builder
+  // RangeSetBuilder requires ranges in sorted order
+  const rangesToDecorate: Array<{ from: number; to: number; decoration: Decoration }> = [];
 
   syntaxTree(state).iterate({
     enter(node) {
       // Strong (bold) - style the content between markers
       if (node.name === "StrongEmphasis") {
-        // Find content range (skip the markers)
         const content = node.node;
         let contentFrom = node.from;
         let contentTo = node.to;
 
-        // Walk children to find actual content bounds
         let firstMark = true;
         content.cursor().iterate((child) => {
           if (child.name === "EmphasisMark") {
@@ -2114,8 +2981,7 @@ function buildStyleDecorations(state: EditorState) {
         });
 
         if (contentFrom < contentTo) {
-          builder.add(contentFrom, contentTo, boldMark);
-          decoratedRanges.push({ from: contentFrom, to: contentTo });
+          rangesToDecorate.push({ from: contentFrom, to: contentTo, decoration: boldMark });
         }
       }
 
@@ -2138,8 +3004,7 @@ function buildStyleDecorations(state: EditorState) {
         });
 
         if (contentFrom < contentTo) {
-          builder.add(contentFrom, contentTo, italicMark);
-          decoratedRanges.push({ from: contentFrom, to: contentTo });
+          rangesToDecorate.push({ from: contentFrom, to: contentTo, decoration: italicMark });
         }
       }
 
@@ -2162,7 +3027,7 @@ function buildStyleDecorations(state: EditorState) {
         });
 
         if (contentFrom < contentTo) {
-          builder.add(contentFrom, contentTo, codeMark);
+          rangesToDecorate.push({ from: contentFrom, to: contentTo, decoration: codeMark });
         }
       }
 
@@ -2185,8 +3050,7 @@ function buildStyleDecorations(state: EditorState) {
         });
 
         if (contentFrom < contentTo) {
-          builder.add(contentFrom, contentTo, strikethroughMark);
-          decoratedRanges.push({ from: contentFrom, to: contentTo });
+          rangesToDecorate.push({ from: contentFrom, to: contentTo, decoration: strikethroughMark });
         }
       }
 
@@ -2194,23 +3058,19 @@ function buildStyleDecorations(state: EditorState) {
       if (node.name === "ATXHeading1" || node.name === "ATXHeading2" ||
           node.name === "ATXHeading3" || node.name === "ATXHeading4" ||
           node.name === "ATXHeading5" || node.name === "ATXHeading6") {
-        // Find the HeaderMark to get content start
         let contentFrom = node.from;
         const content = node.node;
 
         content.cursor().iterate((child) => {
           if (child.name === "HeaderMark") {
-            // Content starts after the HeaderMark (includes trailing space)
             contentFrom = child.to;
           }
         });
 
-        // Skip any whitespace after the header mark
         const text = state.doc.sliceString(contentFrom, node.to);
         const leadingSpace = text.match(/^\s*/)?.[0].length || 0;
         contentFrom += leadingSpace;
 
-        // Get the appropriate mark based on heading level
         const level = parseInt(node.name.replace("ATXHeading", ""));
         const headingMark = level === 1 ? h1Mark :
                            level === 2 ? h2Mark :
@@ -2218,9 +3078,30 @@ function buildStyleDecorations(state: EditorState) {
                            level === 4 ? h4Mark :
                            level === 5 ? h5Mark : h6Mark;
 
-        // Style the content (not the # markers)
         if (contentFrom < node.to) {
-          builder.add(contentFrom, node.to, headingMark);
+          rangesToDecorate.push({ from: contentFrom, to: node.to, decoration: headingMark });
+        }
+      }
+
+      // List items - BulletList and OrderedList contain ListItem nodes
+      if (node.name === "ListItem") {
+        let contentFrom = node.from;
+        let listMark: Decoration | null = null;
+
+        node.node.cursor().iterate((child) => {
+          if (child.name === "ListMark") {
+            contentFrom = child.to;
+            const markText = state.doc.sliceString(child.from, child.to);
+            listMark = /^\d+\.$/.test(markText) ? olMark : ulMark;
+          }
+        });
+
+        const text = state.doc.sliceString(contentFrom, node.to);
+        const leadingSpace = text.match(/^\s*/)?.[0].length || 0;
+        contentFrom += leadingSpace;
+
+        if (listMark && contentFrom < node.to) {
+          rangesToDecorate.push({ from: contentFrom, to: node.to, decoration: listMark });
         }
       }
     },
@@ -2228,23 +3109,21 @@ function buildStyleDecorations(state: EditorState) {
 
   // ===========================================
   // REGEX FALLBACK: Catch formatting the parser misses
-  // (e.g., trailing whitespace like **bold **)
   // ===========================================
 
   const text = doc.toString();
 
-  // Helper to check if a range overlaps with already-decorated ranges
-  const isAlreadyDecorated = (from: number, to: number) =>
-    decoratedRanges.some((r) => !(to <= r.from || from >= r.to));
+  const isAlreadyCollected = (from: number, to: number) =>
+    rangesToDecorate.some((r) => !(to <= r.from || from >= r.to));
 
-  // Bold: **...**  (allowing whitespace before closing)
+  // Bold: **...**
   const boldRegex = /\*\*(.+?)\*\*/g;
   let match: RegExpExecArray | null;
   while ((match = boldRegex.exec(text)) !== null) {
     const contentFrom = match.index + 2;
     const contentTo = match.index + 2 + match[1].length;
-    if (!isAlreadyDecorated(contentFrom, contentTo) && contentFrom < contentTo) {
-      builder.add(contentFrom, contentTo, boldMark);
+    if (!isAlreadyCollected(contentFrom, contentTo) && contentFrom < contentTo) {
+      rangesToDecorate.push({ from: contentFrom, to: contentTo, decoration: boldMark });
     }
   }
 
@@ -2253,8 +3132,8 @@ function buildStyleDecorations(state: EditorState) {
   while ((match = italicRegex.exec(text)) !== null) {
     const contentFrom = match.index + 1;
     const contentTo = match.index + 1 + match[1].length;
-    if (!isAlreadyDecorated(contentFrom, contentTo) && contentFrom < contentTo) {
-      builder.add(contentFrom, contentTo, italicMark);
+    if (!isAlreadyCollected(contentFrom, contentTo) && contentFrom < contentTo) {
+      rangesToDecorate.push({ from: contentFrom, to: contentTo, decoration: italicMark });
     }
   }
 
@@ -2263,9 +3142,18 @@ function buildStyleDecorations(state: EditorState) {
   while ((match = strikeRegex.exec(text)) !== null) {
     const contentFrom = match.index + 2;
     const contentTo = match.index + 2 + match[1].length;
-    if (!isAlreadyDecorated(contentFrom, contentTo) && contentFrom < contentTo) {
-      builder.add(contentFrom, contentTo, strikethroughMark);
+    if (!isAlreadyCollected(contentFrom, contentTo) && contentFrom < contentTo) {
+      rangesToDecorate.push({ from: contentFrom, to: contentTo, decoration: strikethroughMark });
     }
+  }
+
+  // Sort ranges by 'from' position (required by RangeSetBuilder)
+  rangesToDecorate.sort((a, b) => a.from - b.from);
+
+  // Now add to builder in sorted order
+  const builder = new RangeSetBuilder<Decoration>();
+  for (const range of rangesToDecorate) {
+    builder.add(range.from, range.to, range.decoration);
   }
 
   return builder.finish();
@@ -2342,6 +3230,22 @@ const theme = EditorView.theme({
     lineHeight: "1.5",
     color: "#666",
   },
+  // List styles - bullets/numbers are rendered via widgets now
+  ".cm-list-ul, .cm-list-ol": {
+    display: "inline",
+  },
+  // Widget styles for list bullets and numbers
+  ".cm-list-bullet, .cm-list-number": {
+    userSelect: "none",
+    fontFamily: "system-ui, sans-serif",
+  },
+  // Blockquote styles
+  ".cm-blockquote-bar": {
+    userSelect: "none",
+  },
+  ".cm-blockquote-bar-segment": {
+    opacity: "0.6",
+  },
   // Pending format styles - style the cursor/caret when in pending format mode
   "&.cm-pending-bold .cm-cursor": {
     borderLeftWidth: "3px",
@@ -2385,8 +3289,8 @@ function Editor({ initialContent, hidesSyntax, onChange }: EditorProps) {
       formattingInputHandler,
       markdown({ extensions: [GFM] }),
       history(),
-      // Formatting escape keymap BEFORE default keymap (higher priority)
-      formattingEscapeKeymap,
+      // Formatting escape keymap with HIGHEST priority to override markdown extension's list handling
+      Prec.highest(formattingEscapeKeymap),
       keymap.of([...defaultKeymap, ...historyKeymap]),
       theme,
       styleField,
@@ -2431,6 +3335,8 @@ function Editor({ initialContent, hidesSyntax, onChange }: EditorProps) {
 
 const FIXTURES = [
   { name: "headings.md", label: "Headings" },
+  { name: "lists.md", label: "Lists" },
+  { name: "blockquotes.md", label: "Blockquotes" },
   { name: "bold-asterisks.md", label: "Bold (**)" },
   { name: "bold-underscores.md", label: "Bold (__)" },
   { name: "italic-asterisks.md", label: "Italic (*)" },
@@ -2623,6 +3529,32 @@ function App() {
             <strong>Styling:</strong> Each heading level has distinct font size and weight
           </li>
         </ul>
+
+        <h3>Lists (NEW)</h3>
+        <p>Lists are created by typing - or 1. at the start of a line:</p>
+        <ul>
+          <li>
+            <strong>Create unordered:</strong> Type - + space at start of line
+          </li>
+          <li>
+            <strong>Create ordered:</strong> Type 1. + space at start of line
+          </li>
+          <li>
+            <strong>Auto-continue:</strong> Enter at end of list item creates new item
+          </li>
+          <li>
+            <strong>Exit list:</strong> Enter on empty list item exits list
+          </li>
+          <li>
+            <strong>Indent:</strong> Tab indents list item (nested list)
+          </li>
+          <li>
+            <strong>Outdent:</strong> Shift+Tab outdents list item
+          </li>
+          <li>
+            <strong>Remove:</strong> Backspace at start of list item removes marker
+          </li>
+        </ul>
       </div>
 
       <style>{`
@@ -2774,3 +3706,84 @@ if (root) {
 }
 
 export { App };
+
+// ===========================================
+// EXPORTS FOR TESTING
+// ===========================================
+
+export {
+  // Extensions
+  formattingEscapeKeymap,
+  formattingInputHandler,
+  hiddenSyntaxField,
+  pendingFormattingField,
+  pendingFormatTheme,
+  cursorGuard,
+  styleField,
+  theme,
+
+  // Blockquote handlers
+  handleEnterInBlockquote,
+  handleBackspaceInBlockquote,
+  handleArrowLeftFromBlockquoteStart,
+  handleArrowRightIntoBlockquote,
+  getBlockquoteInfo,
+
+  // List handlers
+  handleEnterInList,
+  handleBackspaceInList,
+  handleTabInList,
+  handleShiftTabInList,
+  handleArrowLeftFromListStart,
+  handleArrowRightIntoList,
+  getListInfo,
+  getNextOrderNumber,
+  isAtListContentStart,
+
+  // Heading handlers
+  handleArrowRightIntoHeading,
+  handleArrowLeftFromHeadingStart,
+  handleBackspaceAtHeadingStart,
+  getLineContentStart,
+  getLineContentLength,
+
+  // Navigation handlers
+  handleArrowRight,
+  handleArrowRightAtEnd,
+  handleArrowLeft,
+  handleArrowLeftAtStart,
+  handleArrowRightOverBlankLines,
+  handleArrowLeftOverBlankLines,
+  handleArrowUp,
+  handleArrowDown,
+
+  // Enter/Delete handlers
+  handleEnter,
+  handleShiftEnter,
+  handleDeleteAtEndOfLine,
+  handleDeleteAtLineStart,
+  handleDeleteEmptyFormatting,
+  handleDeleteAtOpeningMarker,
+  handleDeleteAtEndOfContent,
+  handleDeleteWithSelection,
+
+  // Backspace handlers
+  handleBackspaceAtClosingMarker,
+  handleBackspaceAtParagraphStart,
+
+  // Formatting handlers
+  toggleBoldOrEscape,
+  toggleItalicOrEscape,
+  escapeFormatting,
+
+  // Utility functions
+  getFormattingContext,
+  getFormattingContextAfterClosing,
+  getFormattingContextBeforeOpening,
+  getContentStartForLine,
+  isAtEndOfFormatting,
+  getPendingFormat,
+
+  // Types
+  type FormattingContext,
+};
