@@ -58,6 +58,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "shadcn": "^3.8.2",
+    "shiki": "^3.22.0",
     "spellchecker-wasm": "^0.3.3",
     "tailwind-merge": "^3.4.0",
     "tippy.js": "^6.3.7",

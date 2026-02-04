@@ -128,6 +128,311 @@ class HorizontalRuleWidget extends WidgetType {
 }
 
 // ===========================================
+// CODE BLOCK FENCE WIDGET
+// ===========================================
+
+/**
+ * Widget that renders the opening fence of a code block (```language)
+ * Shows a language badge, the content remains editable inline
+ */
+class CodeBlockOpenWidget extends WidgetType {
+  constructor(readonly language: string) {
+    super();
+  }
+
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-code-block-open";
+
+    const badge = document.createElement("span");
+    badge.className = "cm-code-block-lang-badge";
+    badge.textContent = this.language || "code";
+    span.appendChild(badge);
+
+    return span;
+  }
+
+  eq(other: CodeBlockOpenWidget) {
+    return other.language === this.language;
+  }
+}
+
+/**
+ * Widget that renders the closing fence of a code block (```)
+ * Shows a subtle end indicator
+ */
+class CodeBlockCloseWidget extends WidgetType {
+  toDOM() {
+    const span = document.createElement("span");
+    span.className = "cm-code-block-close";
+    // Empty - just provides visual spacing/boundary
+    return span;
+  }
+
+  eq(_other: CodeBlockCloseWidget) {
+    return true;
+  }
+}
+
+// ===========================================
+// CODE BLOCK HELPERS
+// ===========================================
+
+/**
+ * Regex to match fenced code block start: ```language
+ */
+const CODE_FENCE_REGEX = /^(`{3,})(\w*)$/;
+
+/**
+ * Check if a line is the start of a fenced code block
+ */
+function isCodeFenceStart(lineText: string): { fence: string; language: string } | null {
+  const match = lineText.match(CODE_FENCE_REGEX);
+  if (match) {
+    return { fence: match[1], language: match[2] || "" };
+  }
+  return null;
+}
+
+/**
+ * Get code block range if cursor is on a code block line
+ * Returns the from/to positions of the entire code block
+ */
+function getCodeBlockAtLine(
+  state: EditorState,
+  lineNum: number
+): { from: number; to: number; code: string; language: string } | null {
+  const doc = state.doc;
+  const totalLines = doc.lines;
+
+  // First, check if this line is a code fence
+  const line = doc.line(lineNum);
+  const fenceStart = isCodeFenceStart(line.text);
+
+  if (fenceStart) {
+    // This is a fence start - find the closing fence
+    const fence = fenceStart.fence;
+    for (let i = lineNum + 1; i <= totalLines; i++) {
+      const checkLine = doc.line(i);
+      if (checkLine.text.startsWith(fence)) {
+        // Found closing fence
+        const codeLines: string[] = [];
+        for (let j = lineNum + 1; j < i; j++) {
+          codeLines.push(doc.line(j).text);
+        }
+        return {
+          from: line.from,
+          to: checkLine.to,
+          code: codeLines.join("\n"),
+          language: fenceStart.language,
+        };
+      }
+    }
+    // No closing fence found
+    return null;
+  }
+
+  // Check if this line is inside a code block
+  // by searching backwards for an opening fence
+  for (let i = lineNum - 1; i >= 1; i--) {
+    const checkLine = doc.line(i);
+    const maybeFence = isCodeFenceStart(checkLine.text);
+    if (maybeFence) {
+      // Found a potential opening fence, now find its closing
+      const fence = maybeFence.fence;
+      for (let j = i + 1; j <= totalLines; j++) {
+        const closeLine = doc.line(j);
+        if (closeLine.text.startsWith(fence)) {
+          // Check if our target line is within this range
+          if (lineNum > i && lineNum <= j) {
+            // We're inside this code block
+            const codeLines: string[] = [];
+            for (let k = i + 1; k < j; k++) {
+              codeLines.push(doc.line(k).text);
+            }
+            return {
+              from: checkLine.from,
+              to: closeLine.to,
+              code: codeLines.join("\n"),
+              language: maybeFence.language,
+            };
+          }
+          // This block closes before our line, continue searching
+          break;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Handle ArrowDown when moving into a code block
+ * Skip over the entire code block to the line after it
+ */
+function handleArrowDownPastCodeBlock(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  const totalLines = state.doc.lines;
+
+  // Check if next line starts a code block
+  if (line.number < totalLines) {
+    const nextLine = state.doc.line(line.number + 1);
+    if (isCodeFenceStart(nextLine.text)) {
+      const codeBlock = getCodeBlockAtLine(state, line.number + 1);
+      if (codeBlock) {
+        // Skip to line after the code block
+        const endLine = state.doc.lineAt(codeBlock.to);
+        if (endLine.number < totalLines) {
+          const targetLine = state.doc.line(endLine.number + 1);
+          view.dispatch({
+            selection: { anchor: targetLine.from },
+            scrollIntoView: true,
+          });
+          return true;
+        } else {
+          // Code block is at end of document
+          view.dispatch({
+            selection: { anchor: state.doc.length },
+            scrollIntoView: true,
+          });
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Handle ArrowUp when moving into a code block
+ * Skip over the entire code block to the line before it
+ */
+function handleArrowUpPastCodeBlock(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+
+  // Check if previous line is the end of a code block
+  if (line.number > 1) {
+    const prevLine = state.doc.line(line.number - 1);
+
+    // Check if previous line ends a code block (starts with ```)
+    if (prevLine.text.match(/^`{3,}$/)) {
+      // This might be a closing fence - find the opening
+      for (let i = line.number - 2; i >= 1; i--) {
+        const checkLine = state.doc.line(i);
+        if (isCodeFenceStart(checkLine.text)) {
+          // Verify this is the matching opener
+          const codeBlock = getCodeBlockAtLine(state, i);
+          if (codeBlock && state.doc.lineAt(codeBlock.to).number === line.number - 1) {
+            // Skip to line before the code block
+            if (i > 1) {
+              const targetLine = state.doc.line(i - 1);
+              view.dispatch({
+                selection: { anchor: targetLine.to },
+                scrollIntoView: true,
+              });
+              return true;
+            } else {
+              // Code block is at start of document
+              view.dispatch({
+                selection: { anchor: 0 },
+                scrollIntoView: true,
+              });
+              return true;
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Handle Backspace when cursor is at start of line after a code block
+ * Delete the entire code block
+ */
+function handleBackspaceAfterCodeBlock(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+
+  // Must have no selection
+  if (!state.selection.main.empty) return false;
+
+  // Must be at start of line
+  if (pos !== line.from) return false;
+
+  // Must not be first line
+  if (line.number <= 1) return false;
+
+  // Check if previous line is the end of a code block
+  const prevLine = state.doc.line(line.number - 1);
+  if (prevLine.text.match(/^`{3,}$/)) {
+    // Find the opening fence
+    for (let i = line.number - 2; i >= 1; i--) {
+      const checkLine = state.doc.line(i);
+      if (isCodeFenceStart(checkLine.text)) {
+        // Verify this is the matching opener
+        const codeBlock = getCodeBlockAtLine(state, i);
+        if (codeBlock && state.doc.lineAt(codeBlock.to).number === line.number - 1) {
+          // Delete the entire code block
+          view.dispatch({
+            changes: { from: codeBlock.from, to: line.from, insert: "" },
+            selection: { anchor: codeBlock.from },
+            scrollIntoView: true,
+          });
+          return true;
+        }
+        break;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Handle Delete when cursor is at end of line before a code block
+ * Delete the entire code block
+ */
+function handleDeleteBeforeCodeBlock(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+
+  // Must have no selection
+  if (!state.selection.main.empty) return false;
+
+  // Must be at end of line
+  if (pos !== line.to) return false;
+
+  // Must not be last line
+  if (line.number >= state.doc.lines) return false;
+
+  // Check if next line starts a code block
+  const nextLine = state.doc.line(line.number + 1);
+  if (isCodeFenceStart(nextLine.text)) {
+    const codeBlock = getCodeBlockAtLine(state, line.number + 1);
+    if (codeBlock) {
+      // Delete the newline and the entire code block
+      view.dispatch({
+        changes: { from: line.to, to: codeBlock.to, insert: "" },
+        scrollIntoView: true,
+      });
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// ===========================================
 // TASK LIST CHECKBOX WIDGET
 // ===========================================
 
@@ -3290,15 +3595,15 @@ function toggleTaskCheckboxOnLine(view: EditorView): boolean {
  * Create keymap for formatting escape commands
  */
 const formattingEscapeKeymap = keymap.of([
-  // Backspace: handle HR, lists, blockquotes, paragraph merging, headings, empty formatting, selection, links, then skip over invisible closing markers
+  // Backspace: handle code blocks, HR, lists, blockquotes, paragraph merging, headings, empty formatting, selection, links, then skip over invisible closing markers
   {
     key: "Backspace",
-    run: (view) => handleBackspaceAfterHorizontalRule(view) || handleBackspaceInList(view) || handleBackspaceInBlockquote(view) || handleBackspaceAtParagraphStart(view) || handleBackspaceAtHeadingStart(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleBackspaceAfterLink(view) || handleBackspaceAtLinkTextStart(view) || handleBackspaceAtClosingMarker(view),
+    run: (view) => handleBackspaceAfterCodeBlock(view) || handleBackspaceAfterHorizontalRule(view) || handleBackspaceInList(view) || handleBackspaceInBlockquote(view) || handleBackspaceAtParagraphStart(view) || handleBackspaceAtHeadingStart(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleBackspaceAfterLink(view) || handleBackspaceAtLinkTextStart(view) || handleBackspaceAtClosingMarker(view),
   },
-  // Delete: handle HR, end of line (merge with content below), empty formatting, selection, links, then skip over invisible markers
+  // Delete: handle code blocks, HR, end of line (merge with content below), empty formatting, selection, links, then skip over invisible markers
   {
     key: "Delete",
-    run: (view) => handleDeleteBeforeHorizontalRule(view) || handleDeleteAtEndOfLine(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleDeleteAtLinkTextEnd(view) || handleDeleteAtOpeningMarker(view) || handleDeleteAtEndOfContent(view),
+    run: (view) => handleDeleteBeforeCodeBlock(view) || handleDeleteBeforeHorizontalRule(view) || handleDeleteAtEndOfLine(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleDeleteAtLinkTextEnd(view) || handleDeleteAtOpeningMarker(view) || handleDeleteAtEndOfContent(view),
   },
   // Arrow Right: skip over invisible markers, heading markers, list markers, blockquote markers, links, and blank lines
   {
@@ -3385,15 +3690,15 @@ const formattingEscapeKeymap = keymap.of([
     key: "Mod-Enter",
     run: toggleTaskCheckboxOnLine,
   },
-  // ArrowUp: skip horizontal rules and blank lines
+  // ArrowUp: skip code blocks, horizontal rules and blank lines
   {
     key: "ArrowUp",
-    run: (view) => handleArrowUpPastHorizontalRule(view) || handleArrowUp(view),
+    run: (view) => handleArrowUpPastCodeBlock(view) || handleArrowUpPastHorizontalRule(view) || handleArrowUp(view),
   },
-  // ArrowDown: skip horizontal rules and blank lines
+  // ArrowDown: skip code blocks, horizontal rules and blank lines
   {
     key: "ArrowDown",
-    run: (view) => handleArrowDownPastHorizontalRule(view) || handleArrowDown(view),
+    run: (view) => handleArrowDownPastCodeBlock(view) || handleArrowDownPastHorizontalRule(view) || handleArrowDown(view),
   },
 ]);
 
@@ -3703,7 +4008,24 @@ const formattingInputHandler = EditorView.inputHandler.of(
     }
 
     // Auto-close ` → `|`
+    // But first check for code block creation: `` + ` at line start → ```\n\n```
     if (text === "`") {
+      const line = doc.lineAt(from);
+      const lineStart = line.from;
+      const textBeforeCursor = doc.sliceString(lineStart, from);
+
+      // Check if we have `` at start of line and this is the third backtick
+      if (textBeforeCursor === "``") {
+        // Create a fenced code block with cursor on the empty line between fences
+        view.dispatch({
+          changes: { from: lineStart, to: from, insert: "```\n\n```" },
+          selection: { anchor: lineStart + 4 }, // Position on empty line
+          scrollIntoView: true,
+        });
+        return true;
+      }
+
+      // Regular auto-close for inline code
       view.dispatch({
         changes: { from, to, insert: "``" },
         selection: { anchor: from + 1 },
@@ -3792,6 +4114,10 @@ function buildHiddenSyntax(state: EditorState) {
   // Horizontal rules get widget decorations showing an hr line
   const horizontalRules: Array<{ from: number; to: number }> = [];
 
+  // Code block fences get widget decorations (opening shows language badge, closing is hidden)
+  const codeBlockOpens: Array<{ from: number; to: number; language: string }> = [];
+  const codeBlockCloses: Array<{ from: number; to: number }> = [];
+
   // Track which lines we've already processed for blockquotes (to handle nested)
   const processedBlockquoteLines = new Set<number>();
 
@@ -3874,6 +4200,31 @@ function buildHiddenSyntax(state: EditorState) {
       if (node.name === "HorizontalRule") {
         const line = doc.lineAt(node.from);
         horizontalRules.push({ from: line.from, to: line.to });
+      }
+
+      // Handle FencedCode nodes - hide opening fence (show language badge) and closing fence
+      if (node.name === "FencedCode") {
+        const startLine = doc.lineAt(node.from);
+        const endLine = doc.lineAt(node.to);
+
+        // Extract language from opening fence line
+        const langMatch = startLine.text.match(/^`{3,}(\w*)/);
+        const language = langMatch ? langMatch[1] : "";
+
+        // Opening fence: replace entire first line with language badge widget
+        codeBlockOpens.push({
+          from: startLine.from,
+          to: startLine.to,
+          language,
+        });
+
+        // Closing fence: hide it entirely (the last line with ```)
+        if (endLine.number !== startLine.number) {
+          codeBlockCloses.push({
+            from: endLine.from,
+            to: endLine.to,
+          });
+        }
       }
 
       // Handle Link nodes - hide [ and ](url) portions, keep text visible
@@ -4004,18 +4355,26 @@ function buildHiddenSyntax(state: EditorState) {
     | { from: number; to: number; type: "list"; isOrdered: boolean; num: number }
     | { from: number; to: number; type: "task"; checked: boolean; pos: number }
     | { from: number; to: number; type: "blockquote"; level: number }
-    | { from: number; to: number; type: "hr" };
+    | { from: number; to: number; type: "hr" }
+    | { from: number; to: number; type: "codeblock-open"; language: string }
+    | { from: number; to: number; type: "codeblock-close" };
 
   // Helper to check if a range overlaps with any horizontal rule
   const overlapsWithHR = (from: number, to: number): boolean => {
     return horizontalRules.some(hr => from >= hr.from && to <= hr.to);
   };
 
-  // Filter out decorations that overlap with horizontal rules (HRs take precedence)
-  const filteredRangesToHide = rangesToHide.filter(r => !overlapsWithHR(r.from, r.to));
-  const filteredListMarkers = listMarkers.filter(m => !overlapsWithHR(m.from, m.to));
-  const filteredTaskMarkers = taskMarkers.filter(t => !overlapsWithHR(t.from, t.to));
-  const filteredBlockquoteMarkers = blockquoteMarkers.filter(b => !overlapsWithHR(b.from, b.to));
+  // Helper to check if a range overlaps with any code block fence
+  const overlapsWithCodeBlockFence = (from: number, to: number): boolean => {
+    return codeBlockOpens.some(cb => from >= cb.from && to <= cb.to) ||
+           codeBlockCloses.some(cb => from >= cb.from && to <= cb.to);
+  };
+
+  // Filter out decorations that overlap with horizontal rules or code block fences
+  const filteredRangesToHide = rangesToHide.filter(r => !overlapsWithHR(r.from, r.to) && !overlapsWithCodeBlockFence(r.from, r.to));
+  const filteredListMarkers = listMarkers.filter(m => !overlapsWithHR(m.from, m.to) && !overlapsWithCodeBlockFence(m.from, m.to));
+  const filteredTaskMarkers = taskMarkers.filter(t => !overlapsWithHR(t.from, t.to) && !overlapsWithCodeBlockFence(t.from, t.to));
+  const filteredBlockquoteMarkers = blockquoteMarkers.filter(b => !overlapsWithHR(b.from, b.to) && !overlapsWithCodeBlockFence(b.from, b.to));
 
   const allDecorations: DecorationEntry[] = [
     ...filteredRangesToHide.map(r => ({ ...r, type: "hide" as const })),
@@ -4023,6 +4382,8 @@ function buildHiddenSyntax(state: EditorState) {
     ...filteredTaskMarkers.map(t => ({ ...t, type: "task" as const })),
     ...filteredBlockquoteMarkers.map(b => ({ ...b, type: "blockquote" as const })),
     ...horizontalRules.map(hr => ({ ...hr, type: "hr" as const })),
+    ...codeBlockOpens.map(cb => ({ ...cb, type: "codeblock-open" as const })),
+    ...codeBlockCloses.map(cb => ({ ...cb, type: "codeblock-close" as const })),
   ];
 
   // Sort by 'from' position, then by 'to' position for stability (required by RangeSetBuilder)
@@ -4053,6 +4414,15 @@ function buildHiddenSyntax(state: EditorState) {
     } else if (entry.type === "hr") {
       // Horizontal rule - use block widget decoration
       const widget = new HorizontalRuleWidget();
+      builder.add(entry.from, entry.to, Decoration.replace({ widget, block: true }));
+    } else if (entry.type === "codeblock-open") {
+      // Code block opening fence - show language badge widget
+      const cbEntry = entry as { from: number; to: number; type: "codeblock-open"; language: string };
+      const widget = new CodeBlockOpenWidget(cbEntry.language);
+      builder.add(entry.from, entry.to, Decoration.replace({ widget, block: true }));
+    } else if (entry.type === "codeblock-close") {
+      // Code block closing fence - hide it
+      const widget = new CodeBlockCloseWidget();
       builder.add(entry.from, entry.to, Decoration.replace({ widget, block: true }));
     }
   }
@@ -4611,6 +4981,30 @@ const theme = EditorView.theme({
     padding: "0",
     height: "0",
   },
+  // Code block fence styles (opening badge and closing marker)
+  ".cm-code-block-open": {
+    display: "block",
+    marginTop: "8px",
+    marginBottom: "4px",
+  },
+  ".cm-code-block-lang-badge": {
+    display: "inline-block",
+    fontSize: "11px",
+    fontWeight: "500",
+    color: "#57606a",
+    backgroundColor: "#f1f3f5",
+    padding: "2px 8px",
+    borderRadius: "4px 4px 0 0",
+    border: "1px solid #e1e4e8",
+    borderBottom: "none",
+    textTransform: "lowercase",
+    fontFamily: "system-ui, sans-serif",
+  },
+  ".cm-code-block-close": {
+    display: "block",
+    height: "4px",
+    marginBottom: "8px",
+  },
   // Pending format styles - style the cursor/caret when in pending format mode
   "&.cm-pending-bold .cm-cursor": {
     borderLeftWidth: "3px",
@@ -4901,6 +5295,7 @@ const FIXTURES = [
   { name: "checkboxes.md", label: "Checkboxes" },
   { name: "blockquotes.md", label: "Blockquotes" },
   { name: "horizontal-rules.md", label: "Horizontal Rules" },
+  { name: "code-blocks.md", label: "Code Blocks" },
   { name: "links.md", label: "Links" },
   { name: "bold-asterisks.md", label: "Bold (**)" },
   { name: "bold-underscores.md", label: "Bold (__)" },
@@ -5505,6 +5900,14 @@ export {
   handleBackspaceAfterHorizontalRule,
   handleDeleteBeforeHorizontalRule,
   HR_REGEX,
+
+  // Code block handlers
+  handleArrowDownPastCodeBlock,
+  handleArrowUpPastCodeBlock,
+  handleBackspaceAfterCodeBlock,
+  handleDeleteBeforeCodeBlock,
+  getCodeBlockAtLine,
+  isCodeFenceStart,
 
   // Enter/Delete handlers
   handleEnter,
