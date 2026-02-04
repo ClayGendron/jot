@@ -103,6 +103,62 @@ class BlockquoteBarWidget extends WidgetType {
 }
 
 // ===========================================
+// TASK LIST CHECKBOX WIDGET
+// ===========================================
+
+/**
+ * Widget that renders an interactive checkbox for task list items
+ * Handles click events to toggle between [ ] and [x]
+ */
+class CheckboxWidget extends WidgetType {
+  constructor(
+    readonly checked: boolean,
+    readonly pos: number
+  ) {
+    super();
+  }
+
+  toDOM(view: EditorView) {
+    const span = document.createElement("span");
+    span.className = "cm-task-checkbox";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = this.checked;
+    checkbox.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleTaskCheckbox(view, this.pos, this.checked);
+    });
+
+    span.appendChild(checkbox);
+    return span;
+  }
+
+  eq(other: CheckboxWidget) {
+    return other.checked === this.checked && other.pos === this.pos;
+  }
+
+  ignoreEvent() {
+    return true;
+  }
+}
+
+/**
+ * Toggle a task checkbox between [ ] and [x] states
+ */
+function toggleTaskCheckbox(
+  view: EditorView,
+  markerPos: number,
+  currentlyChecked: boolean
+): void {
+  const newMarker = currentlyChecked ? "[ ]" : "[x]";
+  view.dispatch({
+    changes: { from: markerPos, to: markerPos + 3, insert: newMarker },
+  });
+}
+
+// ===========================================
 // PENDING ESCAPE STATE
 // ===========================================
 
@@ -942,8 +998,9 @@ function handleDeleteAtLinkTextEnd(view: EditorView): boolean {
  * List marker patterns:
  * - Unordered: -, *, + followed by space
  * - Ordered: 1., 2., etc. followed by space
+ * - Task lists: - [ ] or - [x] (checkbox)
  */
-const LIST_MARKER_REGEX = /^(\s*)([-*+]|\d+\.)\s/;
+const LIST_MARKER_REGEX = /^(\s*)([-*+]|\d+\.)\s(\[[ xX]\]\s)?/;
 
 /**
  * Get list info for a line
@@ -956,6 +1013,9 @@ function getListInfo(line: { text: string; from: number }): {
   contentStart: number;
   isOrdered: boolean;
   orderNumber: number | null;
+  isTask: boolean;
+  isTaskChecked: boolean;
+  taskMarkerStart: number | null;
 } | null {
   const match = line.text.match(LIST_MARKER_REGEX);
   if (!match) return null;
@@ -966,6 +1026,13 @@ function getListInfo(line: { text: string; from: number }): {
   const isOrdered = /^\d+\.$/.test(marker);
   const orderNumber = isOrdered ? parseInt(marker) : null;
 
+  // Task marker detection: match[3] is the optional [ ] or [x] with trailing space
+  const taskMarkerMatch = match[3];
+  const isTask = !!taskMarkerMatch;
+  const isTaskChecked = isTask && /\[[xX]\]/.test(taskMarkerMatch);
+  // Task marker position: after indent + marker + space
+  const taskMarkerStart = isTask ? line.from + indent.length + marker.length + 1 : null;
+
   return {
     isListItem: true,
     indent,
@@ -974,6 +1041,9 @@ function getListInfo(line: { text: string; from: number }): {
     contentStart: line.from + markerWithSpace.length,
     isOrdered,
     orderNumber,
+    isTask,
+    isTaskChecked,
+    taskMarkerStart,
   };
 }
 
@@ -998,6 +1068,25 @@ function getNextOrderNumber(state: EditorState, lineNumber: number): number {
     return listInfo.orderNumber + 1;
   }
   return 1;
+}
+
+/**
+ * Build a new list marker string for continuing a list
+ * Handles both ordered/unordered and task/regular lists
+ */
+function buildNewListMarker(
+  listInfo: NonNullable<ReturnType<typeof getListInfo>>,
+  nextNum: number
+): string {
+  if (listInfo.isOrdered) {
+    return listInfo.isTask
+      ? `${listInfo.indent}${nextNum}. [ ] `
+      : `${listInfo.indent}${nextNum}. `;
+  } else {
+    return listInfo.isTask
+      ? `${listInfo.indent}${listInfo.marker} [ ] `
+      : `${listInfo.indent}${listInfo.marker} `;
+  }
 }
 
 /**
@@ -1039,13 +1128,8 @@ function handleEnterInList(view: EditorView): boolean {
 
   // At end of list item - create new list item
   if (pos === line.to) {
-    let newMarker: string;
-    if (listInfo.isOrdered) {
-      const nextNum = getNextOrderNumber(state, line.number);
-      newMarker = `${listInfo.indent}${nextNum}. `;
-    } else {
-      newMarker = `${listInfo.indent}${listInfo.marker} `;
-    }
+    const nextNum = getNextOrderNumber(state, line.number);
+    const newMarker = buildNewListMarker(listInfo, nextNum);
 
     view.dispatch({
       changes: { from: pos, to: pos, insert: `\n${newMarker}` },
@@ -1058,13 +1142,8 @@ function handleEnterInList(view: EditorView): boolean {
   // In middle of list item - split into two list items
   if (pos > listInfo.contentStart && pos < line.to) {
     const afterCursor = line.text.slice(pos - line.from);
-    let newMarker: string;
-    if (listInfo.isOrdered) {
-      const nextNum = getNextOrderNumber(state, line.number);
-      newMarker = `${listInfo.indent}${nextNum}. `;
-    } else {
-      newMarker = `${listInfo.indent}${listInfo.marker} `;
-    }
+    const nextNum = getNextOrderNumber(state, line.number);
+    const newMarker = buildNewListMarker(listInfo, nextNum);
 
     view.dispatch({
       changes: { from: pos, to: line.to, insert: `\n${newMarker}${afterCursor}` },
@@ -3041,6 +3120,20 @@ function handleDeleteWithSelection(view: EditorView): boolean {
 }
 
 /**
+ * Toggle task checkbox on current line using Mod+Enter
+ * Returns false if not on a task line to allow default behavior
+ */
+function toggleTaskCheckboxOnLine(view: EditorView): boolean {
+  const line = view.state.doc.lineAt(view.state.selection.main.head);
+  const listInfo = getListInfo(line);
+
+  if (!listInfo?.isTask || listInfo.taskMarkerStart === null) return false;
+
+  toggleTaskCheckbox(view, listInfo.taskMarkerStart, listInfo.isTaskChecked);
+  return true;
+}
+
+/**
  * Create keymap for formatting escape commands
  */
 const formattingEscapeKeymap = keymap.of([
@@ -3133,6 +3226,11 @@ const formattingEscapeKeymap = keymap.of([
   {
     key: "Shift-Enter",
     run: handleShiftEnter,
+  },
+  // Mod+Enter: toggle task checkbox on current line
+  {
+    key: "Mod-Enter",
+    run: toggleTaskCheckboxOnLine,
   },
   // ArrowUp: skip blank lines
   {
@@ -3360,6 +3458,44 @@ const formattingInputHandler = EditorView.inputHandler.of(
     }
 
     // ===========================================
+    // TASK LIST: Auto-expand -[ to - [ ] at line start
+    // ===========================================
+
+    if (text === "[") {
+      const line = doc.lineAt(from);
+      const lineStart = line.from;
+      const textBeforeCursor = doc.sliceString(lineStart, from);
+
+      // Check if we just have a list marker (-, *, +) possibly with indent
+      // This triggers when user types "[" after "- " at line start
+      const taskMatch = textBeforeCursor.match(/^(\s*)([-*+])\s$/);
+      if (taskMatch) {
+        const indent = taskMatch[1];
+        const marker = taskMatch[2];
+        // Replace "- " with "- [ ] "
+        view.dispatch({
+          changes: { from: lineStart, to: from, insert: `${indent}${marker} [ ] ` },
+          selection: { anchor: lineStart + indent.length + marker.length + 5 }, // After "- [ ] "
+          scrollIntoView: true,
+        });
+        return true;
+      }
+
+      // Also handle ordered list task: "1. [" → "1. [ ] "
+      const orderedTaskMatch = textBeforeCursor.match(/^(\s*)(\d+\.)\s$/);
+      if (orderedTaskMatch) {
+        const indent = orderedTaskMatch[1];
+        const marker = orderedTaskMatch[2];
+        view.dispatch({
+          changes: { from: lineStart, to: from, insert: `${indent}${marker} [ ] ` },
+          selection: { anchor: lineStart + indent.length + marker.length + 5 }, // After "1. [ ] "
+          scrollIntoView: true,
+        });
+        return true;
+      }
+    }
+
+    // ===========================================
     // AUTO-CLOSE: Outside formatting, auto-pair markers
     // ===========================================
 
@@ -3460,6 +3596,9 @@ function buildHiddenSyntax(state: EditorState) {
   // List markers get widget decorations instead of being hidden
   const listMarkers: Array<{ from: number; to: number; isOrdered: boolean; num: number }> = [];
 
+  // Task markers ([ ] or [x]) get checkbox widget decorations
+  const taskMarkers: Array<{ from: number; to: number; checked: boolean; pos: number }> = [];
+
   // Blockquote markers get widget decorations showing the bar
   const blockquoteMarkers: Array<{ from: number; to: number; level: number }> = [];
 
@@ -3507,6 +3646,18 @@ function buildHiddenSyntax(state: EditorState) {
         const to = nextChar === " " ? node.to + 1 : node.to;
 
         listMarkers.push({ from: node.from, to, isOrdered, num });
+      }
+
+      // Replace task markers ([ ] or [x]) with checkbox widget decorations
+      if (node.name === "TaskMarker") {
+        const markerText = doc.sliceString(node.from, node.to);
+        const isChecked = /\[[xX]\]/.test(markerText);
+
+        // Include trailing space in the replacement range if present
+        const nextChar = doc.sliceString(node.to, node.to + 1);
+        const to = nextChar === " " ? node.to + 1 : node.to;
+
+        taskMarkers.push({ from: node.from, to, checked: isChecked, pos: node.from });
       }
 
       // Handle QuoteMark nodes from the parser
@@ -3655,11 +3806,13 @@ function buildHiddenSyntax(state: EditorState) {
   type DecorationEntry =
     | { from: number; to: number; type: "hide" }
     | { from: number; to: number; type: "list"; isOrdered: boolean; num: number }
+    | { from: number; to: number; type: "task"; checked: boolean; pos: number }
     | { from: number; to: number; type: "blockquote"; level: number };
 
   const allDecorations: DecorationEntry[] = [
     ...rangesToHide.map(r => ({ ...r, type: "hide" as const })),
     ...listMarkers.map(m => ({ ...m, type: "list" as const })),
+    ...taskMarkers.map(t => ({ ...t, type: "task" as const })),
     ...blockquoteMarkers.map(b => ({ ...b, type: "blockquote" as const })),
   ];
 
@@ -3677,6 +3830,11 @@ function buildHiddenSyntax(state: EditorState) {
       const widget = listEntry.isOrdered
         ? new NumberWidget(listEntry.num)
         : new BulletWidget();
+      builder.add(entry.from, entry.to, Decoration.replace({ widget }));
+    } else if (entry.type === "task") {
+      // Task marker - use checkbox widget decoration
+      const taskEntry = entry as { from: number; to: number; type: "task"; checked: boolean; pos: number };
+      const widget = new CheckboxWidget(taskEntry.checked, taskEntry.pos);
       builder.add(entry.from, entry.to, Decoration.replace({ widget }));
     } else if (entry.type === "blockquote") {
       // Blockquote marker - use widget decoration with bar
@@ -4206,6 +4364,17 @@ const theme = EditorView.theme({
   ".cm-list-bullet, .cm-list-number": {
     userSelect: "none",
     fontFamily: "system-ui, sans-serif",
+  },
+  // Widget styles for task checkboxes
+  ".cm-task-checkbox": {
+    display: "inline-block",
+    verticalAlign: "middle",
+  },
+  ".cm-task-checkbox input": {
+    margin: "0 6px 0 0",
+    cursor: "pointer",
+    width: "14px",
+    height: "14px",
   },
   // Blockquote styles
   ".cm-blockquote-bar": {
@@ -5074,6 +5243,11 @@ export {
   getListInfo,
   getNextOrderNumber,
   isAtListContentStart,
+  buildNewListMarker,
+
+  // Task list handlers
+  toggleTaskCheckbox,
+  toggleTaskCheckboxOnLine,
 
   // Heading handlers
   handleArrowRightIntoHeading,
