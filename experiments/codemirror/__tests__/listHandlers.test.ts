@@ -128,14 +128,14 @@ describe("List Handlers", () => {
       expect(handled).toBe(false);
     });
 
-    it("inserts new line above when at content start", () => {
+    it("exits list and moves content to plain text when at content start", () => {
       testView = createTestView("- |Item");
 
       const handled = handleEnterInList(testView.view);
 
       expect(handled).toBe(true);
-      // Should insert empty list item above
-      expect(getDocWithCursor(testView.view)).toBe("- \n- |Item");
+      // Should keep marker as empty list item and move content to plain text below
+      expect(getDocWithCursor(testView.view)).toBe("-\n\n|Item");
     });
   });
 
@@ -158,13 +158,14 @@ describe("List Handlers", () => {
       expect(getDocWithCursor(testView.view)).toBe("|Content");
     });
 
-    it("merges with previous list item", () => {
+    it("removes marker and converts to plain text with paragraph spacing", () => {
       testView = createTestView("- Line 1\n- |Line 2");
 
       const handled = handleBackspaceInList(testView.view);
 
       expect(handled).toBe(true);
-      expect(getDocWithCursor(testView.view)).toBe("- Line 1|Line 2");
+      // Should remove marker and add paragraph spacing, not merge into previous list item
+      expect(getDocWithCursor(testView.view)).toBe("- Line 1\n\n|Line 2");
     });
 
     it("returns false when not at content start", () => {
@@ -184,13 +185,14 @@ describe("List Handlers", () => {
       expect(getDocWithCursor(testView.view)).toBe("|First content");
     });
 
-    it("merges with content above when previous line is blank", () => {
+    it("removes marker with paragraph spacing when previous line is blank", () => {
       testView = createTestView("Content\n\n- |Item");
 
       const handled = handleBackspaceInList(testView.view);
 
       expect(handled).toBe(true);
-      expect(getDocWithCursor(testView.view)).toBe("Content|Item");
+      // Should remove marker and add paragraph spacing from blank line
+      expect(getDocWithCursor(testView.view)).toBe("Content\n\n\n|Item");
     });
 
     it("returns false for non-list line", () => {

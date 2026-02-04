@@ -1153,12 +1153,16 @@ function handleEnterInList(view: EditorView): boolean {
     return true;
   }
 
-  // At start of content - insert new list item above
+  // At start of content - keep marker as empty list item, move content to plain text below
+  // Before: "- item\n- |content"
+  // After:  "- item\n- \n\n|content"
   if (pos === listInfo.contentStart) {
-    const marker = listInfo.markerWithSpace;
+    const contentText = line.text.slice(listInfo.markerWithSpace.length);
+    const markerOnly = listInfo.markerWithSpace.trimEnd(); // Remove trailing space for empty item
+
     view.dispatch({
-      changes: { from: line.from, to: line.from, insert: `${marker}\n` },
-      selection: { anchor: listInfo.contentStart + marker.length + 1 },
+      changes: { from: line.from, to: line.to, insert: `${markerOnly}\n\n${contentText}` },
+      selection: { anchor: line.from + markerOnly.length + 2 }, // Position at start of content
       scrollIntoView: true,
     });
     return true;
@@ -1199,7 +1203,9 @@ function handleBackspaceInList(view: EditorView): boolean {
     return true;
   }
 
-  // List item has content - handle merging with previous line
+  // List item has content - remove the marker, keep content as plain text
+  // Before: "- item\n- |content"
+  // After:  "- item\n\n|content"
   if (line.number <= 1) {
     // First line - just remove the list marker, keep content
     view.dispatch({
@@ -1210,48 +1216,14 @@ function handleBackspaceInList(view: EditorView): boolean {
     return true;
   }
 
-  // Check line above
+  // Remove the list marker and add blank line for paragraph spacing
+  // The content becomes plain text on its own line
   const prevLine = state.doc.line(line.number - 1);
-  const prevListInfo = getListInfo(prevLine);
 
-  if (prevListInfo) {
-    // Previous line is also a list item - merge into it
-    view.dispatch({
-      changes: { from: prevLine.to, to: listInfo.contentStart, insert: "" },
-      selection: { anchor: prevLine.to },
-      scrollIntoView: true,
-    });
-    return true;
-  }
-
-  if (prevLine.text.trim() === "") {
-    // Previous line is blank - find content above and merge
-    let targetLineNum = line.number - 1;
-    while (targetLineNum >= 1) {
-      const targetLine = state.doc.line(targetLineNum);
-      if (targetLine.text.trim() !== "") {
-        view.dispatch({
-          changes: { from: targetLine.to, to: listInfo.contentStart, insert: "" },
-          selection: { anchor: targetLine.to },
-          scrollIntoView: true,
-        });
-        return true;
-      }
-      targetLineNum--;
-    }
-    // All blank above - just remove marker
-    view.dispatch({
-      changes: { from: line.from, to: listInfo.contentStart, insert: "" },
-      selection: { anchor: line.from },
-      scrollIntoView: true,
-    });
-    return true;
-  }
-
-  // Previous line has content - merge with it
+  // Replace current line with blank line + content (reuse content variable from above)
   view.dispatch({
-    changes: { from: prevLine.to, to: listInfo.contentStart, insert: "" },
-    selection: { anchor: prevLine.to },
+    changes: { from: prevLine.to, to: line.to, insert: `\n\n${content}` },
+    selection: { anchor: prevLine.to + 2 }, // Position at start of content
     scrollIntoView: true,
   });
   return true;
@@ -4670,6 +4642,7 @@ function Editor({ initialContent, hidesSyntax, onChange }: EditorProps) {
 const FIXTURES = [
   { name: "headings.md", label: "Headings" },
   { name: "lists.md", label: "Lists" },
+  { name: "checkboxes.md", label: "Checkboxes" },
   { name: "blockquotes.md", label: "Blockquotes" },
   { name: "links.md", label: "Links" },
   { name: "bold-asterisks.md", label: "Bold (**)" },
