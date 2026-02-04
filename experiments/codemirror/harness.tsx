@@ -103,6 +103,31 @@ class BlockquoteBarWidget extends WidgetType {
 }
 
 // ===========================================
+// HORIZONTAL RULE WIDGET
+// ===========================================
+
+/**
+ * Widget that renders a horizontal rule (---, ***, ___)
+ * Replaces the raw syntax with a visual hr element
+ */
+class HorizontalRuleWidget extends WidgetType {
+  toDOM() {
+    const wrapper = document.createElement("div");
+    wrapper.className = "cm-horizontal-rule";
+
+    const line = document.createElement("hr");
+    line.className = "cm-horizontal-rule-line";
+
+    wrapper.appendChild(line);
+    return wrapper;
+  }
+
+  eq(_other: HorizontalRuleWidget) {
+    return true; // All HRs are identical
+  }
+}
+
+// ===========================================
 // TASK LIST CHECKBOX WIDGET
 // ===========================================
 
@@ -1962,6 +1987,162 @@ function handleArrowDown(view: EditorView): boolean {
   return true;
 }
 
+// ===========================================
+// HORIZONTAL RULE HANDLERS
+// ===========================================
+
+/**
+ * Regex to match horizontal rule patterns (---, ***, ___, or longer)
+ */
+const HR_REGEX = /^([-*_])\1{2,}\s*$/;
+
+/**
+ * Handle ArrowDown when moving into a horizontal rule
+ * Skip over the HR to the line after it
+ */
+function handleArrowDownPastHorizontalRule(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+  const totalLines = state.doc.lines;
+
+  // Check if next line is a horizontal rule
+  if (line.number < totalLines) {
+    const nextLine = state.doc.line(line.number + 1);
+    if (HR_REGEX.test(nextLine.text)) {
+      // Skip to line after the HR
+      if (line.number + 1 < totalLines) {
+        const targetLine = state.doc.line(line.number + 2);
+        view.dispatch({
+          selection: { anchor: targetLine.from },
+          scrollIntoView: true,
+        });
+        return true;
+      } else {
+        // HR is last line - go to end of document
+        view.dispatch({
+          selection: { anchor: state.doc.length },
+          scrollIntoView: true,
+        });
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Handle ArrowUp when moving into a horizontal rule
+ * Skip over the HR to the line before it
+ */
+function handleArrowUpPastHorizontalRule(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+
+  // Check if previous line is a horizontal rule
+  if (line.number > 1) {
+    const prevLine = state.doc.line(line.number - 1);
+    if (HR_REGEX.test(prevLine.text)) {
+      // Skip to line before the HR
+      if (line.number > 2) {
+        const targetLine = state.doc.line(line.number - 2);
+        view.dispatch({
+          selection: { anchor: targetLine.to },
+          scrollIntoView: true,
+        });
+        return true;
+      } else {
+        // HR is first line - go to start of document
+        view.dispatch({
+          selection: { anchor: 0 },
+          scrollIntoView: true,
+        });
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Handle Backspace when cursor is at start of line after a horizontal rule
+ * Delete the horizontal rule
+ */
+function handleBackspaceAfterHorizontalRule(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+
+  // Must have no selection
+  if (!state.selection.main.empty) return false;
+
+  // Must be at start of line
+  if (pos !== line.from) return false;
+
+  // Must not be first line
+  if (line.number <= 1) return false;
+
+  const prevLine = state.doc.line(line.number - 1);
+  if (HR_REGEX.test(prevLine.text)) {
+    // Delete the HR line and the newline after it, keeping cursor on the resulting blank line
+    // This preserves paragraph spacing while removing the HR
+    view.dispatch({
+      changes: { from: prevLine.from, to: line.from, insert: "" },
+      selection: { anchor: prevLine.from },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // Also handle: cursor on blank line, previous line is blank, line before that is HR
+  // This handles the case where HR was created with spacing: ---\n\n|
+  if (line.text === "" && line.number > 2) {
+    const prevPrevLine = state.doc.line(line.number - 2);
+    if (prevLine.text === "" && HR_REGEX.test(prevPrevLine.text)) {
+      // Delete the HR and the blank line after it, keep one blank line
+      view.dispatch({
+        changes: { from: prevPrevLine.from, to: prevLine.to + 1, insert: "" },
+        selection: { anchor: prevPrevLine.from },
+        scrollIntoView: true,
+      });
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Handle Delete when cursor is at end of line before a horizontal rule
+ * Delete the horizontal rule
+ */
+function handleDeleteBeforeHorizontalRule(view: EditorView): boolean {
+  const state = view.state;
+  const pos = state.selection.main.head;
+  const line = state.doc.lineAt(pos);
+
+  // Must have no selection
+  if (!state.selection.main.empty) return false;
+
+  // Must be at end of line
+  if (pos !== line.to) return false;
+
+  // Must not be last line
+  if (line.number >= state.doc.lines) return false;
+
+  const nextLine = state.doc.line(line.number + 1);
+  if (HR_REGEX.test(nextLine.text)) {
+    // Delete the newline and the HR
+    view.dispatch({
+      changes: { from: line.to, to: nextLine.to, insert: "" },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+  return false;
+}
+
 /**
  * Handle Delete at start of line - merge with content above (including headings)
  *
@@ -3109,15 +3290,15 @@ function toggleTaskCheckboxOnLine(view: EditorView): boolean {
  * Create keymap for formatting escape commands
  */
 const formattingEscapeKeymap = keymap.of([
-  // Backspace: handle lists, blockquotes, paragraph merging, headings, empty formatting, selection, links, then skip over invisible closing markers
+  // Backspace: handle HR, lists, blockquotes, paragraph merging, headings, empty formatting, selection, links, then skip over invisible closing markers
   {
     key: "Backspace",
-    run: (view) => handleBackspaceInList(view) || handleBackspaceInBlockquote(view) || handleBackspaceAtParagraphStart(view) || handleBackspaceAtHeadingStart(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleBackspaceAfterLink(view) || handleBackspaceAtLinkTextStart(view) || handleBackspaceAtClosingMarker(view),
+    run: (view) => handleBackspaceAfterHorizontalRule(view) || handleBackspaceInList(view) || handleBackspaceInBlockquote(view) || handleBackspaceAtParagraphStart(view) || handleBackspaceAtHeadingStart(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleBackspaceAfterLink(view) || handleBackspaceAtLinkTextStart(view) || handleBackspaceAtClosingMarker(view),
   },
-  // Delete: handle end of line (merge with content below), empty formatting, selection, links, then skip over invisible markers
+  // Delete: handle HR, end of line (merge with content below), empty formatting, selection, links, then skip over invisible markers
   {
     key: "Delete",
-    run: (view) => handleDeleteAtEndOfLine(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleDeleteAtLinkTextEnd(view) || handleDeleteAtOpeningMarker(view) || handleDeleteAtEndOfContent(view),
+    run: (view) => handleDeleteBeforeHorizontalRule(view) || handleDeleteAtEndOfLine(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleDeleteAtLinkTextEnd(view) || handleDeleteAtOpeningMarker(view) || handleDeleteAtEndOfContent(view),
   },
   // Arrow Right: skip over invisible markers, heading markers, list markers, blockquote markers, links, and blank lines
   {
@@ -3204,15 +3385,15 @@ const formattingEscapeKeymap = keymap.of([
     key: "Mod-Enter",
     run: toggleTaskCheckboxOnLine,
   },
-  // ArrowUp: skip blank lines
+  // ArrowUp: skip horizontal rules and blank lines
   {
     key: "ArrowUp",
-    run: handleArrowUp,
+    run: (view) => handleArrowUpPastHorizontalRule(view) || handleArrowUp(view),
   },
-  // ArrowDown: skip blank lines
+  // ArrowDown: skip horizontal rules and blank lines
   {
     key: "ArrowDown",
-    run: handleArrowDown,
+    run: (view) => handleArrowDownPastHorizontalRule(view) || handleArrowDown(view),
   },
 ]);
 
@@ -3371,6 +3552,40 @@ const formattingInputHandler = EditorView.inputHandler.of(
 
     // Note: No ~|~ → ~~|~~ upgrade needed because first ~ doesn't auto-close
     // Strikethrough requires ~~ so we only auto-close on second ~
+
+    // ===========================================
+    // HORIZONTAL RULE: Convert "- " + "-" to "---" (and similar)
+    // When user types second marker after auto-created list, make HR instead
+    // ===========================================
+
+    if (text === "-" || text === "*" || text === "_") {
+      const line = doc.lineAt(from);
+      const lineStart = line.from;
+      const textBeforeCursor = doc.sliceString(lineStart, from);
+
+      // Check if line is "- " or "* " (just an auto-created list marker)
+      // and user is typing the same character again
+      if (textBeforeCursor === `${text} `) {
+        // Convert to horizontal rule: replace "- " with "---" and add blank line after
+        // Position cursor on the blank line for continued typing
+        view.dispatch({
+          changes: { from: lineStart, to: line.to, insert: `${text}${text}${text}\n\n` },
+          selection: { anchor: lineStart + 5 }, // After "---\n\n"
+          scrollIntoView: true,
+        });
+        return true;
+      }
+
+      // Also handle "-- " → "---" when typing third dash (if they manually typed two dashes)
+      if (text === "-" && textBeforeCursor === "-- ") {
+        view.dispatch({
+          changes: { from: lineStart, to: line.to, insert: "---\n\n" },
+          selection: { anchor: lineStart + 5 }, // After "---\n\n"
+          scrollIntoView: true,
+        });
+        return true;
+      }
+    }
 
     // ===========================================
     // LISTS: Create list item when typing marker at start of line
@@ -3574,6 +3789,9 @@ function buildHiddenSyntax(state: EditorState) {
   // Blockquote markers get widget decorations showing the bar
   const blockquoteMarkers: Array<{ from: number; to: number; level: number }> = [];
 
+  // Horizontal rules get widget decorations showing an hr line
+  const horizontalRules: Array<{ from: number; to: number }> = [];
+
   // Track which lines we've already processed for blockquotes (to handle nested)
   const processedBlockquoteLines = new Set<number>();
 
@@ -3650,6 +3868,12 @@ function buildHiddenSyntax(state: EditorState) {
             });
           }
         }
+      }
+
+      // Handle HorizontalRule nodes - replace with widget
+      if (node.name === "HorizontalRule") {
+        const line = doc.lineAt(node.from);
+        horizontalRules.push({ from: line.from, to: line.to });
       }
 
       // Handle Link nodes - hide [ and ](url) portions, keep text visible
@@ -3779,17 +4003,30 @@ function buildHiddenSyntax(state: EditorState) {
     | { from: number; to: number; type: "hide" }
     | { from: number; to: number; type: "list"; isOrdered: boolean; num: number }
     | { from: number; to: number; type: "task"; checked: boolean; pos: number }
-    | { from: number; to: number; type: "blockquote"; level: number };
+    | { from: number; to: number; type: "blockquote"; level: number }
+    | { from: number; to: number; type: "hr" };
+
+  // Helper to check if a range overlaps with any horizontal rule
+  const overlapsWithHR = (from: number, to: number): boolean => {
+    return horizontalRules.some(hr => from >= hr.from && to <= hr.to);
+  };
+
+  // Filter out decorations that overlap with horizontal rules (HRs take precedence)
+  const filteredRangesToHide = rangesToHide.filter(r => !overlapsWithHR(r.from, r.to));
+  const filteredListMarkers = listMarkers.filter(m => !overlapsWithHR(m.from, m.to));
+  const filteredTaskMarkers = taskMarkers.filter(t => !overlapsWithHR(t.from, t.to));
+  const filteredBlockquoteMarkers = blockquoteMarkers.filter(b => !overlapsWithHR(b.from, b.to));
 
   const allDecorations: DecorationEntry[] = [
-    ...rangesToHide.map(r => ({ ...r, type: "hide" as const })),
-    ...listMarkers.map(m => ({ ...m, type: "list" as const })),
-    ...taskMarkers.map(t => ({ ...t, type: "task" as const })),
-    ...blockquoteMarkers.map(b => ({ ...b, type: "blockquote" as const })),
+    ...filteredRangesToHide.map(r => ({ ...r, type: "hide" as const })),
+    ...filteredListMarkers.map(m => ({ ...m, type: "list" as const })),
+    ...filteredTaskMarkers.map(t => ({ ...t, type: "task" as const })),
+    ...filteredBlockquoteMarkers.map(b => ({ ...b, type: "blockquote" as const })),
+    ...horizontalRules.map(hr => ({ ...hr, type: "hr" as const })),
   ];
 
-  // Sort by 'from' position (required by RangeSetBuilder)
-  allDecorations.sort((a, b) => a.from - b.from);
+  // Sort by 'from' position, then by 'to' position for stability (required by RangeSetBuilder)
+  allDecorations.sort((a, b) => a.from - b.from || a.to - b.to);
 
   // Now add to builder in sorted order
   const builder = new RangeSetBuilder<Decoration>();
@@ -3813,6 +4050,10 @@ function buildHiddenSyntax(state: EditorState) {
       const quoteEntry = entry as { from: number; to: number; type: "blockquote"; level: number };
       const widget = new BlockquoteBarWidget(quoteEntry.level);
       builder.add(entry.from, entry.to, Decoration.replace({ widget }));
+    } else if (entry.type === "hr") {
+      // Horizontal rule - use block widget decoration
+      const widget = new HorizontalRuleWidget();
+      builder.add(entry.from, entry.to, Decoration.replace({ widget, block: true }));
     }
   }
 
@@ -4355,6 +4596,21 @@ const theme = EditorView.theme({
   ".cm-blockquote-bar-segment": {
     opacity: "0.6",
   },
+  // Horizontal rule styles
+  ".cm-horizontal-rule": {
+    display: "block",
+    margin: "16px 0",
+    padding: "0",
+    lineHeight: "0",
+    userSelect: "none",
+  },
+  ".cm-horizontal-rule-line": {
+    border: "none",
+    borderTop: "1px solid #d1d5db",
+    margin: "0",
+    padding: "0",
+    height: "0",
+  },
   // Pending format styles - style the cursor/caret when in pending format mode
   "&.cm-pending-bold .cm-cursor": {
     borderLeftWidth: "3px",
@@ -4644,6 +4900,7 @@ const FIXTURES = [
   { name: "lists.md", label: "Lists" },
   { name: "checkboxes.md", label: "Checkboxes" },
   { name: "blockquotes.md", label: "Blockquotes" },
+  { name: "horizontal-rules.md", label: "Horizontal Rules" },
   { name: "links.md", label: "Links" },
   { name: "bold-asterisks.md", label: "Bold (**)" },
   { name: "bold-underscores.md", label: "Bold (__)" },
@@ -5177,9 +5434,12 @@ function App() {
 // BOOTSTRAP
 // ===========================================
 
-const root = document.getElementById("root");
-if (root) {
-  createRoot(root).render(<App />);
+// Only bootstrap when running in browser (not during tests)
+if (typeof document !== "undefined") {
+  const root = document.getElementById("root");
+  if (root) {
+    createRoot(root).render(<App />);
+  }
 }
 
 export { App };
@@ -5238,6 +5498,13 @@ export {
   handleArrowLeftOverBlankLines,
   handleArrowUp,
   handleArrowDown,
+
+  // Horizontal rule handlers
+  handleArrowDownPastHorizontalRule,
+  handleArrowUpPastHorizontalRule,
+  handleBackspaceAfterHorizontalRule,
+  handleDeleteBeforeHorizontalRule,
+  HR_REGEX,
 
   // Enter/Delete handlers
   handleEnter,
