@@ -17,12 +17,18 @@ import { createTestView, type TestView } from "./testUtils";
 import {
   toggleBoldOrEscape,
   toggleItalicOrEscape,
+  toggleCodeOrEscape,
+  toggleStrikethroughOrEscape,
   escapeFormatting,
   getFormattingContext,
   getFormattingContextAfterClosing,
   getFormattingContextBeforeOpening,
   isAtEndOfFormatting,
   getPendingFormat,
+  setHeadingLevel,
+  setHeading1,
+  setHeading2,
+  setHeading3,
 } from "../harness";
 
 describe("Formatting Handlers", () => {
@@ -66,17 +72,19 @@ describe("Formatting Handlers", () => {
     });
 
     it("wraps selection in bold", () => {
-      // Select "italic" text
-      testView = createTestView("*italic*", { hidesSyntax: false });
-      // Manually set selection from position 1 to 7 (the word "italic")
+      testView = createTestView("some text here", { hidesSyntax: false });
+      // Select "text" (positions 5-9)
       testView.view.dispatch({
-        selection: { anchor: 1, head: 7 },
+        selection: { anchor: 5, head: 9 },
       });
 
       const handled = toggleBoldOrEscape(testView.view);
 
       expect(handled).toBe(true);
-      expect(testView.view.state.doc.toString()).toBe("***italic***");
+      expect(testView.view.state.doc.toString()).toBe("some **text** here");
+      // Selection should be on the wrapped text
+      expect(testView.view.state.selection.main.anchor).toBe(7);
+      expect(testView.view.state.selection.main.head).toBe(11);
     });
   });
 
@@ -115,17 +123,186 @@ describe("Formatting Handlers", () => {
     });
 
     it("wraps selection in italic", () => {
-      // Select "bold" text
-      testView = createTestView("**bold**", { hidesSyntax: false });
-      // Manually set selection from position 2 to 6 (the word "bold")
+      testView = createTestView("some text here", { hidesSyntax: false });
+      // Select "text" (positions 5-9)
       testView.view.dispatch({
-        selection: { anchor: 2, head: 6 },
+        selection: { anchor: 5, head: 9 },
       });
 
       const handled = toggleItalicOrEscape(testView.view);
 
       expect(handled).toBe(true);
-      expect(testView.view.state.doc.toString()).toBe("***bold***");
+      expect(testView.view.state.doc.toString()).toBe("some *text* here");
+      // Selection should be on the wrapped text
+      expect(testView.view.state.selection.main.anchor).toBe(6);
+      expect(testView.view.state.selection.main.head).toBe(10);
+    });
+  });
+
+  describe("toggleCodeOrEscape", () => {
+    it("escapes code when at end of code content", () => {
+      testView = createTestView("`code|`", { hidesSyntax: false });
+
+      const handled = toggleCodeOrEscape(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.selection.main.head).toBe(6); // After "`code`"
+    });
+
+    it("removes code when in middle of code content", () => {
+      testView = createTestView("`con|tent`", { hidesSyntax: false });
+
+      const handled = toggleCodeOrEscape(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("content");
+      expect(testView.view.state.selection.main.head).toBe(3);
+    });
+
+    it("inserts empty code markers when not in code", () => {
+      testView = createTestView("tex|t", { hidesSyntax: false });
+
+      const handled = toggleCodeOrEscape(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("tex``t");
+      expect(testView.view.state.selection.main.head).toBe(4);
+    });
+
+    it("wraps selection in code", () => {
+      testView = createTestView("some text here", { hidesSyntax: false });
+      testView.view.dispatch({
+        selection: { anchor: 5, head: 9 },
+      });
+
+      const handled = toggleCodeOrEscape(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("some `text` here");
+      expect(testView.view.state.selection.main.anchor).toBe(6);
+      expect(testView.view.state.selection.main.head).toBe(10);
+    });
+  });
+
+  describe("toggleStrikethroughOrEscape", () => {
+    it("removes strikethrough when in middle of content", () => {
+      // Create strikethrough with ZWSP (as the editor does)
+      testView = createTestView("~~str|ike~~", { hidesSyntax: false });
+
+      const handled = toggleStrikethroughOrEscape(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("strike");
+      expect(testView.view.state.selection.main.head).toBe(3);
+    });
+
+    it("inserts empty strikethrough markers with ZWSP when not in strikethrough", () => {
+      testView = createTestView("tex|t", { hidesSyntax: false });
+
+      const handled = toggleStrikethroughOrEscape(testView.view);
+
+      expect(handled).toBe(true);
+      // Should have ZWSP between markers: ~~\u200B~~
+      const doc = testView.view.state.doc.toString();
+      expect(doc).toBe("tex~~\u200B~~t");
+      expect(testView.view.state.selection.main.head).toBe(5);
+    });
+
+    it("wraps selection in strikethrough", () => {
+      testView = createTestView("some text here", { hidesSyntax: false });
+      testView.view.dispatch({
+        selection: { anchor: 5, head: 9 },
+      });
+
+      const handled = toggleStrikethroughOrEscape(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("some ~~text~~ here");
+      expect(testView.view.state.selection.main.anchor).toBe(7);
+      expect(testView.view.state.selection.main.head).toBe(11);
+    });
+  });
+
+  describe("setHeadingLevel", () => {
+    it("adds heading to plain text", () => {
+      testView = createTestView("Hello| World", { hidesSyntax: false });
+
+      const handled = setHeadingLevel(testView.view, 2);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("## Hello World");
+      // Cursor should be adjusted for added "## " (3 chars)
+      expect(testView.view.state.selection.main.head).toBe(8);
+    });
+
+    it("toggles off same heading level", () => {
+      testView = createTestView("## Hello| World", { hidesSyntax: false });
+
+      const handled = setHeadingLevel(testView.view, 2);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("Hello World");
+      // Cursor adjusted for removed "## " (3 chars)
+      expect(testView.view.state.selection.main.head).toBe(5);
+    });
+
+    it("changes heading level", () => {
+      testView = createTestView("### Hello| World", { hidesSyntax: false });
+
+      const handled = setHeadingLevel(testView.view, 1);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("# Hello World");
+      // Cursor adjusted for changed marker (was "### " 4 chars, now "# " 2 chars)
+      // Original cursor at 9, content offset = 9 - 4 = 5, new pos = 2 + 5 = 7
+      expect(testView.view.state.selection.main.head).toBe(7);
+    });
+
+    it("does not convert list items", () => {
+      testView = createTestView("- List| item", { hidesSyntax: false });
+
+      const handled = setHeadingLevel(testView.view, 1);
+
+      expect(handled).toBe(false);
+      expect(testView.view.state.doc.toString()).toBe("- List item");
+    });
+
+    it("does not convert blockquotes", () => {
+      testView = createTestView("> Quote| text", { hidesSyntax: false });
+
+      const handled = setHeadingLevel(testView.view, 1);
+
+      expect(handled).toBe(false);
+      expect(testView.view.state.doc.toString()).toBe("> Quote text");
+    });
+  });
+
+  describe("setHeading wrapper functions", () => {
+    it("setHeading1 creates h1", () => {
+      testView = createTestView("Hello|", { hidesSyntax: false });
+
+      const handled = setHeading1(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("# Hello");
+    });
+
+    it("setHeading2 creates h2", () => {
+      testView = createTestView("Hello|", { hidesSyntax: false });
+
+      const handled = setHeading2(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("## Hello");
+    });
+
+    it("setHeading3 creates h3", () => {
+      testView = createTestView("Hello|", { hidesSyntax: false });
+
+      const handled = setHeading3(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("### Hello");
     });
   });
 

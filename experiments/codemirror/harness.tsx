@@ -494,213 +494,18 @@ function escapeFormatting(view: EditorView): boolean {
   return false;
 }
 
-/**
- * Remove bold formatting, preserving content
- */
-function removeBoldFormatting(view: EditorView, ctx: FormattingContext): boolean {
-  const content = view.state.doc.sliceString(ctx.contentFrom, ctx.contentTo);
-  const cursorOffset = view.state.selection.main.head - ctx.contentFrom;
-
-  view.dispatch({
-    changes: { from: ctx.from, to: ctx.to, insert: content },
-    selection: { anchor: ctx.from + Math.max(0, Math.min(cursorOffset, content.length)) },
-    scrollIntoView: true,
-  });
-  return true;
-}
+// Zero-width space used for strikethrough to prevent Lezer parsing issues
+const ZWSP = "\u200B";
 
 /**
- * Wrap selection in bold markers
+ * Generic helper to remove formatting markers, preserving content
+ * @param stripZWSP - If true, removes ZWSP characters (for strikethrough)
  */
-function wrapSelectionInBold(view: EditorView, from: number, to: number): boolean {
-  const selectedText = view.state.doc.sliceString(from, to);
-  view.dispatch({
-    changes: { from, to, insert: `**${selectedText}**` },
-    selection: { anchor: from + 2, head: from + 2 + selectedText.length },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Insert empty bold markers with cursor between
- */
-function insertEmptyBold(view: EditorView, pos: number): boolean {
-  view.dispatch({
-    changes: { from: pos, to: pos, insert: "****" },
-    selection: { anchor: pos + 2 },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Toggle bold - but if at end of bold, escape instead
- */
-function toggleBoldOrEscape(view: EditorView): boolean {
-  const ctx = getFormattingContext(view.state);
-  const sel = view.state.selection.main;
-
-  // If at end of bold, escape
-  if (ctx?.type === "strong" && isAtEndOfFormatting(view.state, ctx)) {
-    return escapeFormatting(view);
-  }
-
-  // If inside bold (not at end), remove formatting
-  if (ctx?.type === "strong") {
-    return removeBoldFormatting(view, ctx);
-  }
-
-  // If has selection, wrap it
-  if (!sel.empty) {
-    return wrapSelectionInBold(view, sel.from, sel.to);
-  }
-
-  // Empty cursor - insert empty markers
-  return insertEmptyBold(view, sel.head);
-}
-
-/**
- * Remove italic formatting, preserving content
- */
-function removeItalicFormatting(view: EditorView, ctx: FormattingContext): boolean {
-  const content = view.state.doc.sliceString(ctx.contentFrom, ctx.contentTo);
-  const cursorOffset = view.state.selection.main.head - ctx.contentFrom;
-
-  view.dispatch({
-    changes: { from: ctx.from, to: ctx.to, insert: content },
-    selection: { anchor: ctx.from + Math.max(0, Math.min(cursorOffset, content.length)) },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Wrap selection in italic markers
- */
-function wrapSelectionInItalic(view: EditorView, from: number, to: number): boolean {
-  const selectedText = view.state.doc.sliceString(from, to);
-  view.dispatch({
-    changes: { from, to, insert: `*${selectedText}*` },
-    selection: { anchor: from + 1, head: from + 1 + selectedText.length },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Insert empty italic markers with cursor between
- */
-function insertEmptyItalic(view: EditorView, pos: number): boolean {
-  view.dispatch({
-    changes: { from: pos, to: pos, insert: "**" },
-    selection: { anchor: pos + 1 },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Toggle italic - but if at end of italic, escape instead
- */
-function toggleItalicOrEscape(view: EditorView): boolean {
-  const ctx = getFormattingContext(view.state);
-  const sel = view.state.selection.main;
-
-  // If at end of italic, escape
-  if (ctx?.type === "emphasis" && isAtEndOfFormatting(view.state, ctx)) {
-    return escapeFormatting(view);
-  }
-
-  // If inside italic (not at end), remove formatting
-  if (ctx?.type === "emphasis") {
-    return removeItalicFormatting(view, ctx);
-  }
-
-  // If has selection, wrap it
-  if (!sel.empty) {
-    return wrapSelectionInItalic(view, sel.from, sel.to);
-  }
-
-  // Empty cursor - insert empty markers
-  return insertEmptyItalic(view, sel.head);
-}
-
-/**
- * Remove code formatting, preserving content
- */
-function removeCodeFormatting(view: EditorView, ctx: FormattingContext): boolean {
-  const content = view.state.doc.sliceString(ctx.contentFrom, ctx.contentTo);
-  const cursorOffset = view.state.selection.main.head - ctx.contentFrom;
-
-  view.dispatch({
-    changes: { from: ctx.from, to: ctx.to, insert: content },
-    selection: { anchor: ctx.from + Math.max(0, Math.min(cursorOffset, content.length)) },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Wrap selection in code markers
- */
-function wrapSelectionInCode(view: EditorView, from: number, to: number): boolean {
-  const selectedText = view.state.doc.sliceString(from, to);
-  view.dispatch({
-    changes: { from, to, insert: `\`${selectedText}\`` },
-    selection: { anchor: from + 1, head: from + 1 + selectedText.length },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Insert empty code markers with cursor between
- */
-function insertEmptyCode(view: EditorView, pos: number): boolean {
-  view.dispatch({
-    changes: { from: pos, to: pos, insert: "``" },
-    selection: { anchor: pos + 1 },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Toggle inline code - but if at end of code, escape instead
- */
-function toggleCodeOrEscape(view: EditorView): boolean {
-  const ctx = getFormattingContext(view.state);
-  const sel = view.state.selection.main;
-
-  // If at end of code, escape
-  if (ctx?.type === "code" && isAtEndOfFormatting(view.state, ctx)) {
-    return escapeFormatting(view);
-  }
-
-  // If inside code (not at end), remove formatting
-  if (ctx?.type === "code") {
-    return removeCodeFormatting(view, ctx);
-  }
-
-  // If has selection, wrap it
-  if (!sel.empty) {
-    return wrapSelectionInCode(view, sel.from, sel.to);
-  }
-
-  // Empty cursor - insert empty markers
-  return insertEmptyCode(view, sel.head);
-}
-
-/**
- * Remove strikethrough formatting, preserving content
- * Also removes any ZWSP characters that were inserted
- */
-function removeStrikethroughFormatting(view: EditorView, ctx: FormattingContext): boolean {
-  const ZWSP = "\u200B";
+function removeFormatting(view: EditorView, ctx: FormattingContext, stripZWSP = false): boolean {
   let content = view.state.doc.sliceString(ctx.contentFrom, ctx.contentTo);
-  // Remove ZWSP characters from content
-  content = content.replace(new RegExp(ZWSP, "g"), "");
+  if (stripZWSP) {
+    content = content.replace(new RegExp(ZWSP, "g"), "");
+  }
   const cursorOffset = view.state.selection.main.head - ctx.contentFrom;
 
   view.dispatch({
@@ -712,57 +517,85 @@ function removeStrikethroughFormatting(view: EditorView, ctx: FormattingContext)
 }
 
 /**
- * Wrap selection in strikethrough markers
+ * Generic helper to wrap selection in formatting markers
  */
-function wrapSelectionInStrikethrough(view: EditorView, from: number, to: number): boolean {
+function wrapSelectionInMarkers(
+  view: EditorView,
+  from: number,
+  to: number,
+  openMarker: string,
+  closeMarker: string
+): boolean {
   const selectedText = view.state.doc.sliceString(from, to);
   view.dispatch({
-    changes: { from, to, insert: `~~${selectedText}~~` },
-    selection: { anchor: from + 2, head: from + 2 + selectedText.length },
+    changes: { from, to, insert: `${openMarker}${selectedText}${closeMarker}` },
+    selection: { anchor: from + openMarker.length, head: from + openMarker.length + selectedText.length },
     scrollIntoView: true,
   });
   return true;
 }
 
 /**
- * Insert empty strikethrough markers with cursor between
- * Uses ZWSP to prevent Lezer from parsing ~~~~ as a code fence
+ * Generic helper to insert empty formatting markers with cursor between
+ * @param content - Optional content to insert between markers (e.g., ZWSP for strikethrough)
  */
-function insertEmptyStrikethrough(view: EditorView, pos: number): boolean {
-  const ZWSP = "\u200B";
+function insertEmptyMarkers(
+  view: EditorView,
+  pos: number,
+  openMarker: string,
+  closeMarker: string,
+  content = ""
+): boolean {
   view.dispatch({
-    changes: { from: pos, to: pos, insert: `~~${ZWSP}~~` },
-    selection: { anchor: pos + 2 },
+    changes: { from: pos, to: pos, insert: `${openMarker}${content}${closeMarker}` },
+    selection: { anchor: pos + openMarker.length },
     scrollIntoView: true,
   });
   return true;
 }
 
 /**
- * Toggle strikethrough - but if at end of strikethrough, escape instead
+ * Generic toggle function for inline formatting
+ * Handles escape at end, remove when inside, wrap selection, or insert empty
  */
-function toggleStrikethroughOrEscape(view: EditorView): boolean {
-  const ctx = getFormattingContext(view.state);
-  const sel = view.state.selection.main;
+function createToggleFormatter(
+  formattingType: FormattingContext["type"],
+  openMarker: string,
+  closeMarker: string,
+  options: { stripZWSP?: boolean; emptyContent?: string } = {}
+) {
+  return function (view: EditorView): boolean {
+    const ctx = getFormattingContext(view.state);
+    const sel = view.state.selection.main;
 
-  // If at end of strikethrough, escape
-  if (ctx?.type === "strikethrough" && isAtEndOfFormatting(view.state, ctx)) {
-    return escapeFormatting(view);
-  }
+    // If at end of this formatting type, escape
+    if (ctx?.type === formattingType && isAtEndOfFormatting(view.state, ctx)) {
+      return escapeFormatting(view);
+    }
 
-  // If inside strikethrough (not at end), remove formatting
-  if (ctx?.type === "strikethrough") {
-    return removeStrikethroughFormatting(view, ctx);
-  }
+    // If inside this formatting type (not at end), remove formatting
+    if (ctx?.type === formattingType) {
+      return removeFormatting(view, ctx, options.stripZWSP);
+    }
 
-  // If has selection, wrap it
-  if (!sel.empty) {
-    return wrapSelectionInStrikethrough(view, sel.from, sel.to);
-  }
+    // If has selection, wrap it
+    if (!sel.empty) {
+      return wrapSelectionInMarkers(view, sel.from, sel.to, openMarker, closeMarker);
+    }
 
-  // Empty cursor - insert empty markers
-  return insertEmptyStrikethrough(view, sel.head);
+    // Empty cursor - insert empty markers
+    return insertEmptyMarkers(view, sel.head, openMarker, closeMarker, options.emptyContent);
+  };
 }
+
+// Create toggle functions using the generic factory
+const toggleBoldOrEscape = createToggleFormatter("strong", "**", "**");
+const toggleItalicOrEscape = createToggleFormatter("emphasis", "*", "*");
+const toggleCodeOrEscape = createToggleFormatter("code", "`", "`");
+const toggleStrikethroughOrEscape = createToggleFormatter("strikethrough", "~~", "~~", {
+  stripZWSP: true,
+  emptyContent: ZWSP,
+});
 
 /**
  * Set heading level for current line
