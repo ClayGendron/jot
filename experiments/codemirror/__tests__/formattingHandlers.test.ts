@@ -19,6 +19,7 @@ import {
   toggleItalicOrEscape,
   toggleCodeOrEscape,
   toggleStrikethroughOrEscape,
+  toggleHighlightOrEscape,
   escapeFormatting,
   getFormattingContext,
   getFormattingContextAfterClosing,
@@ -29,6 +30,7 @@ import {
   setHeading1,
   setHeading2,
   setHeading3,
+  getHiddenRanges,
 } from "../harness";
 
 describe("Formatting Handlers", () => {
@@ -586,6 +588,14 @@ describe("Formatting Handlers", () => {
       expect(format).toBe("strikethrough");
     });
 
+    it("detects pending highlight ==|==", () => {
+      testView = createTestView("text ==|== more", { hidesSyntax: false });
+
+      const format = getPendingFormat(testView.view.state);
+
+      expect(format).toBe("highlight");
+    });
+
     it("returns null for regular text", () => {
       testView = createTestView("tex|t", { hidesSyntax: false });
 
@@ -609,6 +619,126 @@ describe("Formatting Handlers", () => {
       const format = getPendingFormat(testView.view.state);
 
       expect(format).toBe("italic");
+    });
+  });
+
+  describe("toggleHighlightOrEscape", () => {
+    it("removes highlight when in middle of content", () => {
+      testView = createTestView("==high|light==", { hidesSyntax: false });
+
+      const handled = toggleHighlightOrEscape(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("highlight");
+      expect(testView.view.state.selection.main.head).toBe(4);
+    });
+
+    it("inserts empty highlight markers when not in highlight", () => {
+      testView = createTestView("tex|t", { hidesSyntax: false });
+
+      const handled = toggleHighlightOrEscape(testView.view);
+
+      expect(handled).toBe(true);
+      const doc = testView.view.state.doc.toString();
+      expect(doc).toBe("tex====t");
+      expect(testView.view.state.selection.main.head).toBe(5);
+    });
+
+    it("wraps selection in highlight", () => {
+      testView = createTestView("some text here", { hidesSyntax: false });
+      testView.view.dispatch({
+        selection: { anchor: 5, head: 9 },
+      });
+
+      const handled = toggleHighlightOrEscape(testView.view);
+
+      expect(handled).toBe(true);
+      expect(testView.view.state.doc.toString()).toBe("some ==text== here");
+      expect(testView.view.state.selection.main.anchor).toBe(7);
+      expect(testView.view.state.selection.main.head).toBe(11);
+    });
+  });
+
+  describe("highlight formatting context", () => {
+    it("getFormattingContext detects highlight at cursor", () => {
+      testView = createTestView("==high|light==", { hidesSyntax: false });
+
+      const ctx = getFormattingContext(testView.view.state);
+
+      expect(ctx).not.toBeNull();
+      expect(ctx!.type).toBe("highlight");
+      expect(ctx!.contentFrom).toBe(2);
+      expect(ctx!.contentTo).toBe(11);
+    });
+
+    it("getFormattingContextAfterClosing detects highlight", () => {
+      testView = createTestView("==highlight==|", { hidesSyntax: false });
+
+      const ctx = getFormattingContextAfterClosing(testView.view.state);
+
+      expect(ctx).not.toBeNull();
+      expect(ctx!.type).toBe("highlight");
+    });
+
+    it("getFormattingContextBeforeOpening detects highlight", () => {
+      testView = createTestView("|==highlight==", { hidesSyntax: false });
+
+      const ctx = getFormattingContextBeforeOpening(testView.view.state);
+
+      expect(ctx).not.toBeNull();
+      expect(ctx!.type).toBe("highlight");
+    });
+
+    it("isAtEndOfFormatting returns true at end of highlight content", () => {
+      testView = createTestView("==highlight|==", { hidesSyntax: false });
+
+      const ctx = getFormattingContext(testView.view.state);
+      expect(ctx).not.toBeNull();
+      expect(isAtEndOfFormatting(testView.view.state, ctx!)).toBe(true);
+    });
+  });
+
+  describe("highlight hidden ranges", () => {
+    it("hides == markers in WYSIWYG mode", () => {
+      testView = createTestView("==highlighted==");
+
+      const ranges = getHiddenRanges(testView.view.state);
+      const inlineMarkers = ranges.filter(r => r.kind === "inline-marker");
+
+      // Should have 2 inline markers (opening == and closing ==)
+      expect(inlineMarkers.length).toBe(2);
+      expect(inlineMarkers[0].from).toBe(0);
+      expect(inlineMarkers[0].to).toBe(2);
+      expect(inlineMarkers[1].from).toBe(13);
+      expect(inlineMarkers[1].to).toBe(15);
+    });
+
+    it("hides == markers in nested formatting", () => {
+      testView = createTestView("**bold and ==highlight==**");
+
+      const ranges = getHiddenRanges(testView.view.state);
+      const inlineMarkers = ranges.filter(r => r.kind === "inline-marker");
+
+      // Should include both bold markers and highlight markers
+      const highlightMarkers = inlineMarkers.filter(
+        r => r.from === 11 && r.to === 13 || r.from === 22 && r.to === 24
+      );
+      expect(highlightMarkers.length).toBe(2);
+    });
+  });
+
+  describe("highlight backspace empty", () => {
+    it("deletes ==|== on backspace", () => {
+      testView = createTestView("text ==|== more", { hidesSyntax: false });
+
+      // Simulate what handleBackspaceEmptyFormatting does
+      const doc = testView.view.state.doc;
+      const pos = testView.view.state.selection.main.head;
+      const before2 = doc.sliceString(pos - 2, pos);
+      const after2 = doc.sliceString(pos, pos + 2);
+
+      expect(before2).toBe("==");
+      expect(after2).toBe("==");
     });
   });
 });

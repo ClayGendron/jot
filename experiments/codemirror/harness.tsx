@@ -15,8 +15,38 @@ import { EditorState, StateField, RangeSetBuilder, EditorSelection, Prec } from 
 import { EditorView, Decoration, keymap, WidgetType, rectangularSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
-import { syntaxTree } from "@codemirror/language";
+import { syntaxTree, syntaxHighlighting, HighlightStyle } from "@codemirror/language";
+import { languages } from "@codemirror/language-data";
+import { tags } from "@lezer/highlight";
 import { GFM } from "@lezer/markdown";
+import type { InlineContext, MarkdownConfig } from "@lezer/markdown";
+
+// ===========================================
+// HIGHLIGHT LEZER EXTENSION
+// ===========================================
+
+const HighlightDelim = { resolve: "Highlight", mark: "HighlightMark" };
+const HighlightPunctuation = /[!"#$%&'()*+,\-./:;<=>?@\[\\\]^_`{|}~\xA1\u2010-\u2027]/;
+
+const HighlightExtension: MarkdownConfig = {
+  defineNodes: [
+    { name: "Highlight", style: { "Highlight/...": tags.special(tags.content) } },
+    { name: "HighlightMark", style: tags.processingInstruction },
+  ],
+  parseInline: [{
+    name: "Highlight",
+    parse(cx: InlineContext, next: number, pos: number) {
+      if (next != 61 /* '=' */ || cx.char(pos + 1) != 61 || cx.char(pos + 2) == 61) return -1;
+      const before = cx.slice(pos - 1, pos), after = cx.slice(pos + 2, pos + 3);
+      const sBefore = /\s|^$/.test(before), sAfter = /\s|^$/.test(after);
+      const pBefore = HighlightPunctuation.test(before), pAfter = HighlightPunctuation.test(after);
+      return cx.addDelimiter(HighlightDelim, pos, pos + 2,
+        !sAfter && (!pAfter || sBefore || pBefore),
+        !sBefore && (!pBefore || sAfter || pAfter));
+    },
+    after: "Emphasis",
+  }],
+};
 
 // ===========================================
 // LIST MARKER WIDGETS
@@ -431,7 +461,7 @@ function clearPendingEscape() {
 // ===========================================
 
 interface FormattingContext {
-  type: "strong" | "emphasis" | "code" | "strikethrough";
+  type: "strong" | "emphasis" | "code" | "strikethrough" | "highlight";
   from: number; // Start of the formatted region (including markers)
   to: number; // End of the formatted region (including markers)
   contentFrom: number; // Start of content (after opening marker)
@@ -622,6 +652,7 @@ const FORMATTING_NODE_TYPES: Array<{
   { nodeName: "Emphasis", markName: "EmphasisMark", type: "emphasis" },
   { nodeName: "InlineCode", markName: "CodeMark", type: "code" },
   { nodeName: "Strikethrough", markName: "StrikethroughMark", type: "strikethrough" },
+  { nodeName: "Highlight", markName: "HighlightMark", type: "highlight" },
 ];
 
 function findFormattingByAST(
@@ -685,7 +716,7 @@ function isAtEndOfFormatting(state: EditorState, ctx: FormattingContext): boolea
   // Check characters ahead - might be ZWSP then marker, or just marker
   const nextChar = state.doc.sliceString(pos, pos + 1);
   const nextTwoChars = state.doc.sliceString(pos, pos + 2);
-  const markerChar = ctx.type === "code" ? "`" : ctx.type === "strikethrough" ? "~" : "*";
+  const markerChar = ctx.type === "code" ? "`" : ctx.type === "strikethrough" ? "~" : ctx.type === "highlight" ? "=" : "*";
 
   // If we're inside the formatting region
   if (pos >= ctx.contentFrom && pos < ctx.closingMarkerTo) {
@@ -822,6 +853,7 @@ const toggleStrikethroughOrEscape = createToggleFormatter("strikethrough", "~~",
   stripZWSP: true,
   emptyContent: ZWSP,
 });
+const toggleHighlightOrEscape = createToggleFormatter("highlight", "==", "==");
 
 /**
  * Set heading level for current line
@@ -955,6 +987,22 @@ function getFormattingContextAfterClosing(state: EditorState): FormattingContext
       if (openIdx !== -1) {
         result = {
           type: "strikethrough",
+          from: openIdx,
+          to: pos,
+          contentFrom: openIdx + 2,
+          contentTo: pos - 2,
+          closingMarkerFrom: pos - 2,
+          closingMarkerTo: pos,
+        };
+      }
+    }
+    // Check for ==...==
+    else if (pos >= 2 && text.slice(pos - 2, pos) === "==") {
+      const beforeClose = text.slice(0, pos - 2);
+      const openIdx = beforeClose.lastIndexOf("==");
+      if (openIdx !== -1) {
+        result = {
+          type: "highlight",
           from: openIdx,
           to: pos,
           contentFrom: openIdx + 2,
@@ -1987,6 +2035,16 @@ function handleDeleteEmptyFormatting(view: EditorView): boolean {
     return true;
   }
 
+  // Check for ==|== (highlight)
+  if (before2 === "==" && after2 === "==") {
+    view.dispatch({
+      changes: { from: pos - 2, to: pos + 2, insert: "" },
+      selection: { anchor: pos - 2 },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
   // Check for ~~|~~ (strikethrough) - may have ZWSP: ~~ZWSP|~~ or ~~|ZWSP~~
   if (before2 === "~~" && after2 === "~~") {
     view.dispatch({
@@ -2090,6 +2148,22 @@ function getFormattingContextBeforeOpening(state: EditorState): FormattingContex
       if (closeIdx !== -1) {
         result = {
           type: "strikethrough",
+          from: pos,
+          to: pos + 2 + closeIdx + 2,
+          contentFrom: pos + 2,
+          contentTo: pos + 2 + closeIdx,
+          closingMarkerFrom: pos + 2 + closeIdx,
+          closingMarkerTo: pos + 2 + closeIdx + 2,
+        };
+      }
+    }
+    // Check for ==
+    else if (text.slice(pos, pos + 2) === "==") {
+      const afterOpen = text.slice(pos + 2);
+      const closeIdx = afterOpen.indexOf("==");
+      if (closeIdx !== -1) {
+        result = {
+          type: "highlight",
           from: pos,
           to: pos + 2 + closeIdx + 2,
           contentFrom: pos + 2,
@@ -2463,10 +2537,11 @@ function expandSelectionToIncludeMarkers(state: EditorState): { from: number; to
   syntaxTree(state).iterate({
     enter(node) {
       if (node.name === "StrongEmphasis" || node.name === "Emphasis" ||
-          node.name === "InlineCode" || node.name === "Strikethrough") {
+          node.name === "InlineCode" || node.name === "Strikethrough" || node.name === "Highlight") {
         const markers: { from: number; to: number }[] = [];
         const markName = node.name === "InlineCode" ? "CodeMark" :
-                         node.name === "Strikethrough" ? "StrikethroughMark" : "EmphasisMark";
+                         node.name === "Strikethrough" ? "StrikethroughMark" :
+                         node.name === "Highlight" ? "HighlightMark" : "EmphasisMark";
 
         node.node.cursor().iterate((child) => {
           if (child.name === markName) {
@@ -2780,6 +2855,11 @@ const formattingEscapeKeymap = keymap.of([
     key: "Mod-Shift-s",
     run: bypassInCodeBlock(toggleStrikethroughOrEscape),
   },
+  // Cmd+Shift+H: toggle highlight or escape
+  {
+    key: "Mod-Shift-h",
+    run: bypassInCodeBlock(toggleHighlightOrEscape),
+  },
   // Cmd+1-6: set heading level
   {
     key: "Mod-1",
@@ -2890,6 +2970,21 @@ const formattingInputHandler = EditorView.inputHandler.of(
     if (insideCodeBlock) return false;
 
     // ===========================================
+    // HIGHLIGHT AUTO-CLOSE: Handle == specially
+    // Single = does nothing (no auto-close), but == creates ==|==
+    // ===========================================
+
+    if (text === "=" && prevChar === "=") {
+      const eqStart = from - 1;
+      view.dispatch({
+        changes: { from: eqStart, to: from, insert: "====" },
+        selection: { anchor: eqStart + 2 },
+        scrollIntoView: true,
+      });
+      return true;
+    }
+
+    // ===========================================
     // STRIKETHROUGH AUTO-CLOSE: Handle ~~ specially
     // Single ~ does nothing (no auto-close), but ~~ creates ~~|~~
     // ===========================================
@@ -2945,6 +3040,24 @@ const formattingInputHandler = EditorView.inputHandler.of(
           selection: { anchor: ctx.closingMarkerTo },
           scrollIntoView: true,
         });
+        return true;
+      }
+
+      // HIGHLIGHT: Need == to escape - hold first =, wait for second
+      if (text === "=" && ctx.type === "highlight") {
+        pendingEscape = {
+          char: "=",
+          pos: from,
+          formattingEnd: ctx.closingMarkerTo,
+          timeoutId: setTimeout(() => {
+            if (pendingEscape && pendingEscape.pos === from) {
+              view.dispatch({
+                changes: { from, to: from, insert: "=" },
+              });
+              pendingEscape = null;
+            }
+          }, 500),
+        };
         return true;
       }
 
@@ -3284,8 +3397,8 @@ function getHiddenRanges(state: EditorState): HiddenRange[] {
       // Skip nodes inside code blocks (but still process FencedCode itself)
       if (isInsideCodeBlock(node.from) && node.name !== "FencedCode") return;
 
-      // Inline markers: EmphasisMark, CodeMark, StrikethroughMark
-      if (node.name === "EmphasisMark" || node.name === "CodeMark" || node.name === "StrikethroughMark") {
+      // Inline markers: EmphasisMark, CodeMark, StrikethroughMark, HighlightMark
+      if (node.name === "EmphasisMark" || node.name === "CodeMark" || node.name === "StrikethroughMark" || node.name === "HighlightMark") {
         ranges.push({
           from: node.from,
           to: node.to,
@@ -3495,6 +3608,22 @@ function getHiddenRanges(state: EditorState): HiddenRange[] {
   // Strikethrough markers: ~~
   const strikeRegex = /~~(.+?)~~/g;
   while ((match = strikeRegex.exec(text)) !== null) {
+    const openFrom = match.index;
+    const openTo = match.index + 2;
+    const closeFrom = match.index + 2 + match[1].length;
+    const closeTo = closeFrom + 2;
+    if (isInsideCodeBlock(openFrom)) continue;
+    if (!isAlreadyCollected(openFrom, openTo)) {
+      ranges.push({ from: openFrom, to: openTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
+    }
+    if (!isAlreadyCollected(closeFrom, closeTo)) {
+      ranges.push({ from: closeFrom, to: closeTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
+    }
+  }
+
+  // Highlight markers: ==
+  const highlightRegex = /==([^=]+)==/g;
+  while ((match = highlightRegex.exec(text)) !== null) {
     const openFrom = match.index;
     const openTo = match.index + 2;
     const closeFrom = match.index + 2 + match[1].length;
@@ -3951,6 +4080,11 @@ function buildPendingFormattingDecorations(state: EditorState) {
     builder.add(pos - 1, pos, Decoration.replace({}));
     builder.add(pos, pos + 1, Decoration.replace({}));
   }
+  // Check for ==|== (highlight)
+  else if (before2 === "==" && after2 === "==") {
+    builder.add(pos - 2, pos, Decoration.replace({}));
+    builder.add(pos, pos + 2, Decoration.replace({}));
+  }
   // NOTE: We intentionally do NOT hide ~~|~~ (empty strikethrough)
   // When both sides of cursor are Decoration.replace(), CodeMirror
   // gets confused about text insertion position. Once user types content,
@@ -3962,7 +4096,7 @@ function buildPendingFormattingDecorations(state: EditorState) {
 /**
  * Get the pending format type at cursor position (for styling the cursor)
  */
-function getPendingFormat(state: EditorState): "bold" | "italic" | "code" | "strikethrough" | null {
+function getPendingFormat(state: EditorState): "bold" | "italic" | "code" | "strikethrough" | "highlight" | null {
   const doc = state.doc;
   const pos = state.selection.main.head;
 
@@ -3977,6 +4111,7 @@ function getPendingFormat(state: EditorState): "bold" | "italic" | "code" | "str
   if (before1 === "*" && after1 === "*" && before2 !== "**" && !after2.startsWith("**")) return "italic";
   if (before1 === "`" && after1 === "`") return "code";
   if (before2 === "~~" && after2 === "~~") return "strikethrough";
+  if (before2 === "==" && after2 === "==") return "highlight";
 
   return null;
 }
@@ -3995,7 +4130,7 @@ const pendingFormatTheme = EditorView.updateListener.of((update) => {
   const editorEl = update.view.dom;
 
   // Remove all pending format classes
-  editorEl.classList.remove("cm-pending-bold", "cm-pending-italic", "cm-pending-code", "cm-pending-strikethrough");
+  editorEl.classList.remove("cm-pending-bold", "cm-pending-italic", "cm-pending-code", "cm-pending-strikethrough", "cm-pending-highlight");
 
   // Add current pending format class
   if (format) {
@@ -4011,6 +4146,7 @@ const boldMark = Decoration.mark({ class: "cm-strong" });
 const italicMark = Decoration.mark({ class: "cm-em" });
 const codeMark = Decoration.mark({ class: "cm-inline-code" });
 const strikethroughMark = Decoration.mark({ class: "cm-strikethrough" });
+const highlightMark = Decoration.mark({ class: "cm-highlight" });
 const linkMark = Decoration.mark({ class: "cm-link" });
 
 // Heading marks for different levels
@@ -4142,6 +4278,29 @@ function buildStyleDecorations(state: EditorState) {
         }
       }
 
+      // Highlight
+      if (node.name === "Highlight") {
+        const content = node.node;
+        let contentFrom = node.from;
+        let contentTo = node.to;
+
+        let firstMark = true;
+        content.cursor().iterate((child) => {
+          if (child.name === "HighlightMark") {
+            if (firstMark) {
+              contentFrom = child.to;
+              firstMark = false;
+            } else {
+              contentTo = child.from;
+            }
+          }
+        });
+
+        if (contentFrom < contentTo) {
+          rangesToDecorate.push({ from: contentFrom, to: contentTo, decoration: highlightMark });
+        }
+      }
+
       // Link - style the text portion (between [ and ])
       if (node.name === "Link") {
         let textFrom = node.from;
@@ -4259,6 +4418,17 @@ function buildStyleDecorations(state: EditorState) {
     }
   }
 
+  // Highlight: ==...==
+  const highlightStyleRegex = /==([^=]+)==/g;
+  while ((match = highlightStyleRegex.exec(text)) !== null) {
+    if (isInsideCodeBlock(match.index)) continue;
+    const contentFrom = match.index + 2;
+    const contentTo = match.index + 2 + match[1].length;
+    if (!isAlreadyCollected(contentFrom, contentTo) && contentFrom < contentTo) {
+      rangesToDecorate.push({ from: contentFrom, to: contentTo, decoration: highlightMark });
+    }
+  }
+
   // Links: [text](url) - style the text portion
   const linkStyleRegex = /\[([^\]]*)]\([^)]*\)/g;
   while ((match = linkStyleRegex.exec(text)) !== null) {
@@ -4267,6 +4437,17 @@ function buildStyleDecorations(state: EditorState) {
     const textTo = match.index + 1 + match[1].length; // Before ]
     if (!isAlreadyCollected(textFrom, textTo) && textFrom < textTo) {
       rangesToDecorate.push({ from: textFrom, to: textTo, decoration: linkMark });
+    }
+  }
+
+  // Add line decorations for code block content lines (monospace + background)
+  for (const range of codeBlockRanges) {
+    const startLine = doc.lineAt(range.from);
+    const endLine = doc.lineAt(range.to);
+    // Decorate content lines only (skip opening/closing fence lines)
+    for (let lineNum = startLine.number + 1; lineNum < endLine.number; lineNum++) {
+      const line = doc.line(lineNum);
+      rangesToDecorate.push({ from: line.from, to: line.from, decoration: codeBlockLineDeco });
     }
   }
 
@@ -4292,6 +4473,59 @@ const styleField = StateField.define({
   },
   provide: (field) => EditorView.decorations.from(field),
 });
+
+// ===========================================
+// CODE BLOCK SYNTAX HIGHLIGHTING
+// ===========================================
+
+/**
+ * Highlight style for syntax tokens inside fenced code blocks.
+ * Uses a GitHub-light-inspired palette.
+ *
+ * Only defines styles for code-level tags (keyword, string, comment, etc.).
+ * Markdown-level tags (heading, emphasis) are intentionally omitted so the
+ * existing styleField decorations handle markdown styling exclusively.
+ */
+const codeHighlightStyle = HighlightStyle.define([
+  // Keywords
+  { tag: tags.keyword, color: "#d73a49" },
+  { tag: tags.controlKeyword, color: "#d73a49" },
+  { tag: tags.definitionKeyword, color: "#d73a49" },
+  { tag: tags.moduleKeyword, color: "#d73a49" },
+  { tag: tags.operatorKeyword, color: "#d73a49" },
+  { tag: tags.operator, color: "#d73a49" },
+  // Comments
+  { tag: tags.comment, color: "#6a737d", fontStyle: "italic" },
+  { tag: tags.lineComment, color: "#6a737d", fontStyle: "italic" },
+  { tag: tags.blockComment, color: "#6a737d", fontStyle: "italic" },
+  // Literals
+  { tag: tags.string, color: "#032f62" },
+  { tag: tags.number, color: "#005cc5" },
+  { tag: tags.bool, color: "#005cc5" },
+  { tag: tags.null, color: "#005cc5" },
+  // Identifiers
+  { tag: tags.variableName, color: "#24292e" },
+  { tag: tags.function(tags.variableName), color: "#6f42c1" },
+  { tag: tags.definition(tags.variableName), color: "#6f42c1" },
+  { tag: tags.typeName, color: "#e36209" },
+  { tag: tags.className, color: "#e36209" },
+  { tag: tags.propertyName, color: "#005cc5" },
+  // HTML/XML
+  { tag: tags.attributeName, color: "#6f42c1" },
+  { tag: tags.attributeValue, color: "#032f62" },
+  { tag: tags.tagName, color: "#22863a" },
+  // Other
+  { tag: tags.regexp, color: "#032f62" },
+  { tag: tags.escape, color: "#005cc5" },
+  { tag: tags.punctuation, color: "#24292e" },
+  { tag: tags.meta, color: "#6a737d" },
+]);
+
+/**
+ * Line decoration for code block content lines.
+ * Applied to each line between opening/closing fences.
+ */
+const codeBlockLineDeco = Decoration.line({ class: "cm-code-block-line" });
 
 // ===========================================
 // THEME
@@ -4320,6 +4554,11 @@ const theme = EditorView.theme({
   },
   ".cm-strikethrough": {
     textDecoration: "line-through",
+  },
+  ".cm-highlight": {
+    backgroundColor: "#fff3b0",
+    borderRadius: "2px",
+    padding: "1px 0",
   },
   ".cm-link": {
     color: "#0066cc",
@@ -4426,6 +4665,16 @@ const theme = EditorView.theme({
     margin: "0",
     paddingBottom: "8px",
   },
+  // Code block content lines (between fences)
+  ".cm-code-block-line": {
+    fontFamily: "'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace",
+    fontSize: "14px",
+    backgroundColor: "#f6f8fa",
+    borderLeft: "1px solid #e1e4e8",
+    borderRight: "1px solid #e1e4e8",
+    paddingLeft: "16px",
+    paddingRight: "16px",
+  },
   // Pending format styles - style the cursor/caret when in pending format mode
   "&.cm-pending-bold .cm-cursor": {
     borderLeftWidth: "3px",
@@ -4441,6 +4690,9 @@ const theme = EditorView.theme({
   },
   "&.cm-pending-strikethrough .cm-cursor": {
     opacity: "0.6",
+  },
+  "&.cm-pending-highlight .cm-cursor": {
+    backgroundColor: "#fff3b0",
   },
   ".cm-line": {
     padding: "0 4px",
@@ -4648,7 +4900,8 @@ function Editor({ initialContent, hidesSyntax, onChange }: EditorProps) {
       // Input handler FIRST to intercept before markdown parser
       formattingInputHandler,
       codeBlockRectangularSelection,
-      markdown({ extensions: [GFM] }),
+      markdown({ extensions: [GFM, HighlightExtension], codeLanguages: languages }),
+      syntaxHighlighting(codeHighlightStyle),
       history(),
       // Formatting escape keymap with HIGHEST priority to override markdown extension's list handling
       Prec.highest(formattingEscapeKeymap),
@@ -5275,6 +5528,7 @@ export {
   pendingFormatTheme,
   styleField,
   theme,
+  codeHighlightStyle,
 
   // Blockquote handlers
   handleEnterInBlockquote,
@@ -5328,6 +5582,7 @@ export {
   toggleItalicOrEscape,
   toggleCodeOrEscape,
   toggleStrikethroughOrEscape,
+  toggleHighlightOrEscape,
   escapeFormatting,
   setHeadingLevel,
   setHeading1,
@@ -5373,6 +5628,9 @@ export {
   getContentStartForLine,
   isAtEndOfFormatting,
   getPendingFormat,
+
+  // Lezer extensions
+  HighlightExtension,
 
   // Hidden Range model
   getHiddenRanges,

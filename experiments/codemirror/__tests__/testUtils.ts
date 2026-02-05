@@ -8,6 +8,8 @@
 import { EditorState, Prec } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
+import { syntaxHighlighting } from "@codemirror/language";
+import { languages } from "@codemirror/language-data";
 import { GFM } from "@lezer/markdown";
 import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
 
@@ -22,6 +24,8 @@ import {
   pendingFormatTheme,
   styleField,
   theme,
+  codeHighlightStyle,
+  HighlightExtension,
 } from "../harness";
 
 export interface TestView {
@@ -81,7 +85,8 @@ export function createTestView(
   const extensions = [
     formattingInputHandler,
     codeBlockRectangularSelection,
-    markdown({ extensions: [GFM] }),
+    markdown({ extensions: [GFM, HighlightExtension], codeLanguages: languages }),
+    syntaxHighlighting(codeHighlightStyle),
     history(),
     Prec.highest(formattingEscapeKeymap),
     keymap.of([...defaultKeymap, ...historyKeymap]),
@@ -177,7 +182,7 @@ export function createMinimalView(docWithCursor: string): TestView {
     state: EditorState.create({
       doc,
       selection: { anchor: pos },
-      extensions: [markdown({ extensions: [GFM] })],
+      extensions: [markdown({ extensions: [GFM, HighlightExtension] })],
     }),
   });
 
