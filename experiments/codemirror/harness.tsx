@@ -691,6 +691,160 @@ function findFormattingByAST(
 }
 
 /**
+ * Find ALL formatting regions of a specific type that overlap with a range.
+ * Only returns contexts fully contained within [rangeFrom, rangeTo].
+ * Uses AST walk with regex fallback, following the codebase pattern.
+ */
+function findAllFormattingOfTypeInRange(
+  state: EditorState,
+  formattingType: FormattingContext["type"],
+  rangeFrom: number,
+  rangeTo: number,
+): FormattingContext[] {
+  const results: FormattingContext[] = [];
+  const targetNodeType = FORMATTING_NODE_TYPES.find(ft => ft.type === formattingType);
+  if (!targetNodeType) return results;
+
+  // AST walk
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (node.name === targetNodeType.nodeName && node.from >= rangeFrom && node.to <= rangeTo) {
+        const markers: { from: number; to: number }[] = [];
+        node.node.cursor().iterate((child) => {
+          if (child.name === targetNodeType.markName) {
+            markers.push({ from: child.from, to: child.to });
+          }
+        });
+        if (markers.length >= 2) {
+          results.push({
+            type: targetNodeType.type as FormattingContext["type"],
+            from: node.from,
+            to: node.to,
+            contentFrom: markers[0].to,
+            contentTo: markers[markers.length - 1].from,
+            closingMarkerFrom: markers[markers.length - 1].from,
+            closingMarkerTo: markers[markers.length - 1].to,
+          });
+        }
+      }
+    },
+  });
+
+  // Regex fallback for patterns the parser misses
+  const regexMap: Record<string, RegExp> = {
+    strong: /\*\*(.+?)\*\*/g,
+    emphasis: /(?<!\*)\*([^*]+?)\*(?!\*)/g,
+    code: /`([^`]+?)`/g,
+    strikethrough: /~~(.+?)~~/g,
+    highlight: /==([^=]+)==/g,
+  };
+
+  const markerLenMap: Record<string, number> = {
+    strong: 2, emphasis: 1, code: 1, strikethrough: 2, highlight: 2,
+  };
+
+  const regex = regexMap[formattingType];
+  const markerLen = markerLenMap[formattingType];
+  if (regex) {
+    const text = state.doc.toString();
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      const nodeFrom = match.index;
+      const nodeTo = match.index + match[0].length;
+      // Only fully contained in range
+      if (nodeFrom >= rangeFrom && nodeTo <= rangeTo) {
+        const alreadyFound = results.some(r => r.from === nodeFrom && r.to === nodeTo);
+        if (!alreadyFound) {
+          results.push({
+            type: formattingType,
+            from: nodeFrom,
+            to: nodeTo,
+            contentFrom: nodeFrom + markerLen,
+            contentTo: nodeTo - markerLen,
+            closingMarkerFrom: nodeTo - markerLen,
+            closingMarkerTo: nodeTo,
+          });
+        }
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Check if the entire selection range is covered by formatting of the given type.
+ * For multi-line selections, checks each non-empty line independently.
+ */
+function isEntireSelectionFormatted(
+  state: EditorState,
+  formattingType: FormattingContext["type"],
+  selFrom: number,
+  selTo: number,
+): boolean {
+  const doc = state.doc;
+  const startLine = doc.lineAt(selFrom);
+  const endLine = doc.lineAt(selTo);
+
+  // Multi-line: check each non-empty line independently
+  if (startLine.number !== endLine.number) {
+    for (let lineNum = startLine.number; lineNum <= endLine.number; lineNum++) {
+      const line = doc.line(lineNum);
+      // Clip to selection boundaries
+      const lineFrom = Math.max(line.from, selFrom);
+      const lineTo = Math.min(line.to, selTo);
+      if (lineFrom >= lineTo) continue; // empty or out of range
+
+      const lineText = doc.sliceString(lineFrom, lineTo).trim();
+      if (lineText === "") continue; // skip whitespace-only
+
+      const contexts = findAllFormattingOfTypeInRange(state, formattingType, lineFrom, lineTo);
+      if (contexts.length === 0) return false;
+
+      // Check coverage: union of contexts must cover [lineFrom, lineTo]
+      const sorted = [...contexts].sort((a, b) => a.from - b.from);
+      let covered = lineFrom;
+      for (const ctx of sorted) {
+        if (ctx.from > covered) return false;
+        covered = Math.max(covered, ctx.to);
+      }
+      if (covered < lineTo) return false;
+    }
+    return true;
+  }
+
+  // Single-line: check coverage of the range
+  const contexts = findAllFormattingOfTypeInRange(state, formattingType, selFrom, selTo);
+  if (contexts.length === 0) return false;
+
+  const sorted = [...contexts].sort((a, b) => a.from - b.from);
+  let covered = selFrom;
+  for (const ctx of sorted) {
+    if (ctx.from > covered) return false;
+    covered = Math.max(covered, ctx.to);
+  }
+  return covered >= selTo;
+}
+
+/**
+ * Strip all marker pairs of a specific formatting type from text.
+ * Only removes the matching type — other formatting is preserved.
+ */
+function stripMarkersOfType(text: string, formattingType: FormattingContext["type"]): string {
+  const regexMap: Record<string, RegExp> = {
+    strong: /\*\*(.+?)\*\*/g,
+    emphasis: /(?<!\*)\*([^*]+?)\*(?!\*)/g,
+    code: /`([^`]+?)`/g,
+    strikethrough: /~~(.+?)~~/g,
+    highlight: /==([^=]+)==/g,
+  };
+
+  const regex = regexMap[formattingType];
+  if (!regex) return text;
+  return text.replace(regex, "$1");
+}
+
+/**
  * Find the formatting context at cursor position
  * Returns info about the formatted region if cursor is inside one
  */
@@ -774,25 +928,6 @@ function removeFormatting(view: EditorView, ctx: FormattingContext, stripZWSP = 
 }
 
 /**
- * Generic helper to wrap selection in formatting markers
- */
-function wrapSelectionInMarkers(
-  view: EditorView,
-  from: number,
-  to: number,
-  openMarker: string,
-  closeMarker: string
-): boolean {
-  const selectedText = view.state.doc.sliceString(from, to);
-  view.dispatch({
-    changes: { from, to, insert: `${openMarker}${selectedText}${closeMarker}` },
-    selection: { anchor: from + openMarker.length, head: from + openMarker.length + selectedText.length },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
  * Generic helper to insert empty formatting markers with cursor between
  * @param content - Optional content to insert between markers (e.g., ZWSP for strikethrough)
  */
@@ -812,6 +947,193 @@ function insertEmptyMarkers(
 }
 
 /**
+ * Remove all formatting of a specific type within a selection range.
+ * Deletes only the marker characters (opening and closing) while preserving content.
+ * Dispatches a single transaction for atomicity and undo support.
+ */
+function removeFormattingFromRange(
+  view: EditorView,
+  from: number,
+  to: number,
+  formattingType: FormattingContext["type"],
+  options: { stripZWSP?: boolean } = {}
+): boolean {
+  const contexts = findAllFormattingOfTypeInRange(view.state, formattingType, from, to);
+  if (contexts.length === 0) return false;
+
+  // Collect all marker ranges to delete (opening and closing separately)
+  const markerDeletions: Array<{ from: number; to: number; insert: string }> = [];
+  for (const ctx of contexts) {
+    // Opening marker
+    markerDeletions.push({ from: ctx.from, to: ctx.contentFrom, insert: "" });
+    // Closing marker
+    let closingFrom = ctx.closingMarkerFrom;
+    let closingTo = ctx.closingMarkerTo;
+    // Strip ZWSP adjacent to closing marker for strikethrough
+    if (options.stripZWSP) {
+      const beforeClosing = view.state.doc.sliceString(closingFrom - 1, closingFrom);
+      if (beforeClosing === ZWSP) {
+        closingFrom -= 1;
+      }
+    }
+    markerDeletions.push({ from: closingFrom, to: closingTo, insert: "" });
+  }
+
+  // Sort by from position (CodeMirror requires sorted, non-overlapping changes)
+  markerDeletions.sort((a, b) => a.from - b.from);
+
+  // Use CodeMirror's change mapping to compute new selection positions
+  const changeSet = view.state.changes(markerDeletions);
+  const newFrom = changeSet.mapPos(from);
+  const newTo = changeSet.mapPos(to);
+
+  view.dispatch({
+    changes: markerDeletions,
+    selection: { anchor: newFrom, head: newTo },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Apply formatting to a range, handling:
+ * 1. Strip existing same-type markers within the selection
+ * 2. Split by lines and format each independently (multi-line)
+ * 3. Skip empty lines
+ */
+function applyFormattingToRange(
+  view: EditorView,
+  from: number,
+  to: number,
+  formattingType: FormattingContext["type"],
+  openMarker: string,
+  closeMarker: string,
+  options: { stripZWSP?: boolean; emptyContent?: string } = {}
+): boolean {
+  let selectedText = view.state.doc.sliceString(from, to);
+
+  // Strip existing markers of this type
+  selectedText = stripMarkersOfType(selectedText, formattingType);
+  if (options.stripZWSP) {
+    selectedText = selectedText.replace(new RegExp(ZWSP, "g"), "");
+  }
+
+  const lines = selectedText.split("\n");
+
+  let result: string;
+  if (lines.length === 1) {
+    // Single line: just wrap, select content between markers
+    result = `${openMarker}${selectedText}${closeMarker}`;
+    view.dispatch({
+      changes: { from, to, insert: result },
+      selection: { anchor: from + openMarker.length, head: from + openMarker.length + selectedText.length },
+      scrollIntoView: true,
+    });
+  } else {
+    // Multi-line: wrap each non-empty line independently, select whole result
+    result = lines.map(line => {
+      if (line.trim() === "") return line; // preserve empty lines as-is
+      return `${openMarker}${line}${closeMarker}`;
+    }).join("\n");
+    view.dispatch({
+      changes: { from, to, insert: result },
+      selection: { anchor: from, head: from + result.length },
+      scrollIntoView: true,
+    });
+  }
+  return true;
+}
+
+/**
+ * Find a formatting context of a SPECIFIC type that contains the given range.
+ * Unlike findFormattingByAST (which returns the last match across all types),
+ * this searches only for the target type. Essential for nested formatting
+ * like ***bold+italic*** where both Emphasis and StrongEmphasis contain the selection.
+ */
+function findContainingFormattingOfType(
+  state: EditorState,
+  formattingType: FormattingContext["type"],
+  from: number,
+  to: number,
+): FormattingContext | null {
+  const targetNodeType = FORMATTING_NODE_TYPES.find(ft => ft.type === formattingType);
+  if (!targetNodeType) return null;
+
+  let result: FormattingContext | null = null;
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (node.name === targetNodeType.nodeName && node.from <= from && node.to >= to) {
+        const markers: { from: number; to: number }[] = [];
+        node.node.cursor().iterate((child) => {
+          if (child.name === targetNodeType.markName) {
+            markers.push({ from: child.from, to: child.to });
+          }
+        });
+        if (markers.length >= 2) {
+          result = {
+            type: formattingType,
+            from: node.from,
+            to: node.to,
+            contentFrom: markers[0].to,
+            contentTo: markers[markers.length - 1].from,
+            closingMarkerFrom: markers[markers.length - 1].from,
+            closingMarkerTo: markers[markers.length - 1].to,
+          };
+        }
+      }
+    },
+  });
+  return result;
+}
+
+/**
+ * Smart formatting toggle for ranged selections.
+ *
+ * Priority:
+ * 1. Selection is INSIDE a containing formatting context → remove it (toggle off)
+ * 2. Selection spans multiple contexts covering entire range → remove all (toggle off)
+ * 3. Otherwise → strip existing same-type markers, apply per-line (toggle on)
+ */
+function toggleFormattingOnSelection(
+  view: EditorView,
+  from: number,
+  to: number,
+  formattingType: FormattingContext["type"],
+  openMarker: string,
+  closeMarker: string,
+  options: { stripZWSP?: boolean; emptyContent?: string } = {}
+): boolean {
+  const state = view.state;
+
+  // 1. Check if selection is inside a containing formatting context of this type.
+  //    Uses type-specific search so ***bold+italic*** correctly finds the right layer.
+  const containingCtx = findContainingFormattingOfType(state, formattingType, from, to);
+  if (containingCtx) {
+    let content = state.doc.sliceString(containingCtx.contentFrom, containingCtx.contentTo);
+    if (options.stripZWSP) {
+      content = content.replace(new RegExp(ZWSP, "g"), "");
+    }
+    // Adjust selection positions: markers are removed, content shifts to ctx.from
+    const selAnchor = containingCtx.from + Math.max(0, from - containingCtx.contentFrom);
+    const selHead = containingCtx.from + Math.min(content.length, to - containingCtx.contentFrom);
+    view.dispatch({
+      changes: { from: containingCtx.from, to: containingCtx.to, insert: content },
+      selection: { anchor: selAnchor, head: selHead },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  // 2. Check if entire selection is covered by formatting of this type → remove all
+  if (isEntireSelectionFormatted(state, formattingType, from, to)) {
+    return removeFormattingFromRange(view, from, to, formattingType, options);
+  }
+
+  // 3. Strip existing same-type markers and apply per-line
+  return applyFormattingToRange(view, from, to, formattingType, openMarker, closeMarker, options);
+}
+
+/**
  * Generic toggle function for inline formatting
  * Handles escape at end, remove when inside, wrap selection, or insert empty
  */
@@ -822,8 +1144,15 @@ function createToggleFormatter(
   options: { stripZWSP?: boolean; emptyContent?: string } = {}
 ) {
   return function (view: EditorView): boolean {
-    const ctx = getFormattingContext(view.state);
     const sel = view.state.selection.main;
+
+    // Ranged selection: smart toggle (must check BEFORE formatting context)
+    if (!sel.empty) {
+      return toggleFormattingOnSelection(view, sel.from, sel.to, formattingType, openMarker, closeMarker, options);
+    }
+
+    // Collapsed cursor: check formatting context
+    const ctx = getFormattingContext(view.state);
 
     // If at end of this formatting type, escape
     if (ctx?.type === formattingType && isAtEndOfFormatting(view.state, ctx)) {
@@ -833,11 +1162,6 @@ function createToggleFormatter(
     // If inside this formatting type (not at end), remove formatting
     if (ctx?.type === formattingType) {
       return removeFormatting(view, ctx, options.stripZWSP);
-    }
-
-    // If has selection, wrap it
-    if (!sel.empty) {
-      return wrapSelectionInMarkers(view, sel.from, sel.to, openMarker, closeMarker);
     }
 
     // Empty cursor - insert empty markers
@@ -5584,6 +5908,9 @@ export {
   toggleStrikethroughOrEscape,
   toggleHighlightOrEscape,
   escapeFormatting,
+  findAllFormattingOfTypeInRange,
+  isEntireSelectionFormatted,
+  stripMarkersOfType,
   setHeadingLevel,
   setHeading1,
   setHeading2,
