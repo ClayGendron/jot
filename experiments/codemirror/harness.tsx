@@ -205,6 +205,742 @@ class CodeBlockCloseWidget extends WidgetType {
 }
 
 // ===========================================
+// TABLE BLOCK WIDGET
+// ===========================================
+
+/**
+ * Widget that renders a block-level HTML table for GFM tables.
+ * Cells are contentEditable and sync directly to markdown.
+ */
+class TableBlockWidget extends WidgetType {
+  constructor(
+    readonly tableFrom: number,
+    readonly initialColumnCount: number,  // For eq() comparison only
+    readonly initialRowCount: number      // For eq() comparison only
+  ) {
+    super();
+  }
+
+  eq(other: TableBlockWidget) {
+    return this.tableFrom === other.tableFrom
+      && this.initialColumnCount === other.initialColumnCount
+      && this.initialRowCount === other.initialRowCount;
+  }
+
+  /** Re-parse table on every access to avoid stale data */
+  private getTableInfo(view: EditorView): TableInfo | null {
+    return getCurrentTableInfo(view, this.tableFrom);
+  }
+
+  updateDOM(dom: HTMLElement, view: EditorView): boolean {
+    // 1. Capture focus state BEFORE any changes
+    const doc = view.dom.ownerDocument;
+    const activeEl = doc.activeElement;
+    let savedFocusRow: string | null = null;
+    let savedFocusCol: string | null = null;
+    let savedSelectionStart = 0;
+    let savedSelectionEnd = 0;
+
+    if (activeEl && dom.contains(activeEl)) {
+      const cell = activeEl.closest("[data-row][data-col]") as HTMLElement | null;
+      if (cell) {
+        savedFocusRow = cell.dataset.row ?? null;
+        savedFocusCol = cell.dataset.col ?? null;
+        // Save cursor position within cell
+        const sel = doc.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          savedSelectionStart = range.startOffset;
+          savedSelectionEnd = range.endOffset;
+        }
+      }
+    }
+
+    // 2. Re-parse table info fresh
+    const tableInfo = this.getTableInfo(view);
+    if (!tableInfo) return false;
+
+    this.applyTableWidth(dom, view);
+    const table = dom.querySelector("table.cm-table");
+    if (!table) return false;
+
+    const colCount = tableInfo.columnCount;
+    const headerCells = Array.from(table.querySelectorAll("thead th"));
+    const bodyRows = Array.from(table.querySelectorAll("tbody tr"));
+
+    if (headerCells.length !== colCount) return false;
+    if (bodyRows.length !== tableInfo.bodyRows.length) return false;
+
+    // 3. Update table cells (skip active cell in raw mode)
+    for (let col = 0; col < colCount; col++) {
+      const cell = headerCells[col] as HTMLElement;
+      const raw = tableInfo.headerCells[col]?.content ?? "";
+      const isFocused = cell.dataset.row === savedFocusRow && cell.dataset.col === savedFocusCol;
+      if (isFocused && cell.dataset.mode === "raw") {
+        // Don't overwrite - just update dataset
+        cell.dataset.raw = raw;
+      } else {
+        this.renderCell(cell, raw);
+      }
+    }
+
+    for (let rowIdx = 0; rowIdx < tableInfo.bodyRows.length; rowIdx++) {
+      const row = tableInfo.bodyRows[rowIdx];
+      const rowCells = Array.from(bodyRows[rowIdx].querySelectorAll("td"));
+      if (rowCells.length !== colCount) return false;
+      for (let col = 0; col < colCount; col++) {
+        const cell = rowCells[col] as HTMLElement;
+        const raw = row[col]?.content ?? "";
+        const isFocused = cell.dataset.row === String(rowIdx + 1) && cell.dataset.col === String(col);
+        if (isFocused && cell.dataset.mode === "raw") {
+          cell.dataset.raw = raw;
+        } else {
+          this.renderCell(cell, raw);
+        }
+      }
+    }
+
+    // 4. Restore focus if we had it
+    if (savedFocusRow !== null && savedFocusCol !== null) {
+      const targetCell = dom.querySelector(
+        `[data-row="${savedFocusRow}"][data-col="${savedFocusCol}"]`
+      ) as HTMLElement | null;
+
+      if (targetCell) {
+        targetCell.focus();
+        // Restore cursor position
+        const sel = doc.getSelection();
+        if (sel && targetCell.firstChild) {
+          try {
+            const range = doc.createRange();
+            const textNode = targetCell.firstChild;
+            const maxOffset = textNode.textContent?.length ?? 0;
+            range.setStart(textNode, Math.min(savedSelectionStart, maxOffset));
+            range.setEnd(textNode, Math.min(savedSelectionEnd, maxOffset));
+            sel.removeAllRanges();
+            sel.addRange(range);
+          } catch {
+            // Fallback: just focus the cell
+          }
+        }
+      }
+    }
+
+    return true;
+  }
+
+  toDOM(view: EditorView) {
+    const tableInfo = this.getTableInfo(view);
+    if (!tableInfo) {
+      // Fallback: empty div if table can't be parsed
+      const wrapper = document.createElement("div");
+      wrapper.className = "cm-table-block";
+      return wrapper;
+    }
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "cm-table-block";
+    this.applyTableWidth(wrapper, view);
+
+    // Create toolbar container
+    const toolbar = this.createToolbar(view);
+    wrapper.appendChild(toolbar);
+
+    const table = document.createElement("table");
+    table.className = "cm-table";
+
+    const colCount = tableInfo.columnCount;
+
+    // Header
+    const thead = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    headerRow.className = "cm-table-header-row";
+
+    for (let col = 0; col < colCount; col++) {
+      const cell = tableInfo.headerCells[col];
+      const th = document.createElement("th");
+      th.className = "cm-table-header-cell";
+      th.contentEditable = "true";
+      th.dataset.raw = cell?.content ?? "";
+      th.dataset.row = "0";
+      th.dataset.col = String(col);
+      // Apply column alignment from markdown
+      this.applyColumnAlignment(th, col, tableInfo);
+      this.attachCellHandlers(th, view);
+      this.renderCell(th);
+      headerRow.appendChild(th);
+    }
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+
+    // Body
+    const tbody = document.createElement("tbody");
+    for (let rowIdx = 0; rowIdx < tableInfo.bodyRows.length; rowIdx++) {
+      const row = tableInfo.bodyRows[rowIdx];
+      const tr = document.createElement("tr");
+      tr.className = rowIdx % 2 === 0
+        ? "cm-table-body-row cm-table-row-odd"
+        : "cm-table-body-row cm-table-row-even";
+
+      for (let col = 0; col < colCount; col++) {
+        const cell = row[col];
+        const td = document.createElement("td");
+        td.className = "cm-table-body-cell";
+        td.contentEditable = "true";
+        td.dataset.raw = cell?.content ?? "";
+        td.dataset.row = String(rowIdx + 1);
+        td.dataset.col = String(col);
+        // Apply column alignment from markdown
+        this.applyColumnAlignment(td, col, tableInfo);
+        this.attachCellHandlers(td, view);
+        this.renderCell(td);
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    wrapper.appendChild(table);
+
+    return wrapper;
+  }
+
+  private createToolbar(view: EditorView): HTMLElement {
+    const toolbar = document.createElement("div");
+    toolbar.className = "cm-table-toolbar";
+
+    // Row controls
+    const rowGroup = document.createElement("div");
+    rowGroup.className = "cm-table-toolbar-group";
+
+    const addRowBtn = this.createToolbarButton("+ Row", "Add row", () => {
+      const info = getCurrentTableInfo(view, this.tableFrom);
+      if (info) addTableRow(view, info);
+    });
+
+    const removeRowBtn = this.createToolbarButton("− Row", "Remove row", () => {
+      const info = getCurrentTableInfo(view, this.tableFrom);
+      if (info) removeTableRow(view, info);
+    });
+
+    rowGroup.appendChild(addRowBtn);
+    rowGroup.appendChild(removeRowBtn);
+
+    // Column controls
+    const colGroup = document.createElement("div");
+    colGroup.className = "cm-table-toolbar-group";
+
+    const addColBtn = this.createToolbarButton("+ Column", "Add column", () => {
+      const info = getCurrentTableInfo(view, this.tableFrom);
+      if (info) addTableColumn(view, info);
+    });
+
+    const removeColBtn = this.createToolbarButton("− Column", "Remove column", () => {
+      const info = getCurrentTableInfo(view, this.tableFrom);
+      if (info) removeTableColumn(view, info);
+    });
+
+    colGroup.appendChild(addColBtn);
+    colGroup.appendChild(removeColBtn);
+
+    toolbar.appendChild(rowGroup);
+    toolbar.appendChild(colGroup);
+
+    return toolbar;
+  }
+
+  private createToolbarButton(
+    label: string,
+    title: string,
+    onClick: () => void
+  ): HTMLButtonElement {
+    const btn = document.createElement("button");
+    btn.className = "cm-table-toolbar-btn";
+    btn.textContent = label;
+    btn.title = title;
+    btn.type = "button";
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onClick();
+    });
+    // Prevent focus from moving to button
+    btn.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+    });
+    return btn;
+  }
+
+  attachCellHandlers(cell: HTMLElement, view: EditorView) {
+    let updatePending = false;
+
+    const syncToMarkdown = () => {
+      if (updatePending) return;
+      updatePending = true;
+
+      requestAnimationFrame(() => {
+        updatePending = false;
+        const row = parseInt(cell.dataset.row ?? "", 10);
+        const col = parseInt(cell.dataset.col ?? "", 10);
+        if (Number.isNaN(row) || Number.isNaN(col)) return;
+
+        const newContent = cell.dataset.raw ?? cell.textContent ?? "";
+
+        // Re-parse table to get current state
+        const currentInfo = getCurrentTableInfo(view, this.tableFrom);
+        if (!currentInfo) return;
+
+        // Update the cell content
+        const headers = currentInfo.headerCells.map(c => c.content);
+        const rows = currentInfo.bodyRows.map(r => r.map(c => c.content));
+
+        if (row === 0) {
+          headers[col] = newContent;
+        } else if (rows[row - 1]) {
+          rows[row - 1][col] = newContent;
+        }
+
+        // Generate new markdown and dispatch
+        const newMd = generateTableMarkdown(headers, rows, currentInfo.columnAlignments, currentInfo.linePrefix);
+        view.dispatch({
+          changes: { from: currentInfo.from, to: currentInfo.to, insert: newMd }
+        });
+      });
+    };
+
+    cell.addEventListener("input", () => {
+      cell.dataset.raw = cell.textContent ?? "";
+      cell.dataset.mode = "raw";
+      syncToMarkdown();
+    });
+    cell.addEventListener("focus", () => {
+      this.setCellRaw(cell);
+    });
+    cell.addEventListener("blur", () => {
+      syncToMarkdown();
+      // Delay render to allow focus to move
+      requestAnimationFrame(() => {
+        // Only render if cell is no longer focused
+        if (cell !== cell.ownerDocument.activeElement) {
+          this.renderCell(cell);
+        }
+      });
+    });
+
+    // Keyboard navigation
+    cell.addEventListener("keydown", (e) => {
+      const table = cell.closest("table")!;
+      const cells = Array.from(table.querySelectorAll("th, td")) as HTMLElement[];
+      const idx = cells.indexOf(cell);
+      const row = parseInt(cell.dataset.row ?? "0", 10);
+      const col = parseInt(cell.dataset.col ?? "0", 10);
+      // Get fresh table info for each keydown
+      const currentInfo = getCurrentTableInfo(view, this.tableFrom);
+      const colCount = currentInfo?.columnCount ?? cells.length;
+      const rowCount = currentInfo?.rowCount ?? 1;
+
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const nextIdx = e.shiftKey ? idx - 1 : idx + 1;
+        if (nextIdx >= 0 && nextIdx < cells.length) {
+          cells[nextIdx].focus();
+        } else if (!e.shiftKey && nextIdx >= cells.length) {
+          // Tab at last cell - add row and focus same column in new row
+          const info = getCurrentTableInfo(view, this.tableFrom);
+          if (info) {
+            addTableRow(view, info);
+            // Double RAF to ensure decoration rebuild completes
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                const newTable = view.dom.querySelector(".cm-table-block table");
+                if (newTable) {
+                  // Focus same column in new row (first column for Tab)
+                  const newCells = newTable.querySelectorAll("tbody tr:last-child td");
+                  if (newCells.length > 0) {
+                    (newCells[0] as HTMLElement).focus();
+                  }
+                }
+              });
+            });
+          }
+        }
+      } else if (e.key === "ArrowUp" && !e.shiftKey) {
+        // Move to same column in previous row
+        if (row > 0) {
+          e.preventDefault();
+          const prevRowIdx = row === 1 ? col : (row - 1) * colCount + col;
+          if (prevRowIdx >= 0 && prevRowIdx < cells.length) {
+            cells[prevRowIdx].focus();
+          }
+        }
+      } else if (e.key === "ArrowDown" && !e.shiftKey) {
+        // Move to same column in next row
+        if (row < rowCount - 1) {
+          e.preventDefault();
+          const nextRowIdx = row === 0 ? colCount + col : (row + 1) * colCount + col;
+          if (nextRowIdx >= 0 && nextRowIdx < cells.length) {
+            cells[nextRowIdx].focus();
+          }
+        }
+      } else if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        // Enter adds a new row when in body, moves to body from header
+        e.preventDefault();
+        if (row === 0) {
+          // In header - move to first body cell in same column
+          const bodyFirstIdx = colCount + col;
+          if (bodyFirstIdx < cells.length) {
+            cells[bodyFirstIdx].focus();
+          }
+        } else {
+          // In body - add new row and focus same column
+          const info = getCurrentTableInfo(view, this.tableFrom);
+          if (info) {
+            addTableRow(view, info);
+            // Double RAF to ensure decoration rebuild completes
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                const newTable = view.dom.querySelector(".cm-table-block table");
+                if (newTable) {
+                  const newCells = newTable.querySelectorAll("tbody tr:last-child td");
+                  const targetCol = Math.min(col, newCells.length - 1);
+                  if (newCells.length > targetCol) {
+                    (newCells[targetCol] as HTMLElement).focus();
+                  }
+                }
+              });
+            });
+          }
+        }
+      } else if (e.key === "Escape") {
+        // Exit table editing and focus CodeMirror
+        e.preventDefault();
+        cell.blur();
+        view.focus();
+        // Move cursor after the table
+        const info = getCurrentTableInfo(view, this.tableFrom);
+        if (info) {
+          view.dispatch({
+            selection: { anchor: info.to }
+          });
+        }
+      }
+    });
+  }
+
+  ignoreEvent() {
+    // Return true = CodeMirror ignores event, browser/widget handles natively
+    // This is REQUIRED for contentEditable cells to receive focus and input
+    return true;
+  }
+
+  private applyTableWidth(wrapper: HTMLElement, view: EditorView) {
+    const width = view.scrollDOM?.clientWidth || view.dom.clientWidth;
+    if (width > 0) {
+      wrapper.style.width = "100%";
+      wrapper.style.maxWidth = `${width}px`;
+    }
+  }
+
+  private applyColumnAlignment(cell: HTMLElement, colIndex: number, tableInfo: TableInfo) {
+    const alignment = tableInfo.columnAlignments[colIndex] || "none";
+    switch (alignment) {
+      case "left":
+        cell.style.textAlign = "left";
+        break;
+      case "center":
+        cell.style.textAlign = "center";
+        break;
+      case "right":
+        cell.style.textAlign = "right";
+        break;
+      default:
+        // "none" defaults to left alignment
+        cell.style.textAlign = "left";
+        break;
+    }
+  }
+
+  private setCellRaw(cell: HTMLElement) {
+    const raw = cell.dataset.raw ?? cell.textContent ?? "";
+    cell.dataset.raw = raw;
+    cell.dataset.mode = "raw";
+    cell.textContent = raw;
+  }
+
+  private renderCell(cell: HTMLElement, rawOverride?: string) {
+    const doc = cell.ownerDocument;
+
+    // Don't overwrite cell if it's currently focused and in raw mode
+    if (cell === doc.activeElement && cell.dataset.mode === "raw") {
+      // Just update the dataset, don't touch DOM content
+      if (rawOverride !== undefined) {
+        cell.dataset.raw = rawOverride;
+      }
+      return;
+    }
+
+    const raw = rawOverride ?? cell.dataset.raw ?? cell.textContent ?? "";
+    cell.dataset.raw = raw;
+    cell.dataset.mode = "rendered";
+    cell.innerHTML = renderInlineMarkdown(raw);
+  }
+}
+
+/**
+ * Simple HTML entity escaping for cell content.
+ */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * Render inline markdown for table cells (bold, italic, code, strike, highlight, links).
+ * This is intentionally lightweight and does not handle full markdown.
+ */
+function renderInlineMarkdown(text: string): string {
+  const escaped = escapeHtml(text);
+
+  const codePlaceholders: string[] = [];
+  let html = escaped.replace(/`([^`]+)`/g, (_m, code) => {
+    const idx = codePlaceholders.length;
+    codePlaceholders.push(`<code class="cm-inline-code">${code}</code>`);
+    return `\u0000CODE${idx}\u0000`;
+  });
+
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, url) => {
+    const safeUrl = url.replace(/"/g, "&quot;");
+    return `<a href="${safeUrl}" class="cm-link" rel="noopener noreferrer" target="_blank">${label}</a>`;
+  });
+
+  html = html.replace(/\*\*([^*]+)\*\*/g, `<strong class="cm-strong">$1</strong>`);
+  html = html.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, `$1<em class="cm-em">$2</em>`);
+  html = html.replace(/~~([^~]+)~~/g, `<s class="cm-strikethrough">$1</s>`);
+  html = html.replace(/==([^=]+)==/g, `<mark class="cm-highlight">$1</mark>`);
+
+  html = html.replace(/\u0000CODE(\d+)\u0000/g, (_m, idx) => codePlaceholders[Number(idx)]);
+  return html;
+}
+
+// ===========================================
+// TABLE ROW/COLUMN OPERATIONS
+// ===========================================
+
+/**
+ * Re-parse TableInfo from the current editor state at the given position.
+ * Returns null if no valid table is found at that position.
+ */
+function getCurrentTableInfo(view: EditorView, tableFrom: number): TableInfo | null {
+  const state = view.state;
+  let found: TableInfo | null = null;
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (found) return false;
+      if (node.name === "Table") {
+        // Check if this table contains or starts at/near tableFrom
+        if (node.from <= tableFrom && node.to >= tableFrom) {
+          found = parseTableFromAST(state, { from: node.from, to: node.to, node: node.node });
+        }
+      }
+    },
+  });
+  return found;
+}
+
+function addTableRow(view: EditorView, info: TableInfo): void {
+  const headers = info.headerCells.map(c => c.content);
+  const rows = info.bodyRows.map(bodyRow => bodyRow.map(c => c.content));
+  rows.push(Array(info.columnCount).fill(""));
+  const newMarkdown = generateTableMarkdown(headers, rows, info.columnAlignments, info.linePrefix);
+  view.dispatch({ changes: { from: info.from, to: info.to, insert: newMarkdown } });
+}
+
+function removeTableRow(view: EditorView, info: TableInfo): void {
+  if (info.bodyRows.length === 0) return;
+  const headers = info.headerCells.map(c => c.content);
+  const rows = info.bodyRows.map(bodyRow => bodyRow.map(c => c.content));
+  rows.pop();
+  const newMarkdown = generateTableMarkdown(headers, rows, info.columnAlignments, info.linePrefix);
+  view.dispatch({ changes: { from: info.from, to: info.to, insert: newMarkdown } });
+}
+
+function addTableColumn(view: EditorView, info: TableInfo): void {
+  // New columns are blank - user fills in the header
+  const headers = [...info.headerCells.map(c => c.content), ""];
+  const rows = info.bodyRows.map(bodyRow => [...bodyRow.map(c => c.content), ""]);
+  const alignments = [...info.columnAlignments, "none" as const];
+  const newMarkdown = generateTableMarkdown(headers, rows, alignments, info.linePrefix);
+  view.dispatch({ changes: { from: info.from, to: info.to, insert: newMarkdown } });
+}
+
+function removeTableColumn(view: EditorView, info: TableInfo): void {
+  if (info.columnCount <= 1) return;
+  const headers = info.headerCells.map(c => c.content).slice(0, -1);
+  const rows = info.bodyRows.map(bodyRow => bodyRow.map(c => c.content).slice(0, -1));
+  const alignments = info.columnAlignments.slice(0, -1);
+  const newMarkdown = generateTableMarkdown(headers, rows, alignments, info.linePrefix);
+  view.dispatch({ changes: { from: info.from, to: info.to, insert: newMarkdown } });
+}
+
+// ===========================================
+// TABLE TAB NAVIGATION
+// ===========================================
+
+/**
+ * Get all data cells (header + body) in reading order from a TableInfo.
+ * Skips the delimiter row. Returns cells left-to-right, top-to-bottom.
+ */
+function getAllTableCells(info: TableInfo): TableCellInfo[] {
+  const cells: TableCellInfo[] = [];
+  for (const cell of info.headerCells) cells.push(cell);
+  for (const row of info.bodyRows) {
+    for (const cell of row) cells.push(cell);
+  }
+  return cells;
+}
+
+/**
+ * Handle Tab key when cursor is inside a table.
+ * Moves cursor to the next cell (left-to-right, top-to-bottom).
+ * If at the last cell, adds a new row and moves to its first cell.
+ */
+function handleTabInTable(view: EditorView): boolean {
+  const pos = view.state.selection.main.head;
+  const extents = collectTableExtents(view.state);
+  const tableExtent = extents.find(e => pos >= e.from && pos <= e.to);
+  if (!tableExtent) return false;
+
+  const info = getCurrentTableInfo(view, tableExtent.from);
+  if (!info) return false;
+
+  const cells = getAllTableCells(info);
+  if (cells.length === 0) return false;
+
+  // Find the current cell (the one containing the cursor)
+  let currentIdx = -1;
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i];
+    // Cursor is in this cell if it's between the cell boundaries.
+    // For empty cells (from === to), cursor must be exactly at that position.
+    // For non-empty cells, use inclusive range.
+    // We also need to account for cursor being on a pipe boundary —
+    // find the cell whose line matches and whose range is closest.
+    if (pos >= cell.from && pos <= cell.to) {
+      currentIdx = i;
+      break;
+    }
+  }
+
+  // If cursor isn't in any cell, find the nearest cell on the same line
+  if (currentIdx === -1) {
+    const cursorLine = view.state.doc.lineAt(pos);
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i];
+      const cellLine = view.state.doc.lineAt(cell.from);
+      if (cellLine.number !== cursorLine.number) continue;
+      const dist = Math.min(Math.abs(pos - cell.from), Math.abs(pos - cell.to));
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx === -1) return false;
+    currentIdx = bestIdx;
+  }
+
+  const nextIdx = currentIdx + 1;
+
+  if (nextIdx < cells.length) {
+    // Move to next cell — select its content
+    const nextCell = cells[nextIdx];
+    view.dispatch({
+      selection: nextCell.from === nextCell.to
+        ? EditorSelection.cursor(nextCell.from)
+        : EditorSelection.range(nextCell.from, nextCell.to),
+    });
+    return true;
+  }
+
+  // At last cell — add a new row and move to its first cell
+  addTableRow(view, info);
+  // Re-parse after the edit to get updated cell positions
+  const newInfo = getCurrentTableInfo(view, tableExtent.from);
+  if (!newInfo || newInfo.bodyRows.length === 0) return true;
+  const lastRow = newInfo.bodyRows[newInfo.bodyRows.length - 1];
+  if (lastRow.length > 0) {
+    view.dispatch({
+      selection: EditorSelection.cursor(lastRow[0].from),
+    });
+  }
+  return true;
+}
+
+/**
+ * Handle Shift+Tab key when cursor is inside a table.
+ * Moves cursor to the previous cell (right-to-left, bottom-to-top).
+ * If at the first cell, does nothing (returns true to consume the key).
+ */
+function handleShiftTabInTable(view: EditorView): boolean {
+  const pos = view.state.selection.main.head;
+  const extents = collectTableExtents(view.state);
+  const tableExtent = extents.find(e => pos >= e.from && pos <= e.to);
+  if (!tableExtent) return false;
+
+  const info = getCurrentTableInfo(view, tableExtent.from);
+  if (!info) return false;
+
+  const cells = getAllTableCells(info);
+  if (cells.length === 0) return false;
+
+  // Find the current cell
+  let currentIdx = -1;
+  for (let i = 0; i < cells.length; i++) {
+    const cell = cells[i];
+    if (pos >= cell.from && pos <= cell.to) {
+      currentIdx = i;
+      break;
+    }
+  }
+
+  // If cursor isn't in any cell, find nearest on same line
+  if (currentIdx === -1) {
+    const cursorLine = view.state.doc.lineAt(pos);
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i];
+      const cellLine = view.state.doc.lineAt(cell.from);
+      if (cellLine.number !== cursorLine.number) continue;
+      const dist = Math.min(Math.abs(pos - cell.from), Math.abs(pos - cell.to));
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx === -1) return false;
+    currentIdx = bestIdx;
+  }
+
+  const prevIdx = currentIdx - 1;
+
+  if (prevIdx >= 0) {
+    // Move to previous cell — select its content
+    const prevCell = cells[prevIdx];
+    view.dispatch({
+      selection: prevCell.from === prevCell.to
+        ? EditorSelection.cursor(prevCell.from)
+        : EditorSelection.range(prevCell.from, prevCell.to),
+    });
+  }
+  // At first cell — consume the key but do nothing
+  return true;
+}
+
+// ===========================================
 // CODE BLOCK HELPERS
 // ===========================================
 
@@ -1764,6 +2500,54 @@ function getBlockquoteInfo(line: { text: string; from: number }): {
 }
 
 /**
+ * Compute the continuation line prefix for a line inside a container
+ * (blockquote, list, or nested blockquote>list).
+ *
+ * Returns:
+ * - linePrefix: prefix for continuation lines (e.g., "> ", "  ")
+ * - blankLinePrefix: prefix for blank separator lines (e.g., ">", "  ")
+ */
+function getContainerLinePrefix(
+  _state: EditorState,
+  line: { text: string; from: number }
+): { linePrefix: string; blankLinePrefix: string } {
+  const bq = getBlockquoteInfo(line);
+
+  if (bq) {
+    // Strip blockquote prefix, check for inner list
+    const afterBq = {
+      text: line.text.slice(bq.marker.length),
+      from: line.from + bq.marker.length,
+    };
+    const innerLi = getListInfo(afterBq);
+    if (innerLi) {
+      // Nested: "> - " → continuation ">   " (spaces matching content start)
+      const listIndent = " ".repeat(innerLi.contentStart - afterBq.from);
+      return {
+        linePrefix: bq.marker + listIndent,
+        blankLinePrefix: bq.marker + listIndent,
+      };
+    }
+    return {
+      linePrefix: bq.marker,                // "> "
+      blankLinePrefix: bq.marker.trimEnd(),  // ">"
+    };
+  }
+
+  const li = getListInfo(line);
+  if (li) {
+    // List continuation: spaces up to contentStart
+    const indent = " ".repeat(li.contentStart - line.from);
+    return {
+      linePrefix: indent,
+      blankLinePrefix: indent,
+    };
+  }
+
+  return { linePrefix: "", blankLinePrefix: "" };
+}
+
+/**
  * Handle Enter in blockquote - continue the blockquote or exit
  */
 function handleEnterInBlockquote(view: EditorView): boolean {
@@ -3002,6 +3786,67 @@ function bypassInCodeBlock(handler: (view: EditorView) => boolean): (view: Edito
 }
 
 /**
+ * Check if cursor is inside a table.
+ */
+function isCursorInTable(view: EditorView): boolean {
+  const pos = view.state.selection.main.head;
+  const extents = collectTableExtents(view.state);
+  return isInTable(pos, extents);
+}
+
+/**
+ * Insert a default GFM table at cursor position.
+ * Default: 2 columns, 2 body rows, with placeholder headers.
+ * Ensures blank lines before/after for proper markdown parsing.
+ * Returns false if cursor is inside a code block or table (no nesting).
+ */
+function insertTable(view: EditorView, rows = 2, cols = 2): boolean {
+  if (isCursorInCodeBlock(view) || isCursorInTable(view)) return false;
+
+  const pos = view.state.selection.main.head;
+  const doc = view.state.doc;
+  const line = doc.lineAt(pos);
+
+  // Compute container prefix for the current line
+  const { linePrefix, blankLinePrefix } = getContainerLinePrefix(view.state, line);
+
+  // Build default table
+  const headers: string[] = [];
+  for (let c = 0; c < cols; c++) {
+    headers.push(`Header ${c + 1}`);
+  }
+  const bodyRows: string[][] = [];
+  for (let r = 0; r < rows; r++) {
+    bodyRows.push(Array(cols).fill(""));
+  }
+  const alignments: ("left" | "center" | "right" | "none")[] = Array(cols).fill("none");
+  const rawTable = generateTableMarkdown(headers, bodyRows, alignments);
+  // Apply linePrefix to ALL lines (since this is a fresh insertion, no pre-existing prefix)
+  const tableMd = rawTable.split("\n").map(l => linePrefix + l).join("\n");
+
+  // Ensure blank lines before/after
+  let prefix = "";
+  let suffix = "\n";
+  if (line.text.trim() !== "" || pos !== line.from) {
+    // Current line has content — insert after with blank line separator
+    prefix = "\n" + blankLinePrefix + "\n";
+  } else if (line.number > 1) {
+    const prevLine = doc.line(line.number - 1);
+    if (prevLine.text.trim() !== "") {
+      prefix = "\n";
+    }
+  }
+
+  const insertText = prefix + tableMd + suffix;
+  view.dispatch({
+    changes: { from: pos, insert: insertText },
+    selection: { anchor: pos + insertText.length },
+  });
+
+  return true;
+}
+
+/**
  * Event filter for rectangular selection: only allow inside code blocks.
  * Uses Alt+drag (default) and checks the target position against code block ranges.
  */
@@ -3184,6 +4029,11 @@ const formattingEscapeKeymap = keymap.of([
     key: "Mod-Shift-h",
     run: bypassInCodeBlock(toggleHighlightOrEscape),
   },
+  // Cmd+T: insert table
+  {
+    key: "Mod-t",
+    run: (view) => isCursorInCodeBlock(view) || isCursorInTable(view) ? false : insertTable(view),
+  },
   // Cmd+1-6: set heading level
   {
     key: "Mod-1",
@@ -3209,15 +4059,15 @@ const formattingEscapeKeymap = keymap.of([
     key: "Mod-6",
     run: bypassInCodeBlock(setHeading6),
   },
-  // Tab: indent list or escape formatting
+  // Tab: table navigation, indent list, or escape formatting
   {
     key: "Tab",
-    run: (view) => handleTabInCodeBlock(view) || handleTabInList(view) || escapeFormatting(view),
+    run: (view) => handleTabInTable(view) || handleTabInCodeBlock(view) || handleTabInList(view) || escapeFormatting(view),
   },
-  // Shift+Tab: outdent list
+  // Shift+Tab: table navigation or outdent list
   {
     key: "Shift-Tab",
-    run: (view) => handleShiftTabInCodeBlock(view) || handleShiftTabInList(view),
+    run: (view) => handleShiftTabInTable(view) || handleShiftTabInCodeBlock(view) || handleShiftTabInList(view),
   },
   // Enter: new paragraph (double newline for proper markdown)
   {
@@ -3673,7 +4523,8 @@ type HiddenRangeKind =
   | "link-tail"          // ](url) portion
   | "code-fence-open"    // opening ``` line
   | "code-fence-close"   // closing ``` line
-  | "horizontal-rule";   // entire --- line
+  | "horizontal-rule"    // entire --- line
+  | "table-delimiter";   // entire GFM table delimiter row
 
 interface HiddenRange {
   from: number;
@@ -3691,6 +4542,287 @@ interface HiddenRange {
   meta?: Record<string, unknown>;
 }
 
+// ===========================================
+// TABLE DATA MODEL
+// ===========================================
+
+interface TableCellInfo {
+  row: number;       // 0 = header, 1+ = body
+  col: number;
+  from: number;      // doc position of cell content start
+  to: number;        // doc position of cell content end
+  content: string;   // raw markdown content
+  isHeader: boolean;
+}
+
+interface TableInfo {
+  from: number;              // Table node start
+  to: number;                // End of last row line
+  headerCells: TableCellInfo[];
+  delimiterFrom: number;
+  delimiterTo: number;
+  bodyRows: TableCellInfo[][];
+  columnCount: number;
+  rowCount: number;          // header + body (not delimiter)
+  columnAlignments: ("left" | "center" | "right" | "none")[];
+  linePrefix: string;        // continuation prefix, e.g., "> " or "  "
+  blankLinePrefix: string;   // prefix for blank separator lines, e.g., ">" or ""
+}
+
+/**
+ * Parse alignment markers from a GFM table delimiter row.
+ * Each cell segment is checked for :--- (left), :---: (center), ---: (right).
+ */
+function parseAlignments(delimText: string): ("left" | "center" | "right" | "none")[] {
+  // Split by pipe, trimming outer pipes
+  const segments = delimText.split("|").map(s => s.trim()).filter(s => s.length > 0);
+  return segments.map(seg => {
+    const left = seg.startsWith(":");
+    const right = seg.endsWith(":");
+    if (left && right) return "center";
+    if (left) return "left";
+    if (right) return "right";
+    return "none";
+  });
+}
+
+/**
+ * Extract cell positions from a table row by parsing pipes.
+ * Returns array of {from, to} positions for each cell (relative to line start).
+ * Handles empty cells correctly by preserving column positions.
+ */
+function extractCellPositions(rowText: string): Array<{ from: number; to: number }> {
+  const positions: Array<{ from: number; to: number }> = [];
+  let inCell = false;
+  let cellStart = 0;
+
+  for (let i = 0; i < rowText.length; i++) {
+    if (rowText[i] === "|") {
+      if (inCell) {
+        // End of cell
+        positions.push({ from: cellStart, to: i });
+      }
+      // Start of next cell
+      inCell = true;
+      cellStart = i + 1;
+    }
+  }
+
+  return positions;
+}
+
+/**
+ * Parse a GFM table from the Lezer AST Table node.
+ *
+ * Uses pipe-based parsing for cells to correctly handle empty cells.
+ * The Lezer GFM parser does not create TableCell nodes for empty cells,
+ * so we parse row text directly by splitting on pipes.
+ *
+ * Walks direct children of the Table node:
+ * - TableHeader → parse row text by pipes for cell positions
+ * - Standalone TableDelimiter (direct child of Table) → alignment/delimiter row
+ * - TableRow → parse row text by pipes for cell positions
+ *
+ * Note: TableDelimiter is used for BOTH pipe characters within rows AND
+ * the standalone delimiter row. Within TableHeader/TableRow, TableDelimiter
+ * nodes are individual | pipes. The standalone delimiter row is a single
+ * TableDelimiter spanning the entire line.
+ */
+function parseTableFromAST(state: EditorState, tableNode: { from: number; to: number; node: import("@lezer/common").SyntaxNode }): TableInfo | null {
+  const doc = state.doc;
+  const headerCells: TableCellInfo[] = [];
+  let delimiterFrom = -1;
+  let delimiterTo = -1;
+  let delimText = "";
+  const bodyRows: TableCellInfo[][] = [];
+  // Start from node.from — only extend inside validated children
+  let maxTo = tableNode.from;
+
+  // Walk direct children of the Table node
+  let child = tableNode.node.firstChild;
+  let bodyRowIndex = 0;
+
+  while (child) {
+    if (child.name === "TableHeader") {
+      if (child.to > maxTo) maxTo = child.to;
+      // Parse header cells by splitting on pipes (handles empty cells)
+      const headerLine = doc.lineAt(child.from);
+      const headerText = doc.sliceString(headerLine.from, headerLine.to);
+      const cellPositions = extractCellPositions(headerText);
+
+      for (let colIndex = 0; colIndex < cellPositions.length; colIndex++) {
+        const { from: relFrom, to: relTo } = cellPositions[colIndex];
+        const absFrom = headerLine.from + relFrom;
+        const absTo = headerLine.from + relTo;
+        const content = doc.sliceString(absFrom, absTo).trim();
+        headerCells.push({
+          row: 0,
+          col: colIndex,
+          from: absFrom,
+          to: absTo,
+          content,
+          isHeader: true,
+        });
+      }
+    } else if (child.name === "TableDelimiter") {
+      // Standalone delimiter row (direct child of Table, not inside TableHeader/TableRow)
+      // Check that this is the full delimiter line, not just a pipe within a row
+      const childLine = doc.lineAt(child.from);
+      if (child.from === childLine.from || doc.sliceString(childLine.from, child.from).trim() === "") {
+        delimiterFrom = childLine.from;
+        delimiterTo = childLine.to;
+        delimText = doc.sliceString(delimiterFrom, delimiterTo);
+        if (child.to > maxTo) maxTo = child.to;
+      }
+    } else if (child.name === "TableRow") {
+      // Validate: Lezer GFM parser can greedily absorb non-table lines as TableRow.
+      // Only accept rows whose text actually contains a pipe character.
+      const rowText = doc.sliceString(child.from, child.to);
+      if (!rowText.includes("|")) {
+        child = child.nextSibling;
+        continue;
+      }
+      if (child.to > maxTo) maxTo = child.to;
+      // Parse body cells by splitting on pipes (handles empty cells)
+      const rowLine = doc.lineAt(child.from);
+      const fullRowText = doc.sliceString(rowLine.from, rowLine.to);
+      const cellPositions = extractCellPositions(fullRowText);
+
+      const rowCells: TableCellInfo[] = [];
+      for (let colIndex = 0; colIndex < cellPositions.length; colIndex++) {
+        const { from: relFrom, to: relTo } = cellPositions[colIndex];
+        const absFrom = rowLine.from + relFrom;
+        const absTo = rowLine.from + relTo;
+        const content = doc.sliceString(absFrom, absTo).trim();
+        rowCells.push({
+          row: bodyRowIndex + 1,
+          col: colIndex,
+          from: absFrom,
+          to: absTo,
+          content,
+          isHeader: false,
+        });
+      }
+      bodyRows.push(rowCells);
+      bodyRowIndex++;
+    }
+
+    child = child.nextSibling;
+  }
+
+  // Must have header and delimiter
+  if (headerCells.length === 0 || delimiterFrom === -1) return null;
+
+  const columnCount = headerCells.length;
+  const alignments = parseAlignments(delimText);
+
+  // Extend to end of last line
+  const trueTo = doc.lineAt(maxTo).to;
+
+  // Compute container line prefix from the first line of the table
+  const firstLine = doc.lineAt(tableNode.from);
+  const { linePrefix, blankLinePrefix } = getContainerLinePrefix(state, firstLine);
+
+  return {
+    from: tableNode.from,
+    to: trueTo,
+    headerCells,
+    delimiterFrom,
+    delimiterTo,
+    bodyRows,
+    columnCount,
+    rowCount: 1 + bodyRows.length, // header + body rows
+    columnAlignments: alignments.length >= columnCount
+      ? alignments.slice(0, columnCount)
+      : [...alignments, ...Array(columnCount - alignments.length).fill("none" as const)],
+    linePrefix,
+    blankLinePrefix,
+  };
+}
+
+/**
+ * Generate GFM table markdown from structured data.
+ * Pads columns to consistent width for readability.
+ *
+ * continuationPrefix: if provided, lines 2+ get this prefix prepended.
+ * (First line keeps no prefix — caller is responsible for the existing line prefix.)
+ */
+function generateTableMarkdown(
+  headers: string[],
+  rows: string[][],
+  alignments: ("left" | "center" | "right" | "none")[],
+  continuationPrefix = ""
+): string {
+  const colCount = headers.length;
+
+  // Calculate column widths (minimum 3 for delimiter dashes)
+  const widths: number[] = [];
+  for (let c = 0; c < colCount; c++) {
+    let maxW = Math.max(3, headers[c].length);
+    for (const row of rows) {
+      const cellLen = (row[c] || "").length;
+      if (cellLen > maxW) maxW = cellLen;
+    }
+    widths.push(maxW);
+  }
+
+  // Build header line
+  const headerLine = "| " + headers.map((h, i) => h.padEnd(widths[i])).join(" | ") + " |";
+
+  // Build delimiter line with alignment
+  const delimLine = "| " + widths.map((w, i) => {
+    const align = alignments[i] || "none";
+    const dashes = "-".repeat(w);
+    if (align === "center") return ":" + dashes.slice(1, -1) + ":";
+    if (align === "left") return ":" + dashes.slice(1);
+    if (align === "right") return dashes.slice(0, -1) + ":";
+    return dashes;
+  }).join(" | ") + " |";
+
+  // Build body lines
+  const bodyLines = rows.map(row =>
+    "| " + headers.map((_, i) => (row[i] || "").padEnd(widths[i])).join(" | ") + " |"
+  );
+
+  const lines = [headerLine, delimLine, ...bodyLines];
+  return lines.map((l, i) => i === 0 ? l : continuationPrefix + l).join("\n");
+}
+
+/**
+ * Collect table extents from the AST.
+ * Shared by table helpers and navigation utilities.
+ */
+function collectTableExtents(state: EditorState): Array<{ from: number; to: number }> {
+  const extents: Array<{ from: number; to: number }> = [];
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (node.name === "Table") {
+        // Walk children to compute validated extent (Lezer can greedily absorb non-table lines)
+        let maxTo = node.from;
+        let child = node.node.firstChild;
+        while (child) {
+          if (child.name === "TableHeader" || child.name === "TableDelimiter") {
+            if (child.to > maxTo) maxTo = child.to;
+          } else if (child.name === "TableRow") {
+            const rowText = state.doc.sliceString(child.from, child.to);
+            if (rowText.includes("|")) {
+              if (child.to > maxTo) maxTo = child.to;
+            }
+          }
+          child = child.nextSibling;
+        }
+        const trueTo = state.doc.lineAt(maxTo).to;
+        extents.push({ from: node.from, to: trueTo });
+      }
+    },
+  });
+  return extents;
+}
+
+function isInTable(pos: number, extents: Array<{ from: number; to: number }>): boolean {
+  return extents.some((r) => pos >= r.from && pos < r.to);
+}
+
 /**
  * Walk the Lezer AST and return all hidden ranges.
  * Both decorations and selection snapping consume this cached result.
@@ -3705,6 +4837,7 @@ interface HiddenRange {
 function getHiddenRanges(state: EditorState): HiddenRange[] {
   const doc = state.doc;
   const ranges: HiddenRange[] = [];
+  const tableRanges: Array<{ from: number; to: number }> = [];
 
   // First pass: collect code block extents so we can exclude their content
   const codeBlockExtents = collectCodeBlockExtents(state);
@@ -3848,6 +4981,24 @@ function getHiddenRanges(state: EditorState): HiddenRange[] {
             nodeTo: node.to,
           });
         }
+      }
+
+      // GFM Table: produce delimiter hidden range (table block widget rendering)
+      if (node.name === "Table") {
+        const tableInfo = parseTableFromAST(state, { from: node.from, to: node.to, node: node.node });
+        if (!tableInfo) return;
+
+        tableRanges.push({ from: tableInfo.from, to: tableInfo.to });
+
+        // Delimiter row: hide entire line
+        ranges.push({
+          from: tableInfo.delimiterFrom,
+          to: tableInfo.delimiterTo,
+          kind: "table-delimiter",
+          nodeFrom: tableInfo.from,
+          nodeTo: tableInfo.to,
+          meta: { tableInfo },
+        });
       }
 
       // Links: hide [ and ](url)
@@ -4031,6 +5182,16 @@ function getHiddenRanges(state: EditorState): HiddenRange[] {
     }
   }
 
+  // Post-process: remove ranges that fall entirely within a table range
+  // (prevents overlapping Decoration.replace ranges once the table is replaced)
+  if (tableRanges.length > 0) {
+    const filtered = ranges.filter(r => {
+      if (r.kind === "table-delimiter") return true;
+      return !tableRanges.some(t => r.from >= t.from && r.to <= t.to);
+    });
+    return filtered;
+  }
+
   return ranges;
 }
 
@@ -4066,32 +5227,30 @@ function snapDirectional(pos: number, direction: number, hiddenRanges: HiddenRan
     let snapped = false;
 
     // Block-level ranges first (HR, code fences)
+    // NOTE: table-delimiter is EXCLUDED because tables are fully replaced by widgets
+    // with their own editing - no hidden syntax to snap away from
     for (const r of hiddenRanges) {
+      if (r.kind !== "horizontal-rule" && r.kind !== "code-fence-open" && r.kind !== "code-fence-close") continue;
       if (current < r.from || current > r.to) continue; // not inside
-      if (current === r.from || current === r.to) continue; // on edge is ok for some kinds
+      if (current === r.from || current === r.to) continue; // on edge is ok
 
-      if (r.kind === "horizontal-rule" || r.kind === "code-fence-open" || r.kind === "code-fence-close") {
-        if (current >= r.from && current <= r.to) {
-          // Jump to line before/after
-          const line = state.doc.lineAt(r.from);
-          const prevLine = line.number > 1 ? state.doc.line(line.number - 1) : null;
-          const nextLine = line.number < state.doc.lines ? state.doc.line(line.number + 1) : null;
+      // Jump to line before/after
+      const firstLine = state.doc.lineAt(r.from);
+      const lastLine = state.doc.lineAt(r.to);
+      const prevLine = firstLine.number > 1 ? state.doc.line(firstLine.number - 1) : null;
+      const nextLine = lastLine.number < state.doc.lines ? state.doc.line(lastLine.number + 1) : null;
 
-          if (direction > 0) {
-            // Prefer moving down; if no next line, move up instead
-            if (nextLine) current = nextLine.from;
-            else if (prevLine) current = prevLine.to;
-            else current = r.to;
-          } else {
-            // Prefer moving up; if no previous line, move down instead
-            if (prevLine) current = prevLine.to;
-            else if (nextLine) current = nextLine.from;
-            else current = r.from;
-          }
-          snapped = true;
-          break;
-        }
+      if (direction > 0) {
+        if (nextLine) current = nextLine.from;
+        else if (prevLine) current = prevLine.to;
+        else current = r.to;
+      } else {
+        if (prevLine) current = prevLine.to;
+        else if (nextLine) current = nextLine.from;
+        else current = r.from;
       }
+      snapped = true;
+      break;
     }
 
     // Line-prefix ranges (heading, list, task, blockquote)
@@ -4099,7 +5258,6 @@ function snapDirectional(pos: number, direction: number, hiddenRanges: HiddenRan
       if (r.contentStart === undefined) continue;
       if (current >= r.from && current < r.contentStart) {
         if (direction < 0 && r.from > 0) {
-          // Moving left into prefix → go to end of previous line
           const line = state.doc.lineAt(r.from);
           if (line.number > 1) {
             const prevLine = state.doc.line(line.number - 1);
@@ -4108,7 +5266,6 @@ function snapDirectional(pos: number, direction: number, hiddenRanges: HiddenRan
             current = r.from;
           }
         } else {
-          // Moving right or click → snap to contentStart
           current = r.contentStart;
         }
         snapped = true;
@@ -4144,12 +5301,15 @@ function snapToNearest(pos: number, hiddenRanges: HiddenRange[], state: EditorSt
     let snapped = false;
 
     // Block-level: snap to nearest line boundary
+    // NOTE: table-delimiter is EXCLUDED because tables are fully replaced by widgets
+    // with their own editing - no hidden syntax to snap away from
     for (const r of hiddenRanges) {
       if (r.kind === "horizontal-rule" || r.kind === "code-fence-open" || r.kind === "code-fence-close") {
         if (current >= r.from && current <= r.to) {
-          const line = state.doc.lineAt(r.from);
-          const prevLine = line.number > 1 ? state.doc.line(line.number - 1) : null;
-          const nextLine = line.number < state.doc.lines ? state.doc.line(line.number + 1) : null;
+          const firstLine = state.doc.lineAt(r.from);
+          const lastLine = state.doc.lineAt(r.to);
+          const prevLine = firstLine.number > 1 ? state.doc.line(firstLine.number - 1) : null;
+          const nextLine = lastLine.number < state.doc.lines ? state.doc.line(lastLine.number + 1) : null;
 
           if (!prevLine && nextLine) {
             current = nextLine.from;
@@ -4269,11 +5429,15 @@ const hiddenDecoration = Decoration.replace({});
  * - horizontal-rule → HorizontalRuleWidget
  * - link-bracket-open → Decoration.replace({})
  * - link-tail → Decoration.replace({})
+ * - table-delimiter → TableBlockWidget
  */
 function buildDecorationsFromRanges(hiddenRanges: HiddenRange[]) {
   // Collect HR and code fence ranges for overlap filtering
   const hrRanges = hiddenRanges.filter(r => r.kind === "horizontal-rule");
   const codeFenceRanges = hiddenRanges.filter(r => r.kind === "code-fence-open" || r.kind === "code-fence-close");
+  const tableRanges = hiddenRanges
+    .filter(r => r.kind === "table-delimiter")
+    .map(r => ({ from: r.nodeFrom, to: r.nodeTo }));
 
   const overlapsWithHR = (from: number, to: number): boolean =>
     hrRanges.some(hr => from >= hr.from && to <= hr.to);
@@ -4281,12 +5445,18 @@ function buildDecorationsFromRanges(hiddenRanges: HiddenRange[]) {
   const overlapsWithCodeFence = (from: number, to: number): boolean =>
     codeFenceRanges.some(cb => from >= cb.from && to <= cb.to);
 
+  const isInsideTable = (from: number, to: number): boolean =>
+    tableRanges.some(t => from >= t.from && to <= t.to);
+
   type DecorationEntry = { from: number; to: number; deco: Decoration };
   const entries: DecorationEntry[] = [];
 
   for (const r of hiddenRanges) {
-    // Filter out ranges that overlap with HR or code fences (except the HR/fence ranges themselves)
-    if (r.kind !== "horizontal-rule" && r.kind !== "code-fence-open" && r.kind !== "code-fence-close") {
+    if (r.kind !== "table-delimiter" && isInsideTable(r.from, r.to)) continue;
+
+    // Filter out ranges that overlap with HR or code fences (except those ranges themselves)
+    if (r.kind !== "horizontal-rule" && r.kind !== "code-fence-open" && r.kind !== "code-fence-close"
+        && r.kind !== "table-delimiter") {
       if (overlapsWithHR(r.from, r.to) || overlapsWithCodeFence(r.from, r.to)) continue;
     }
 
@@ -4331,6 +5501,20 @@ function buildDecorationsFromRanges(hiddenRanges: HiddenRange[]) {
       case "code-fence-close": {
         const widget = new CodeBlockCloseWidget();
         entries.push({ from: r.from, to: r.to, deco: Decoration.replace({ widget, block: true }) });
+        break;
+      }
+      case "table-delimiter": {
+        const tableInfo = r.meta?.tableInfo as TableInfo | undefined;
+        if (tableInfo) {
+          const widget = new TableBlockWidget(
+            r.nodeFrom,
+            tableInfo.columnCount,
+            tableInfo.rowCount
+          );
+          entries.push({ from: r.nodeFrom, to: r.nodeTo, deco: Decoration.replace({ widget, block: true }) });
+        } else {
+          entries.push({ from: r.from, to: r.to, deco: hiddenDecoration });
+        }
         break;
       }
     }
@@ -5021,6 +6205,117 @@ const theme = EditorView.theme({
   ".cm-line": {
     padding: "0 4px",
   },
+  // HTML table widget styles
+  ".cm-table-block": {
+    margin: "16px 0",
+    overflowX: "auto",
+    display: "block",
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: "0",
+    boxSizing: "border-box",
+    whiteSpace: "normal",
+  },
+  ".cm-table": {
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: "0",
+    borderCollapse: "separate",
+    borderSpacing: "0",
+    border: "1px solid #d1d5db",
+    borderRadius: "6px",
+    fontSize: "14px",
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    tableLayout: "fixed",
+    boxSizing: "border-box",
+    whiteSpace: "normal",
+  },
+  ".cm-table thead tr": {
+    backgroundColor: "#f6f8fa",
+  },
+  ".cm-table th": {
+    padding: "10px 16px",
+    textAlign: "left",
+    fontWeight: "600",
+    fontSize: "0.8em",
+    textTransform: "uppercase",
+    letterSpacing: "0.05em",
+    color: "#57606a",
+    borderBottom: "2px solid #d1d5db",
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+  },
+  ".cm-table th:first-child": {
+    borderTopLeftRadius: "6px",
+  },
+  ".cm-table th:last-child": {
+    borderTopRightRadius: "6px",
+  },
+  ".cm-table td": {
+    padding: "10px 16px",
+    color: "#24292e",
+    borderBottom: "1px solid #e5e7eb",
+    verticalAlign: "top",
+    whiteSpace: "normal",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
+  },
+  ".cm-table-row-odd": {
+    backgroundColor: "white",
+  },
+  ".cm-table-row-even": {
+    backgroundColor: "#fafafa",
+  },
+  ".cm-table tbody tr:last-child td:first-child": {
+    borderBottomLeftRadius: "6px",
+  },
+  ".cm-table tbody tr:last-child td:last-child": {
+    borderBottomRightRadius: "6px",
+  },
+  ".cm-table tbody tr:last-child td": {
+    borderBottom: "none",
+  },
+  ".cm-table th:focus, .cm-table td:focus": {
+    outline: "2px solid #007aff",
+    outlineOffset: "-2px",
+  },
+  ".cm-table tbody tr:hover": {
+    backgroundColor: "#f5f5f5",
+  },
+  // Table toolbar styles
+  ".cm-table-toolbar": {
+    display: "flex",
+    gap: "12px",
+    marginBottom: "8px",
+    opacity: "0",
+    transition: "opacity 0.15s ease",
+  },
+  ".cm-table-block:hover .cm-table-toolbar, .cm-table-block:focus-within .cm-table-toolbar": {
+    opacity: "1",
+  },
+  ".cm-table-toolbar-group": {
+    display: "flex",
+    gap: "4px",
+  },
+  ".cm-table-toolbar-btn": {
+    padding: "4px 10px",
+    fontSize: "12px",
+    fontWeight: "500",
+    color: "#57606a",
+    backgroundColor: "#f6f8fa",
+    border: "1px solid #d1d5db",
+    borderRadius: "4px",
+    cursor: "pointer",
+    transition: "background-color 0.1s ease, border-color 0.1s ease",
+    fontFamily: "system-ui, -apple-system, sans-serif",
+  },
+  ".cm-table-toolbar-btn:hover": {
+    backgroundColor: "#e5e7eb",
+    borderColor: "#9ca3af",
+  },
+  ".cm-table-toolbar-btn:active": {
+    backgroundColor: "#d1d5db",
+  },
 });
 
 // ===========================================
@@ -5308,6 +6603,7 @@ const FIXTURES = [
   { name: "highlight.md", label: "Highlight" },
   { name: "mixed-formatting.md", label: "Mixed" },
   { name: "cursor-positions.md", label: "Cursor Tests" },
+  { name: "tables.md", label: "Tables" },
 ];
 
 function App() {
@@ -5975,4 +7271,27 @@ export {
   type LinkContext,
   type HiddenRange,
   type HiddenRangeKind,
+
+  // Table handlers
+  insertTable,
+  isCursorInTable,
+  parseTableFromAST,
+  parseAlignments,
+  generateTableMarkdown,
+  addTableRow,
+  removeTableRow,
+  addTableColumn,
+  removeTableColumn,
+  collectTableExtents,
+  isInTable,
+  escapeHtml,
+  getCurrentTableInfo,
+  getContainerLinePrefix,
+  handleTabInTable,
+  handleShiftTabInTable,
+  getAllTableCells,
+
+  // Table types
+  type TableInfo,
+  type TableCellInfo,
 };
