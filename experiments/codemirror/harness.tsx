@@ -20,6 +20,12 @@ import { languages } from "@codemirror/language-data";
 import { tags } from "@lezer/highlight";
 import { GFM } from "@lezer/markdown";
 import type { InlineContext, MarkdownConfig } from "@lezer/markdown";
+import {
+  captureFocus,
+  restoreFocus,
+  WidgetEventManager,
+  type ManagedWidgetConfig,
+} from "./managedWidget";
 
 // ===========================================
 // HIGHLIGHT LEZER EXTENSION
@@ -209,10 +215,26 @@ class CodeBlockCloseWidget extends WidgetType {
 // ===========================================
 
 /**
+ * Configuration for TableBlockWidget managed event handlers.
+ * Uses composition pattern - simple widgets don't need this machinery.
+ */
+const TABLE_WIDGET_CONFIG: ManagedWidgetConfig<TableInfo> = {
+  widgetKey: "table-block",
+  anchorAttr: "table-from",
+  reparse: getCurrentTableInfo,
+};
+
+/**
  * Widget that renders a block-level HTML table for GFM tables.
  * Cells are contentEditable and sync directly to markdown.
+ *
+ * Uses ManagedWidget pattern for event handlers to avoid stale closure issues.
+ * Event handlers read tableFrom from DOM and re-parse data on each event.
  */
 class TableBlockWidget extends WidgetType {
+  /** Manages lifecycle of event handlers attached to cells/buttons */
+  private eventManager = new WidgetEventManager();
+
   constructor(
     readonly tableFrom: number,
     readonly initialColumnCount: number,  // For eq() comparison only
@@ -233,33 +255,15 @@ class TableBlockWidget extends WidgetType {
   }
 
   updateDOM(dom: HTMLElement, view: EditorView): boolean {
-    // 1. Capture focus state BEFORE any changes
-    const doc = view.dom.ownerDocument;
-    const activeEl = doc.activeElement;
-    let savedFocusRow: string | null = null;
-    let savedFocusCol: string | null = null;
-    let savedSelectionStart = 0;
-    let savedSelectionEnd = 0;
-
-    if (activeEl && dom.contains(activeEl)) {
-      const cell = activeEl.closest("[data-row][data-col]") as HTMLElement | null;
-      if (cell) {
-        savedFocusRow = cell.dataset.row ?? null;
-        savedFocusCol = cell.dataset.col ?? null;
-        // Save cursor position within cell
-        const sel = doc.getSelection();
-        if (sel && sel.rangeCount > 0) {
-          const range = sel.getRangeAt(0);
-          savedSelectionStart = range.startOffset;
-          savedSelectionEnd = range.endOffset;
-        }
-      }
-    }
+    // 1. Capture focus state BEFORE any changes using managed focus utilities
+    const focusState = captureFocus(dom);
 
     // 2. Re-parse table info fresh
     const tableInfo = this.getTableInfo(view);
     if (!tableInfo) return false;
 
+    // Update stable identifier (in case position changed)
+    dom.dataset.tableFrom = String(this.tableFrom);
     this.applyTableWidth(dom, view);
     const table = dom.querySelector("table.cm-table");
     if (!table) return false;
@@ -272,6 +276,10 @@ class TableBlockWidget extends WidgetType {
     if (bodyRows.length !== tableInfo.bodyRows.length) return false;
 
     // 3. Update table cells (skip active cell in raw mode)
+    // Compute current focus cell for raw mode check
+    const savedFocusRow = focusState.focusPath?.match(/data-row="(\d+)"/)?.[1] ?? null;
+    const savedFocusCol = focusState.focusPath?.match(/data-col="(\d+)"/)?.[1] ?? null;
+
     for (let col = 0; col < colCount; col++) {
       const cell = headerCells[col] as HTMLElement;
       const raw = tableInfo.headerCells[col]?.content ?? "";
@@ -300,31 +308,8 @@ class TableBlockWidget extends WidgetType {
       }
     }
 
-    // 4. Restore focus if we had it
-    if (savedFocusRow !== null && savedFocusCol !== null) {
-      const targetCell = dom.querySelector(
-        `[data-row="${savedFocusRow}"][data-col="${savedFocusCol}"]`
-      ) as HTMLElement | null;
-
-      if (targetCell) {
-        targetCell.focus();
-        // Restore cursor position
-        const sel = doc.getSelection();
-        if (sel && targetCell.firstChild) {
-          try {
-            const range = doc.createRange();
-            const textNode = targetCell.firstChild;
-            const maxOffset = textNode.textContent?.length ?? 0;
-            range.setStart(textNode, Math.min(savedSelectionStart, maxOffset));
-            range.setEnd(textNode, Math.min(savedSelectionEnd, maxOffset));
-            sel.removeAllRanges();
-            sel.addRange(range);
-          } catch {
-            // Fallback: just focus the cell
-          }
-        }
-      }
-    }
+    // 4. Restore focus if we had it using managed focus utilities
+    restoreFocus(dom, focusState);
 
     return true;
   }
@@ -335,11 +320,13 @@ class TableBlockWidget extends WidgetType {
       // Fallback: empty div if table can't be parsed
       const wrapper = document.createElement("div");
       wrapper.className = "cm-table-block";
+      wrapper.dataset.tableFrom = String(this.tableFrom);
       return wrapper;
     }
 
     const wrapper = document.createElement("div");
     wrapper.className = "cm-table-block";
+    wrapper.dataset.tableFrom = String(this.tableFrom);
     this.applyTableWidth(wrapper, view);
 
     // Create toolbar container
@@ -412,15 +399,23 @@ class TableBlockWidget extends WidgetType {
     const rowGroup = document.createElement("div");
     rowGroup.className = "cm-table-toolbar-group";
 
-    const addRowBtn = this.createToolbarButton("+ Row", "Add row", () => {
-      const info = getCurrentTableInfo(view, this.tableFrom);
-      if (info) addTableRow(view, info);
-    });
+    const addRowBtn = this.createToolbarButton("+ Row", "Add row");
+    this.eventManager.attach(addRowBtn, "click", TABLE_WIDGET_CONFIG, view,
+      (e, { data: tableInfo }) => {
+        e.preventDefault();
+        e.stopPropagation();
+        addTableRow(view, tableInfo);
+      }
+    );
 
-    const removeRowBtn = this.createToolbarButton("− Row", "Remove row", () => {
-      const info = getCurrentTableInfo(view, this.tableFrom);
-      if (info) removeTableRow(view, info);
-    });
+    const removeRowBtn = this.createToolbarButton("− Row", "Remove row");
+    this.eventManager.attach(removeRowBtn, "click", TABLE_WIDGET_CONFIG, view,
+      (e, { data: tableInfo }) => {
+        e.preventDefault();
+        e.stopPropagation();
+        removeTableRow(view, tableInfo);
+      }
+    );
 
     rowGroup.appendChild(addRowBtn);
     rowGroup.appendChild(removeRowBtn);
@@ -429,15 +424,23 @@ class TableBlockWidget extends WidgetType {
     const colGroup = document.createElement("div");
     colGroup.className = "cm-table-toolbar-group";
 
-    const addColBtn = this.createToolbarButton("+ Column", "Add column", () => {
-      const info = getCurrentTableInfo(view, this.tableFrom);
-      if (info) addTableColumn(view, info);
-    });
+    const addColBtn = this.createToolbarButton("+ Column", "Add column");
+    this.eventManager.attach(addColBtn, "click", TABLE_WIDGET_CONFIG, view,
+      (e, { data: tableInfo }) => {
+        e.preventDefault();
+        e.stopPropagation();
+        addTableColumn(view, tableInfo);
+      }
+    );
 
-    const removeColBtn = this.createToolbarButton("− Column", "Remove column", () => {
-      const info = getCurrentTableInfo(view, this.tableFrom);
-      if (info) removeTableColumn(view, info);
-    });
+    const removeColBtn = this.createToolbarButton("− Column", "Remove column");
+    this.eventManager.attach(removeColBtn, "click", TABLE_WIDGET_CONFIG, view,
+      (e, { data: tableInfo }) => {
+        e.preventDefault();
+        e.stopPropagation();
+        removeTableColumn(view, tableInfo);
+      }
+    );
 
     colGroup.appendChild(addColBtn);
     colGroup.appendChild(removeColBtn);
@@ -448,23 +451,14 @@ class TableBlockWidget extends WidgetType {
     return toolbar;
   }
 
-  private createToolbarButton(
-    label: string,
-    title: string,
-    onClick: () => void
-  ): HTMLButtonElement {
+  private createToolbarButton(label: string, title: string): HTMLButtonElement {
     const btn = document.createElement("button");
     btn.className = "cm-table-toolbar-btn";
     btn.textContent = label;
     btn.title = title;
     btn.type = "button";
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      onClick();
-    });
     // Prevent focus from moving to button
-    btn.addEventListener("mousedown", (e) => {
+    this.eventManager.attachRaw(btn, "mousedown", (e) => {
       e.preventDefault();
     });
     return btn;
@@ -485,8 +479,14 @@ class TableBlockWidget extends WidgetType {
 
         const newContent = cell.dataset.raw ?? cell.textContent ?? "";
 
+        // Read tableFrom from DOM - this stays current even when widget instance is stale
+        const wrapper = cell.closest(".cm-table-block") as HTMLElement;
+        const tableFromStr = wrapper?.dataset.tableFrom;
+        if (!tableFromStr) return;
+        const tableFrom = parseInt(tableFromStr, 10);
+
         // Re-parse table to get current state
-        const currentInfo = getCurrentTableInfo(view, this.tableFrom);
+        const currentInfo = getCurrentTableInfo(view, tableFrom);
         if (!currentInfo) return;
 
         // Update the cell content
@@ -529,12 +529,19 @@ class TableBlockWidget extends WidgetType {
     // Keyboard navigation
     cell.addEventListener("keydown", (e) => {
       const table = cell.closest("table")!;
+      const wrapper = cell.closest(".cm-table-block") as HTMLElement;
       const cells = Array.from(table.querySelectorAll("th, td")) as HTMLElement[];
       const idx = cells.indexOf(cell);
       const row = parseInt(cell.dataset.row ?? "0", 10);
       const col = parseInt(cell.dataset.col ?? "0", 10);
+
+      // Read tableFrom from DOM - this stays current even when widget instance is stale
+      const tableFromStr = wrapper?.dataset.tableFrom;
+      if (!tableFromStr) return;
+      const tableFrom = parseInt(tableFromStr, 10);
+
       // Get fresh table info for each keydown
-      const currentInfo = getCurrentTableInfo(view, this.tableFrom);
+      const currentInfo = getCurrentTableInfo(view, tableFrom);
       const colCount = currentInfo?.columnCount ?? cells.length;
       const rowCount = currentInfo?.rowCount ?? 1;
 
@@ -545,13 +552,15 @@ class TableBlockWidget extends WidgetType {
           cells[nextIdx].focus();
         } else if (!e.shiftKey && nextIdx >= cells.length) {
           // Tab at last cell - add row and focus same column in new row
-          const info = getCurrentTableInfo(view, this.tableFrom);
+          const info = getCurrentTableInfo(view, tableFrom);
           if (info) {
             addTableRow(view, info);
             // Double RAF to ensure decoration rebuild completes
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                const newTable = view.dom.querySelector(".cm-table-block table");
+                // Find by stable identifier, not stale cell reference
+                const wrapper = view.dom.querySelector(`.cm-table-block[data-table-from="${tableFrom}"]`);
+                const newTable = wrapper?.querySelector("table");
                 if (newTable) {
                   // Focus same column in new row (first column for Tab)
                   const newCells = newTable.querySelectorAll("tbody tr:last-child td");
@@ -582,7 +591,7 @@ class TableBlockWidget extends WidgetType {
           }
         }
       } else if (e.key === "Enter" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-        // Enter adds a new row when in body, moves to body from header
+        // Enter moves down in table, only adds row when on last body row
         e.preventDefault();
         if (row === 0) {
           // In header - move to first body cell in same column
@@ -591,23 +600,37 @@ class TableBlockWidget extends WidgetType {
             cells[bodyFirstIdx].focus();
           }
         } else {
-          // In body - add new row and focus same column
-          const info = getCurrentTableInfo(view, this.tableFrom);
+          // In body - check if last row
+          const info = getCurrentTableInfo(view, tableFrom);
           if (info) {
-            addTableRow(view, info);
-            // Double RAF to ensure decoration rebuild completes
-            requestAnimationFrame(() => {
+            const bodyRowIdx = row - 1; // row 0 is header, so row 1 = body row 0
+            if (bodyRowIdx < info.bodyRows.length - 1) {
+              // NOT last row - move to next row, same column
+              // bodyRowIdx is 0-indexed, nth-child is 1-indexed, so next row is bodyRowIdx + 2
+              const tbody = cell.closest("table")?.querySelector("tbody");
+              const nextRowCells = tbody?.querySelectorAll(`tr:nth-child(${bodyRowIdx + 2}) td`);
+              if (nextRowCells && nextRowCells.length > col) {
+                (nextRowCells[col] as HTMLElement).focus();
+              }
+            } else {
+              // AT last row - add new row and focus same column
+              addTableRow(view, info);
+              // Double RAF to ensure decoration rebuild completes
               requestAnimationFrame(() => {
-                const newTable = view.dom.querySelector(".cm-table-block table");
-                if (newTable) {
-                  const newCells = newTable.querySelectorAll("tbody tr:last-child td");
-                  const targetCol = Math.min(col, newCells.length - 1);
-                  if (newCells.length > targetCol) {
-                    (newCells[targetCol] as HTMLElement).focus();
+                requestAnimationFrame(() => {
+                  // Find by stable identifier, not stale cell reference
+                  const wrapper = view.dom.querySelector(`.cm-table-block[data-table-from="${tableFrom}"]`);
+                  const newTable = wrapper?.querySelector("table");
+                  if (newTable) {
+                    const newCells = newTable.querySelectorAll("tbody tr:last-child td");
+                    const targetCol = Math.min(col, newCells.length - 1);
+                    if (newCells.length > targetCol) {
+                      (newCells[targetCol] as HTMLElement).focus();
+                    }
                   }
-                }
+                });
               });
-            });
+            }
           }
         }
       } else if (e.key === "Escape") {
@@ -616,7 +639,7 @@ class TableBlockWidget extends WidgetType {
         cell.blur();
         view.focus();
         // Move cursor after the table
-        const info = getCurrentTableInfo(view, this.tableFrom);
+        const info = getCurrentTableInfo(view, tableFrom);
         if (info) {
           view.dispatch({
             selection: { anchor: info.to }
@@ -630,6 +653,11 @@ class TableBlockWidget extends WidgetType {
     // Return true = CodeMirror ignores event, browser/widget handles natively
     // This is REQUIRED for contentEditable cells to receive focus and input
     return true;
+  }
+
+  destroy() {
+    // Clean up all managed event handlers
+    this.eventManager.detachAll();
   }
 
   private applyTableWidth(wrapper: HTMLElement, view: EditorView) {
@@ -866,9 +894,12 @@ function handleTabInTable(view: EditorView): boolean {
   }
 
   // At last cell — add a new row and move to its first cell
+  // Store original table position BEFORE dispatch — the table still starts at this position
+  // after replacement (content before info.from doesn't shift)
+  const originalTableFrom = info.from;
   addTableRow(view, info);
-  // Re-parse after the edit to get updated cell positions
-  const newInfo = getCurrentTableInfo(view, tableExtent.from);
+  // Re-parse using the stored position to find the correct table
+  const newInfo = getCurrentTableInfo(view, originalTableFrom);
   if (!newInfo || newInfo.bodyRows.length === 0) return true;
   const lastRow = newInfo.bodyRows[newInfo.bodyRows.length - 1];
   if (lastRow.length > 0) {
@@ -937,6 +968,291 @@ function handleShiftTabInTable(view: EditorView): boolean {
     });
   }
   // At first cell — consume the key but do nothing
+  return true;
+}
+
+/**
+ * Handle Enter key when cursor is inside a table.
+ * Moves cursor down to the next row in the same column.
+ * - In header: move to first body row, same column
+ * - In body (not last row): move to next row, same column
+ * - In last body row: create new row and move to the new cell below
+ */
+function handleEnterInTable(view: EditorView): boolean {
+  const pos = view.state.selection.main.head;
+  const extents = collectTableExtents(view.state);
+  const tableExtent = extents.find(e => pos >= e.from && pos <= e.to);
+  if (!tableExtent) return false;
+
+  const info = getCurrentTableInfo(view, tableExtent.from);
+  if (!info) return false;
+
+  // Find which cell cursor is in
+  const allCells = getAllTableCells(info);
+  let currentCell: TableCellInfo | null = null;
+  for (const cell of allCells) {
+    if (pos >= cell.from && pos <= cell.to) {
+      currentCell = cell;
+      break;
+    }
+  }
+
+  // If cursor isn't in any cell, find nearest on same line
+  if (!currentCell) {
+    const cursorLine = view.state.doc.lineAt(pos);
+    let bestCell: TableCellInfo | null = null;
+    let bestDist = Infinity;
+    for (const cell of allCells) {
+      const cellLine = view.state.doc.lineAt(cell.from);
+      if (cellLine.number !== cursorLine.number) continue;
+      const dist = Math.min(Math.abs(pos - cell.from), Math.abs(pos - cell.to));
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestCell = cell;
+      }
+    }
+    if (!bestCell) return false;
+    currentCell = bestCell;
+  }
+
+  const col = currentCell.col;
+
+  if (currentCell.isHeader) {
+    // In header — move to first body row, same column
+    if (info.bodyRows.length > 0 && info.bodyRows[0].length > col) {
+      const targetCell = info.bodyRows[0][col];
+      view.dispatch({
+        selection: targetCell.from === targetCell.to
+          ? EditorSelection.cursor(targetCell.from)
+          : EditorSelection.range(targetCell.from, targetCell.to),
+      });
+    }
+    return true;
+  }
+
+  // In body — find current row index
+  const bodyRowIdx = currentCell.row - 1; // row 0 is header, so body row 0 = currentCell.row 1
+
+  if (bodyRowIdx < info.bodyRows.length - 1) {
+    // Not last row — move to next row, same column
+    const nextRow = info.bodyRows[bodyRowIdx + 1];
+    if (nextRow.length > col) {
+      const targetCell = nextRow[col];
+      view.dispatch({
+        selection: targetCell.from === targetCell.to
+          ? EditorSelection.cursor(targetCell.from)
+          : EditorSelection.range(targetCell.from, targetCell.to),
+      });
+    }
+    return true;
+  }
+
+  // At last body row — add new row and move to the new cell
+  // Store original table position BEFORE dispatch — the table still starts at this position
+  // after replacement (content before info.from doesn't shift)
+  const originalTableFrom = info.from;
+  addTableRow(view, info);
+  // Re-parse using the stored position to find the correct table
+  const newInfo = getCurrentTableInfo(view, originalTableFrom);
+  if (!newInfo || newInfo.bodyRows.length === 0) return true;
+  const lastRow = newInfo.bodyRows[newInfo.bodyRows.length - 1];
+  if (lastRow.length > col) {
+    view.dispatch({
+      selection: EditorSelection.cursor(lastRow[col].from),
+    });
+  }
+  return true;
+}
+
+/**
+ * Handle Arrow Up key when cursor is inside a table.
+ * Moves cursor to the cell above in the same column.
+ * If at the first row (header), exits the table and places cursor before it.
+ */
+function handleArrowUpInTable(view: EditorView): boolean {
+  const pos = view.state.selection.main.head;
+  const extents = collectTableExtents(view.state);
+  const tableExtent = extents.find(e => pos >= e.from && pos <= e.to);
+  if (!tableExtent) return false;
+
+  const info = getCurrentTableInfo(view, tableExtent.from);
+  if (!info) return false;
+
+  // Find which cell cursor is in
+  const allCells = getAllTableCells(info);
+  let currentCell: TableCellInfo | null = null;
+  for (const cell of allCells) {
+    if (pos >= cell.from && pos <= cell.to) {
+      currentCell = cell;
+      break;
+    }
+  }
+
+  // If cursor isn't in any cell, find nearest on same line
+  if (!currentCell) {
+    const cursorLine = view.state.doc.lineAt(pos);
+    let bestCell: TableCellInfo | null = null;
+    let bestDist = Infinity;
+    for (const cell of allCells) {
+      const cellLine = view.state.doc.lineAt(cell.from);
+      if (cellLine.number !== cursorLine.number) continue;
+      const dist = Math.min(Math.abs(pos - cell.from), Math.abs(pos - cell.to));
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestCell = cell;
+      }
+    }
+    if (!bestCell) return false;
+    currentCell = bestCell;
+  }
+
+  const col = currentCell.col;
+
+  if (currentCell.isHeader) {
+    // At header — exit table, place cursor before it
+    // Position before the table (end of previous line or start of doc)
+    const beforeTable = info.from > 0 ? info.from - 1 : 0;
+    view.dispatch({
+      selection: EditorSelection.cursor(beforeTable),
+    });
+    return true;
+  }
+
+  // In body — find current row index
+  const bodyRowIdx = currentCell.row - 1;
+
+  if (bodyRowIdx === 0) {
+    // First body row — move up to header, same column
+    if (info.headerCells.length > col) {
+      const targetCell = info.headerCells[col];
+      view.dispatch({
+        selection: targetCell.from === targetCell.to
+          ? EditorSelection.cursor(targetCell.from)
+          : EditorSelection.range(targetCell.from, targetCell.to),
+      });
+    }
+    return true;
+  }
+
+  // Move to previous body row, same column
+  const prevRow = info.bodyRows[bodyRowIdx - 1];
+  if (prevRow.length > col) {
+    const targetCell = prevRow[col];
+    view.dispatch({
+      selection: targetCell.from === targetCell.to
+        ? EditorSelection.cursor(targetCell.from)
+        : EditorSelection.range(targetCell.from, targetCell.to),
+    });
+  }
+  return true;
+}
+
+/**
+ * Handle Arrow Down key when cursor is inside a table.
+ * Moves cursor to the cell below in the same column.
+ * If at the last row, exits the table and places cursor after it.
+ */
+function handleArrowDownInTable(view: EditorView): boolean {
+  const pos = view.state.selection.main.head;
+  const extents = collectTableExtents(view.state);
+  const tableExtent = extents.find(e => pos >= e.from && pos <= e.to);
+  if (!tableExtent) return false;
+
+  const info = getCurrentTableInfo(view, tableExtent.from);
+  if (!info) return false;
+
+  // Find which cell cursor is in
+  const allCells = getAllTableCells(info);
+  let currentCell: TableCellInfo | null = null;
+  for (const cell of allCells) {
+    if (pos >= cell.from && pos <= cell.to) {
+      currentCell = cell;
+      break;
+    }
+  }
+
+  // If cursor isn't in any cell, find nearest on same line
+  if (!currentCell) {
+    const cursorLine = view.state.doc.lineAt(pos);
+    let bestCell: TableCellInfo | null = null;
+    let bestDist = Infinity;
+    for (const cell of allCells) {
+      const cellLine = view.state.doc.lineAt(cell.from);
+      if (cellLine.number !== cursorLine.number) continue;
+      const dist = Math.min(Math.abs(pos - cell.from), Math.abs(pos - cell.to));
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestCell = cell;
+      }
+    }
+    if (!bestCell) return false;
+    currentCell = bestCell;
+  }
+
+  const col = currentCell.col;
+
+  if (currentCell.isHeader) {
+    // In header — move down to first body row, same column
+    if (info.bodyRows.length > 0 && info.bodyRows[0].length > col) {
+      const targetCell = info.bodyRows[0][col];
+      view.dispatch({
+        selection: targetCell.from === targetCell.to
+          ? EditorSelection.cursor(targetCell.from)
+          : EditorSelection.range(targetCell.from, targetCell.to),
+      });
+    } else {
+      // No body rows — exit table
+      const afterTable = info.to < view.state.doc.length ? info.to + 1 : info.to;
+      view.dispatch({
+        selection: EditorSelection.cursor(afterTable),
+      });
+    }
+    return true;
+  }
+
+  // In body — find current row index
+  const bodyRowIdx = currentCell.row - 1;
+
+  if (bodyRowIdx >= info.bodyRows.length - 1) {
+    // At last body row — exit table, place cursor after it
+    const afterTable = info.to < view.state.doc.length ? info.to + 1 : info.to;
+    view.dispatch({
+      selection: EditorSelection.cursor(afterTable),
+    });
+    return true;
+  }
+
+  // Move to next body row, same column
+  const nextRow = info.bodyRows[bodyRowIdx + 1];
+  if (nextRow.length > col) {
+    const targetCell = nextRow[col];
+    view.dispatch({
+      selection: targetCell.from === targetCell.to
+        ? EditorSelection.cursor(targetCell.from)
+        : EditorSelection.range(targetCell.from, targetCell.to),
+    });
+  }
+  return true;
+}
+
+/**
+ * Handle Escape key when cursor is inside a table.
+ * Exits the table and places cursor after it.
+ */
+function handleEscapeInTable(view: EditorView): boolean {
+  const pos = view.state.selection.main.head;
+  const extents = collectTableExtents(view.state);
+  const tableExtent = extents.find(e => pos >= e.from && pos <= e.to);
+  if (!tableExtent) return false;
+
+  const info = getCurrentTableInfo(view, tableExtent.from);
+  if (!info) return false;
+
+  // Exit table — place cursor after it
+  const afterTable = info.to < view.state.doc.length ? info.to + 1 : info.to;
+  view.dispatch({
+    selection: EditorSelection.cursor(afterTable),
+  });
   return true;
 }
 
@@ -4069,10 +4385,10 @@ const formattingEscapeKeymap = keymap.of([
     key: "Shift-Tab",
     run: (view) => handleShiftTabInTable(view) || handleShiftTabInCodeBlock(view) || handleShiftTabInList(view),
   },
-  // Enter: new paragraph (double newline for proper markdown)
+  // Enter: table navigation, then new paragraph (double newline for proper markdown)
   {
     key: "Enter",
-    run: bypassInCodeBlock(handleEnter),
+    run: (view) => handleEnterInTable(view) || bypassInCodeBlock(handleEnter)(view),
   },
   // Shift+Enter: soft line break (single newline, same paragraph)
   {
@@ -4084,7 +4400,21 @@ const formattingEscapeKeymap = keymap.of([
     key: "Mod-Enter",
     run: bypassInCodeBlock(toggleTaskCheckboxOnLine),
   },
-  // ArrowUp/Down: navigation handled by selectionSnapper transaction filter
+  // Arrow Up: table navigation (column-wise), then default
+  {
+    key: "ArrowUp",
+    run: handleArrowUpInTable,
+  },
+  // Arrow Down: table navigation (column-wise), then default
+  {
+    key: "ArrowDown",
+    run: handleArrowDownInTable,
+  },
+  // Escape: exit table
+  {
+    key: "Escape",
+    run: handleEscapeInTable,
+  },
 ]);
 
 /**
@@ -7289,6 +7619,10 @@ export {
   getContainerLinePrefix,
   handleTabInTable,
   handleShiftTabInTable,
+  handleEnterInTable,
+  handleArrowUpInTable,
+  handleArrowDownInTable,
+  handleEscapeInTable,
   getAllTableCells,
 
   // Table types
