@@ -4,8 +4,6 @@
  * Tests cover:
  * - handleEnterInBlockquote: Continue/exit blockquote on Enter
  * - handleBackspaceInBlockquote: Remove marker on Backspace at content start
- * - handleArrowLeftFromBlockquoteStart: Skip to previous line
- * - handleArrowRightIntoBlockquote: Skip to content start
  * - getBlockquoteInfo: Parse blockquote markers
  */
 
@@ -14,8 +12,6 @@ import { createTestView, getDocWithCursor, type TestView } from "./testUtils";
 import {
   handleEnterInBlockquote,
   handleBackspaceInBlockquote,
-  handleArrowLeftFromBlockquoteStart,
-  handleArrowRightIntoBlockquote,
   getBlockquoteInfo,
 } from "../harness";
 
@@ -162,79 +158,6 @@ describe("Blockquote Handlers", () => {
 
       expect(handled).toBe(true);
       expect(getDocWithCursor(testView.view)).toBe("|First line content");
-    });
-  });
-
-  describe("handleArrowRightIntoBlockquote", () => {
-    it("skips to content start when at line start", () => {
-      // Create view without cursor guard to test precise positioning
-      testView = createTestView("|> Hello", { hidesSyntax: false });
-
-      const handled = handleArrowRightIntoBlockquote(testView.view);
-
-      expect(handled).toBe(true);
-      expect(testView.view.state.selection.main.head).toBe(2); // After "> "
-    });
-
-    it("returns false when not at line start", () => {
-      testView = createTestView("> He|llo", { hidesSyntax: false });
-
-      const handled = handleArrowRightIntoBlockquote(testView.view);
-
-      expect(handled).toBe(false);
-    });
-
-    it("returns false for non-blockquote line", () => {
-      testView = createTestView("|Regular text", { hidesSyntax: false });
-
-      const handled = handleArrowRightIntoBlockquote(testView.view);
-
-      expect(handled).toBe(false);
-    });
-
-    it("skips nested markers correctly", () => {
-      testView = createTestView("|> > Nested", { hidesSyntax: false });
-
-      const handled = handleArrowRightIntoBlockquote(testView.view);
-
-      expect(handled).toBe(true);
-      expect(testView.view.state.selection.main.head).toBe(4); // After "> > "
-    });
-  });
-
-  describe("handleArrowLeftFromBlockquoteStart", () => {
-    it("goes to end of previous line", () => {
-      testView = createTestView("Previous\n> |Content");
-
-      const handled = handleArrowLeftFromBlockquoteStart(testView.view);
-
-      expect(handled).toBe(true);
-      expect(testView.view.state.selection.main.head).toBe(8); // End of "Previous"
-    });
-
-    it("returns false when not at content start", () => {
-      testView = createTestView("> Con|tent");
-
-      const handled = handleArrowLeftFromBlockquoteStart(testView.view);
-
-      expect(handled).toBe(false);
-    });
-
-    it("returns false on first line", () => {
-      testView = createTestView("> |First");
-
-      const handled = handleArrowLeftFromBlockquoteStart(testView.view);
-
-      expect(handled).toBe(false);
-    });
-
-    it("skips blank lines to find previous content", () => {
-      testView = createTestView("Content\n\n> |Quote");
-
-      const handled = handleArrowLeftFromBlockquoteStart(testView.view);
-
-      expect(handled).toBe(true);
-      expect(testView.view.state.selection.main.head).toBe(7); // End of "Content"
     });
   });
 

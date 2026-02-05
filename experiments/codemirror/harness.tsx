@@ -12,7 +12,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { EditorState, StateField, RangeSetBuilder, EditorSelection, Prec } from "@codemirror/state";
-import { EditorView, Decoration, keymap, WidgetType } from "@codemirror/view";
+import { EditorView, Decoration, keymap, WidgetType, rectangularSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { syntaxTree } from "@codemirror/language";
@@ -265,92 +265,6 @@ function getCodeBlockAtLine(
   }
 
   return null;
-}
-
-/**
- * Handle ArrowDown when moving into a code block
- * Skip over the entire code block to the line after it
- */
-function handleArrowDownPastCodeBlock(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-  const totalLines = state.doc.lines;
-
-  // Check if next line starts a code block
-  if (line.number < totalLines) {
-    const nextLine = state.doc.line(line.number + 1);
-    if (isCodeFenceStart(nextLine.text)) {
-      const codeBlock = getCodeBlockAtLine(state, line.number + 1);
-      if (codeBlock) {
-        // Skip to line after the code block
-        const endLine = state.doc.lineAt(codeBlock.to);
-        if (endLine.number < totalLines) {
-          const targetLine = state.doc.line(endLine.number + 1);
-          view.dispatch({
-            selection: { anchor: targetLine.from },
-            scrollIntoView: true,
-          });
-          return true;
-        } else {
-          // Code block is at end of document
-          view.dispatch({
-            selection: { anchor: state.doc.length },
-            scrollIntoView: true,
-          });
-          return true;
-        }
-      }
-    }
-  }
-  return false;
-}
-
-/**
- * Handle ArrowUp when moving into a code block
- * Skip over the entire code block to the line before it
- */
-function handleArrowUpPastCodeBlock(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-
-  // Check if previous line is the end of a code block
-  if (line.number > 1) {
-    const prevLine = state.doc.line(line.number - 1);
-
-    // Check if previous line ends a code block (starts with ```)
-    if (prevLine.text.match(/^`{3,}$/)) {
-      // This might be a closing fence - find the opening
-      for (let i = line.number - 2; i >= 1; i--) {
-        const checkLine = state.doc.line(i);
-        if (isCodeFenceStart(checkLine.text)) {
-          // Verify this is the matching opener
-          const codeBlock = getCodeBlockAtLine(state, i);
-          if (codeBlock && state.doc.lineAt(codeBlock.to).number === line.number - 1) {
-            // Skip to line before the code block
-            if (i > 1) {
-              const targetLine = state.doc.line(i - 1);
-              view.dispatch({
-                selection: { anchor: targetLine.to },
-                scrollIntoView: true,
-              });
-              return true;
-            } else {
-              // Code block is at start of document
-              view.dispatch({
-                selection: { anchor: 0 },
-                scrollIntoView: true,
-              });
-              return true;
-            }
-          }
-          break;
-        }
-      }
-    }
-  }
-  return false;
 }
 
 /**
@@ -619,42 +533,7 @@ function getLinkContext(state: EditorState): LinkContext | null {
 
   // Regex fallback for links the parser might miss
   if (!result) {
-    const doc = state.doc;
-    const text = doc.toString();
-    const linkRegex = /\[([^\]]*)\]\(([^)]*)\)/g;
-    let match: RegExpExecArray | null;
-
-    while ((match = linkRegex.exec(text)) !== null) {
-      const from = match.index;
-      const to = match.index + match[0].length;
-
-      if (pos >= from && pos <= to) {
-        const bracketOpen = from;
-        const bracketClose = from + 1 + match[1].length;
-        const parenOpen = bracketClose + 1;
-        const parenClose = to - 1;
-        const textFrom = bracketOpen + 1;
-        const textTo = bracketClose;
-        const urlFrom = parenOpen + 1;
-        const urlTo = parenClose;
-
-        result = {
-          from,
-          to,
-          textFrom,
-          textTo,
-          urlFrom,
-          urlTo,
-          bracketOpen,
-          bracketClose,
-          parenOpen,
-          parenClose,
-          url: match[2],
-          text: match[1],
-        };
-        break;
-      }
-    }
+    result = findLinkByRegex(state, (from, to) => pos >= from && pos <= to);
   }
 
   return result;
@@ -677,29 +556,22 @@ function isAtStartOfLinkText(state: EditorState, ctx: LinkContext): boolean {
 }
 
 /**
- * Check if cursor is inside the hidden ](url) portion
+ * Shared regex-based link finder. Returns the first LinkContext whose position
+ * satisfies the given predicate, or null.
  */
-function isInHiddenLinkPortion(state: EditorState, ctx: LinkContext): boolean {
-  const pos = state.selection.main.head;
-  // Hidden portion: ] ( url )
-  // That's from bracketClose to parenClose (inclusive of parenClose)
-  return pos > ctx.textTo && pos <= ctx.parenClose;
-}
-
-/**
- * Find link context when cursor is right after the closing )
- */
-function getLinkContextAfterClosing(state: EditorState): LinkContext | null {
-  const pos = state.selection.main.head;
-  const doc = state.doc;
-  const text = doc.toString();
-  const linkRegex = /\[([^\]]*)\]\(([^)]*)\)/g;
+function findLinkByRegex(
+  state: EditorState,
+  predicate: (from: number, to: number) => boolean,
+): LinkContext | null {
+  const text = state.doc.toString();
+  const linkRegex = /\[([^\]]*)]\(([^)]*)\)/g;
   let match: RegExpExecArray | null;
 
   while ((match = linkRegex.exec(text)) !== null) {
+    const from = match.index;
     const to = match.index + match[0].length;
-    if (pos === to) {
-      const from = match.index;
+
+    if (predicate(from, to)) {
       const bracketOpen = from;
       const bracketClose = from + 1 + match[1].length;
       const parenOpen = bracketClose + 1;
@@ -730,102 +602,70 @@ function getLinkContextAfterClosing(state: EditorState): LinkContext | null {
 }
 
 /**
- * Find the formatting context at cursor position
- * Returns info about the formatted region if cursor is inside one
+ * Find link context when cursor is right after the closing )
  */
-function getFormattingContext(state: EditorState): FormattingContext | null {
+function getLinkContextAfterClosing(state: EditorState): LinkContext | null {
   const pos = state.selection.main.head;
+  return findLinkByRegex(state, (_from, to) => pos === to);
+}
+
+/**
+ * Shared AST walk for formatting contexts.
+ * Each formatting node type uses the same logic — only the position predicate differs.
+ */
+const FORMATTING_NODE_TYPES: Array<{
+  nodeName: string;
+  markName: string;
+  type: FormattingContext["type"];
+}> = [
+  { nodeName: "StrongEmphasis", markName: "EmphasisMark", type: "strong" },
+  { nodeName: "Emphasis", markName: "EmphasisMark", type: "emphasis" },
+  { nodeName: "InlineCode", markName: "CodeMark", type: "code" },
+  { nodeName: "Strikethrough", markName: "StrikethroughMark", type: "strikethrough" },
+];
+
+function findFormattingByAST(
+  state: EditorState,
+  predicate: (nodeFrom: number, nodeTo: number) => boolean,
+): FormattingContext | null {
   let result: FormattingContext | null = null;
 
   syntaxTree(state).iterate({
     enter(node) {
-      // Check StrongEmphasis (bold)
-      if (node.name === "StrongEmphasis" && pos >= node.from && pos < node.to) {
-        const markers: { from: number; to: number }[] = [];
-        node.node.cursor().iterate((child) => {
-          if (child.name === "EmphasisMark") {
-            markers.push({ from: child.from, to: child.to });
+      for (const ft of FORMATTING_NODE_TYPES) {
+        if (node.name === ft.nodeName && predicate(node.from, node.to)) {
+          const markers: { from: number; to: number }[] = [];
+          node.node.cursor().iterate((child) => {
+            if (child.name === ft.markName) {
+              markers.push({ from: child.from, to: child.to });
+            }
+          });
+          if (markers.length >= 2) {
+            result = {
+              type: ft.type,
+              from: node.from,
+              to: node.to,
+              contentFrom: markers[0].to,
+              contentTo: markers[markers.length - 1].from,
+              closingMarkerFrom: markers[markers.length - 1].from,
+              closingMarkerTo: markers[markers.length - 1].to,
+            };
           }
-        });
-        if (markers.length >= 2) {
-          result = {
-            type: "strong",
-            from: node.from,
-            to: node.to,
-            contentFrom: markers[0].to,
-            contentTo: markers[markers.length - 1].from,
-            closingMarkerFrom: markers[markers.length - 1].from,
-            closingMarkerTo: markers[markers.length - 1].to,
-          };
-        }
-      }
-
-      // Check Emphasis (italic)
-      if (node.name === "Emphasis" && pos >= node.from && pos < node.to) {
-        const markers: { from: number; to: number }[] = [];
-        node.node.cursor().iterate((child) => {
-          if (child.name === "EmphasisMark") {
-            markers.push({ from: child.from, to: child.to });
-          }
-        });
-        if (markers.length >= 2) {
-          result = {
-            type: "emphasis",
-            from: node.from,
-            to: node.to,
-            contentFrom: markers[0].to,
-            contentTo: markers[markers.length - 1].from,
-            closingMarkerFrom: markers[markers.length - 1].from,
-            closingMarkerTo: markers[markers.length - 1].to,
-          };
-        }
-      }
-
-      // Check InlineCode
-      if (node.name === "InlineCode" && pos >= node.from && pos < node.to) {
-        const markers: { from: number; to: number }[] = [];
-        node.node.cursor().iterate((child) => {
-          if (child.name === "CodeMark") {
-            markers.push({ from: child.from, to: child.to });
-          }
-        });
-        if (markers.length >= 2) {
-          result = {
-            type: "code",
-            from: node.from,
-            to: node.to,
-            contentFrom: markers[0].to,
-            contentTo: markers[markers.length - 1].from,
-            closingMarkerFrom: markers[markers.length - 1].from,
-            closingMarkerTo: markers[markers.length - 1].to,
-          };
-        }
-      }
-
-      // Check Strikethrough
-      if (node.name === "Strikethrough" && pos >= node.from && pos < node.to) {
-        const markers: { from: number; to: number }[] = [];
-        node.node.cursor().iterate((child) => {
-          if (child.name === "StrikethroughMark") {
-            markers.push({ from: child.from, to: child.to });
-          }
-        });
-        if (markers.length >= 2) {
-          result = {
-            type: "strikethrough",
-            from: node.from,
-            to: node.to,
-            contentFrom: markers[0].to,
-            contentTo: markers[markers.length - 1].from,
-            closingMarkerFrom: markers[markers.length - 1].from,
-            closingMarkerTo: markers[markers.length - 1].to,
-          };
         }
       }
     },
   });
 
   return result;
+}
+
+/**
+ * Find the formatting context at cursor position
+ * Returns info about the formatted region if cursor is inside one
+ */
+function getFormattingContext(state: EditorState): FormattingContext | null {
+  const pos = state.selection.main.head;
+  return findFormattingByAST(state, (from, to) => pos >= from && pos < to);
 }
 
 /**
@@ -1001,7 +841,7 @@ function setHeadingLevel(view: EditorView, level: 1 | 2 | 3 | 4 | 5 | 6): boolea
   if (getBlockquoteInfo(line)) return false;
 
   // Check for existing heading
-  const headingMatch = lineText.match(/^(#{1,6})\s/);
+  const headingMatch = lineText.match(HEADING_PREFIX_RE);
 
   if (headingMatch) {
     const existingLevel = headingMatch[1].length;
@@ -1052,102 +892,14 @@ function setHeading6(view: EditorView): boolean { return setHeadingLevel(view, 6
  */
 function getFormattingContextAfterClosing(state: EditorState): FormattingContext | null {
   const pos = state.selection.main.head;
-  let result: FormattingContext | null = null;
-
-  syntaxTree(state).iterate({
-    enter(node) {
-      // Check if cursor is right after a formatted region
-      if (node.name === "StrongEmphasis" && pos === node.to) {
-        const markers: { from: number; to: number }[] = [];
-        node.node.cursor().iterate((child) => {
-          if (child.name === "EmphasisMark") {
-            markers.push({ from: child.from, to: child.to });
-          }
-        });
-        if (markers.length >= 2) {
-          result = {
-            type: "strong",
-            from: node.from,
-            to: node.to,
-            contentFrom: markers[0].to,
-            contentTo: markers[markers.length - 1].from,
-            closingMarkerFrom: markers[markers.length - 1].from,
-            closingMarkerTo: markers[markers.length - 1].to,
-          };
-        }
-      }
-
-      if (node.name === "Emphasis" && pos === node.to) {
-        const markers: { from: number; to: number }[] = [];
-        node.node.cursor().iterate((child) => {
-          if (child.name === "EmphasisMark") {
-            markers.push({ from: child.from, to: child.to });
-          }
-        });
-        if (markers.length >= 2) {
-          result = {
-            type: "emphasis",
-            from: node.from,
-            to: node.to,
-            contentFrom: markers[0].to,
-            contentTo: markers[markers.length - 1].from,
-            closingMarkerFrom: markers[markers.length - 1].from,
-            closingMarkerTo: markers[markers.length - 1].to,
-          };
-        }
-      }
-
-      if (node.name === "InlineCode" && pos === node.to) {
-        const markers: { from: number; to: number }[] = [];
-        node.node.cursor().iterate((child) => {
-          if (child.name === "CodeMark") {
-            markers.push({ from: child.from, to: child.to });
-          }
-        });
-        if (markers.length >= 2) {
-          result = {
-            type: "code",
-            from: node.from,
-            to: node.to,
-            contentFrom: markers[0].to,
-            contentTo: markers[markers.length - 1].from,
-            closingMarkerFrom: markers[markers.length - 1].from,
-            closingMarkerTo: markers[markers.length - 1].to,
-          };
-        }
-      }
-
-      if (node.name === "Strikethrough" && pos === node.to) {
-        const markers: { from: number; to: number }[] = [];
-        node.node.cursor().iterate((child) => {
-          if (child.name === "StrikethroughMark") {
-            markers.push({ from: child.from, to: child.to });
-          }
-        });
-        if (markers.length >= 2) {
-          result = {
-            type: "strikethrough",
-            from: node.from,
-            to: node.to,
-            contentFrom: markers[0].to,
-            contentTo: markers[markers.length - 1].from,
-            closingMarkerFrom: markers[markers.length - 1].from,
-            closingMarkerTo: markers[markers.length - 1].to,
-          };
-        }
-      }
-    },
-  });
+  let result = findFormattingByAST(state, (_from, to) => pos === to);
 
   // Fallback: check with regex for patterns parser might miss
   if (!result) {
-    const doc = state.doc;
-    const text = doc.toString();
+    const text = state.doc.toString();
 
     // Check for **...** pattern ending at cursor
-    // Look backwards from cursor for closing **
     if (pos >= 2 && text.slice(pos - 2, pos) === "**") {
-      // Find the opening **
       const beforeClose = text.slice(0, pos - 2);
       const openIdx = beforeClose.lastIndexOf("**");
       if (openIdx !== -1) {
@@ -1165,7 +917,6 @@ function getFormattingContextAfterClosing(state: EditorState): FormattingContext
     // Check for *...* (italic, not bold)
     else if (pos >= 1 && text[pos - 1] === "*" && (pos < 2 || text[pos - 2] !== "*")) {
       const beforeClose = text.slice(0, pos - 1);
-      // Find opening * that's not part of **
       for (let i = beforeClose.length - 1; i >= 0; i--) {
         if (beforeClose[i] === "*" && (i === 0 || beforeClose[i - 1] !== "*") && (i === beforeClose.length - 1 || beforeClose[i + 1] !== "*")) {
           result = {
@@ -1330,7 +1081,7 @@ function handleDeleteAtLinkTextEnd(view: EditorView): boolean {
  * - Ordered: 1., 2., etc. followed by space
  * - Task lists: - [ ] or - [x] (checkbox)
  */
-const LIST_MARKER_REGEX = /^(\s*)([-*+]|\d+\.)\s(\[[ xX]\]\s)?/;
+const LIST_MARKER_REGEX = /^(\s*)([-*+]|\d+\.)\s(\[[ xX]]\s)?/;
 
 /**
  * Get list info for a line
@@ -1359,7 +1110,7 @@ function getListInfo(line: { text: string; from: number }): {
   // Task marker detection: match[3] is the optional [ ] or [x] with trailing space
   const taskMarkerMatch = match[3];
   const isTask = !!taskMarkerMatch;
-  const isTaskChecked = isTask && /\[[xX]\]/.test(taskMarkerMatch);
+  const isTaskChecked = isTask && /\[[xX]]/.test(taskMarkerMatch);
   // Task marker position: after indent + marker + space
   const taskMarkerStart = isTask ? line.from + indent.length + marker.length + 1 : null;
 
@@ -1518,6 +1269,8 @@ function handleBackspaceInList(view: EditorView): boolean {
   // Only handle if at start of content
   if (pos !== listInfo.contentStart) return false;
 
+  const markerStart = line.from + listInfo.indent.length;
+
   // Check if list item content is empty
   const content = line.text.slice(listInfo.markerWithSpace.length);
   const isEmptyListItem = content.trim() === "";
@@ -1526,8 +1279,8 @@ function handleBackspaceInList(view: EditorView): boolean {
   // This handles the case: user types "-" then backspaces
   if (isEmptyListItem) {
     view.dispatch({
-      changes: { from: line.from, to: listInfo.contentStart, insert: "" },
-      selection: { anchor: line.from },
+      changes: { from: markerStart, to: listInfo.contentStart, insert: "" },
+      selection: { anchor: markerStart },
       scrollIntoView: true,
     });
     return true;
@@ -1539,8 +1292,8 @@ function handleBackspaceInList(view: EditorView): boolean {
   if (line.number <= 1) {
     // First line - just remove the list marker, keep content
     view.dispatch({
-      changes: { from: line.from, to: listInfo.contentStart, insert: "" },
-      selection: { anchor: line.from },
+      changes: { from: markerStart, to: listInfo.contentStart, insert: "" },
+      selection: { anchor: markerStart },
       scrollIntoView: true,
     });
     return true;
@@ -1552,8 +1305,8 @@ function handleBackspaceInList(view: EditorView): boolean {
 
   // Replace current line with blank line + content (reuse content variable from above)
   view.dispatch({
-    changes: { from: prevLine.to, to: line.to, insert: `\n\n${content}` },
-    selection: { anchor: prevLine.to + 2 }, // Position at start of content
+    changes: { from: prevLine.to, to: line.to, insert: `\n\n${listInfo.indent}${content}` },
+    selection: { anchor: prevLine.to + 2 + listInfo.indent.length }, // Position at start of content (after indent)
     scrollIntoView: true,
   });
   return true;
@@ -1598,58 +1351,6 @@ function handleShiftTabInList(view: EditorView): boolean {
   view.dispatch({
     changes: { from: line.from, to: line.from + spacesToRemove, insert: "" },
     selection: { anchor: pos - spacesToRemove },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Handle ArrowLeft from list content start - go to previous line
- */
-function handleArrowLeftFromListStart(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-  const listInfo = getListInfo(line);
-
-  if (!listInfo) return false;
-  if (pos !== listInfo.contentStart) return false;
-  if (line.number <= 1) return false;
-
-  // Find previous content line (skip blank lines)
-  let targetLineNum = line.number - 1;
-  while (targetLineNum >= 1) {
-    const targetLine = state.doc.line(targetLineNum);
-    if (targetLine.text.trim() !== "") {
-      view.dispatch({
-        selection: { anchor: targetLine.to },
-        scrollIntoView: true,
-      });
-      return true;
-    }
-    targetLineNum--;
-  }
-
-  return false;
-}
-
-/**
- * Handle ArrowRight into list - skip to content start
- */
-function handleArrowRightIntoList(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-
-  // Only handle if at start of line
-  if (pos !== line.from) return false;
-
-  const listInfo = getListInfo(line);
-  if (!listInfo) return false;
-
-  // Skip to content start
-  view.dispatch({
-    selection: { anchor: listInfo.contentStart },
     scrollIntoView: true,
   });
   return true;
@@ -1855,58 +1556,6 @@ function handleBackspaceInBlockquote(view: EditorView): boolean {
 }
 
 /**
- * Handle ArrowLeft from blockquote content start - go to previous line
- */
-function handleArrowLeftFromBlockquoteStart(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-  const quoteInfo = getBlockquoteInfo(line);
-
-  if (!quoteInfo) return false;
-  if (pos !== quoteInfo.contentStart) return false;
-  if (line.number <= 1) return false;
-
-  // Find previous content line (skip blank lines)
-  let targetLineNum = line.number - 1;
-  while (targetLineNum >= 1) {
-    const targetLine = state.doc.line(targetLineNum);
-    if (targetLine.text.trim() !== "") {
-      view.dispatch({
-        selection: { anchor: targetLine.to },
-        scrollIntoView: true,
-      });
-      return true;
-    }
-    targetLineNum--;
-  }
-
-  return false;
-}
-
-/**
- * Handle ArrowRight into blockquote - skip to content start
- */
-function handleArrowRightIntoBlockquote(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-
-  // Only handle if at start of line
-  if (pos !== line.from) return false;
-
-  const quoteInfo = getBlockquoteInfo(line);
-  if (!quoteInfo) return false;
-
-  // Skip to content start
-  view.dispatch({
-    selection: { anchor: quoteInfo.contentStart },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
  * Handle Enter - insert blank line for proper markdown paragraph separation
  *
  * In markdown, paragraphs are separated by blank lines.
@@ -1939,7 +1588,7 @@ function handleEnter(view: EditorView): boolean {
   }
 
   // Check if we're in a heading
-  const headingMatch = line.text.match(/^(#{1,6})\s/);
+  const headingMatch = line.text.match(HEADING_PREFIX_RE);
   if (headingMatch) {
     const contentStart = line.from + headingMatch[0].length;
 
@@ -1996,379 +1645,39 @@ function handleShiftEnter(view: EditorView): boolean {
   return true;
 }
 
-/**
- * Handle ArrowRight into heading - skip over # markers
- * When entering a heading line from the left, skip to content start
- */
-function handleArrowRightIntoHeading(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-
-  // Check if we're at the start of a heading line
-  if (pos !== line.from) return false;
-
-  const headingMatch = line.text.match(/^(#{1,6})\s/);
-  if (!headingMatch) return false;
-
-  // Skip to content start
-  const contentStart = line.from + headingMatch[0].length;
-  view.dispatch({
-    selection: { anchor: contentStart },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Handle ArrowLeft into heading - skip over # markers and blank lines
- * When at start of heading content, jump to end of previous content
- */
-function handleArrowLeftFromHeadingStart(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-
-  const headingMatch = line.text.match(/^(#{1,6})\s/);
-  if (!headingMatch) return false;
-
-  const contentStart = line.from + headingMatch[0].length;
-
-  // Only handle if at start of heading content
-  if (pos !== contentStart) return false;
-
-  // Can't go left from first line
-  if (line.number <= 1) return false;
-
-  // Find previous content line (skip blank lines)
-  let targetLineNum = line.number - 1;
-  while (targetLineNum >= 1) {
-    const targetLine = state.doc.line(targetLineNum);
-    if (targetLine.text.trim() !== "") {
-      // Found content - go to end of it
-      view.dispatch({
-        selection: { anchor: targetLine.to },
-        scrollIntoView: true,
-      });
-      return true;
-    }
-    targetLineNum--;
-  }
-
-  // All lines above are blank, go to start of document
-  view.dispatch({
-    selection: { anchor: 0 },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Handle ArrowRight at end of line - skip over blank lines
- */
-function handleArrowRightOverBlankLines(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-  const totalLines = state.doc.lines;
-
-  // Only handle if at end of line
-  if (pos !== line.to) return false;
-
-  // Can't go right from last line
-  if (line.number >= totalLines) return false;
-
-  const nextLine = state.doc.line(line.number + 1);
-
-  // If next line is not blank, let default behavior handle
-  if (nextLine.text.trim() !== "") return false;
-
-  // Next line is blank - find the next non-blank line
-  let targetLineNum = line.number + 2;
-  while (targetLineNum <= totalLines) {
-    const targetLine = state.doc.line(targetLineNum);
-    if (targetLine.text.trim() !== "") {
-      // Found content line - go to start of it
-      view.dispatch({
-        selection: { anchor: targetLine.from },
-        scrollIntoView: true,
-      });
-      return true;
-    }
-    targetLineNum++;
-  }
-
-  // All lines below are blank, go to end of document
-  view.dispatch({
-    selection: { anchor: state.doc.length },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Handle ArrowLeft at start of line - skip over blank lines
- */
-function handleArrowLeftOverBlankLines(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-
-  // Only handle if at start of line
-  if (pos !== line.from) return false;
-
-  // Can't go left from first line
-  if (line.number <= 1) return false;
-
-  const prevLine = state.doc.line(line.number - 1);
-
-  // If previous line is not blank, let default behavior handle
-  if (prevLine.text.trim() !== "") return false;
-
-  // Previous line is blank - find the next non-blank line above
-  let targetLineNum = line.number - 2;
-  while (targetLineNum >= 1) {
-    const targetLine = state.doc.line(targetLineNum);
-    if (targetLine.text.trim() !== "") {
-      // Found content line - go to end of it
-      view.dispatch({
-        selection: { anchor: targetLine.to },
-        scrollIntoView: true,
-      });
-      return true;
-    }
-    targetLineNum--;
-  }
-
-  // All lines above are blank, go to start of document
-  view.dispatch({
-    selection: { anchor: 0 },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Get the content start position for a line (accounts for heading markers)
- */
-function getLineContentStart(line: { from: number; text: string }): number {
-  const headingMatch = line.text.match(/^(#{1,6})\s/);
-  if (headingMatch) {
-    return line.from + headingMatch[0].length;
-  }
-  return line.from;
-}
-
-/**
- * Get the content length for a line (accounts for heading markers)
- */
-function getLineContentLength(line: { text: string }): number {
-  const headingMatch = line.text.match(/^(#{1,6})\s/);
-  if (headingMatch) {
-    return line.text.length - headingMatch[0].length;
-  }
-  return line.text.length;
-}
-
-/**
- * Handle ArrowUp - skip over blank lines and account for heading markers
- */
-function handleArrowUp(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-
-  // Can't go up from first line
-  if (line.number <= 1) return false;
-
-  const prevLine = state.doc.line(line.number - 1);
-
-  // If previous line is not blank, let default behavior handle (but we need to check heading)
-  if (prevLine.text.trim() !== "") {
-    // Check if moving to a heading - need to adjust column
-    const headingMatch = prevLine.text.match(/^(#{1,6})\s/);
-    if (headingMatch) {
-      // Calculate column in content area
-      const currentContentStart = getLineContentStart(line);
-      const colInContent = pos - currentContentStart;
-      const prevContentStart = prevLine.from + headingMatch[0].length;
-      const prevContentLength = prevLine.text.length - headingMatch[0].length;
-      const targetCol = Math.min(Math.max(0, colInContent), prevContentLength);
-      view.dispatch({
-        selection: { anchor: prevContentStart + targetCol },
-        scrollIntoView: true,
-      });
-      return true;
-    }
-    return false;
-  }
-
-  // Previous line is blank - find the next non-blank line above
-  let targetLineNum = line.number - 2;
-  while (targetLineNum >= 1) {
-    const targetLine = state.doc.line(targetLineNum);
-    if (targetLine.text.trim() !== "") {
-      // Found content line - calculate equivalent cursor position
-      const currentContentStart = getLineContentStart(line);
-      const colInContent = pos - currentContentStart;
-      const targetContentStart = getLineContentStart(targetLine);
-      const targetContentLength = getLineContentLength(targetLine);
-      const targetCol = Math.min(Math.max(0, colInContent), targetContentLength);
-      view.dispatch({
-        selection: { anchor: targetContentStart + targetCol },
-        scrollIntoView: true,
-      });
-      return true;
-    }
-    targetLineNum--;
-  }
-
-  // All lines above are blank, go to start of document
-  view.dispatch({
-    selection: { anchor: 0 },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Handle ArrowDown - skip over blank lines and account for heading markers
- */
-function handleArrowDown(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-  const totalLines = state.doc.lines;
-
-  // Can't go down from last line
-  if (line.number >= totalLines) return false;
-
-  const nextLine = state.doc.line(line.number + 1);
-
-  // If next line is not blank, check if we need to handle heading
-  if (nextLine.text.trim() !== "") {
-    const headingMatch = nextLine.text.match(/^(#{1,6})\s/);
-    if (headingMatch) {
-      // Calculate column in content area
-      const currentContentStart = getLineContentStart(line);
-      const colInContent = pos - currentContentStart;
-      const nextContentStart = nextLine.from + headingMatch[0].length;
-      const nextContentLength = nextLine.text.length - headingMatch[0].length;
-      const targetCol = Math.min(Math.max(0, colInContent), nextContentLength);
-      view.dispatch({
-        selection: { anchor: nextContentStart + targetCol },
-        scrollIntoView: true,
-      });
-      return true;
-    }
-    return false;
-  }
-
-  // Next line is blank - find the next non-blank line below
-  let targetLineNum = line.number + 2;
-  while (targetLineNum <= totalLines) {
-    const targetLine = state.doc.line(targetLineNum);
-    if (targetLine.text.trim() !== "") {
-      // Found content line - calculate equivalent cursor position
-      const currentContentStart = getLineContentStart(line);
-      const colInContent = pos - currentContentStart;
-      const targetContentStart = getLineContentStart(targetLine);
-      const targetContentLength = getLineContentLength(targetLine);
-      const targetCol = Math.min(Math.max(0, colInContent), targetContentLength);
-      view.dispatch({
-        selection: { anchor: targetContentStart + targetCol },
-        scrollIntoView: true,
-      });
-      return true;
-    }
-    targetLineNum++;
-  }
-
-  // All lines below are blank, go to end of document
-  view.dispatch({
-    selection: { anchor: state.doc.length },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
 // ===========================================
 // HORIZONTAL RULE HANDLERS
 // ===========================================
 
 /**
+ * Regex to match heading prefix (# through ######, followed by a space)
+ */
+const HEADING_PREFIX_RE = /^(#{1,6})\s/;
+
+/**
+ * Collect fenced code block extents from the AST.
+ * Shared by getHiddenRanges() and buildStyleDecorations() to skip code blocks.
+ */
+function collectCodeBlockExtents(state: EditorState): Array<{ from: number; to: number }> {
+  const extents: Array<{ from: number; to: number }> = [];
+  syntaxTree(state).iterate({
+    enter(node) {
+      if (node.name === "FencedCode") {
+        extents.push({ from: node.from, to: node.to });
+      }
+    },
+  });
+  return extents;
+}
+
+function isInCodeBlock(pos: number, extents: Array<{ from: number; to: number }>): boolean {
+  return extents.some((r) => pos >= r.from && pos < r.to);
+}
+
+/**
  * Regex to match horizontal rule patterns (---, ***, ___, or longer)
  */
 const HR_REGEX = /^([-*_])\1{2,}\s*$/;
-
-/**
- * Handle ArrowDown when moving into a horizontal rule
- * Skip over the HR to the line after it
- */
-function handleArrowDownPastHorizontalRule(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-  const totalLines = state.doc.lines;
-
-  // Check if next line is a horizontal rule
-  if (line.number < totalLines) {
-    const nextLine = state.doc.line(line.number + 1);
-    if (HR_REGEX.test(nextLine.text)) {
-      // Skip to line after the HR
-      if (line.number + 1 < totalLines) {
-        const targetLine = state.doc.line(line.number + 2);
-        view.dispatch({
-          selection: { anchor: targetLine.from },
-          scrollIntoView: true,
-        });
-        return true;
-      } else {
-        // HR is last line - go to end of document
-        view.dispatch({
-          selection: { anchor: state.doc.length },
-          scrollIntoView: true,
-        });
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-/**
- * Handle ArrowUp when moving into a horizontal rule
- * Skip over the HR to the line before it
- */
-function handleArrowUpPastHorizontalRule(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-
-  // Check if previous line is a horizontal rule
-  if (line.number > 1) {
-    const prevLine = state.doc.line(line.number - 1);
-    if (HR_REGEX.test(prevLine.text)) {
-      // Skip to line before the HR
-      if (line.number > 2) {
-        const targetLine = state.doc.line(line.number - 2);
-        view.dispatch({
-          selection: { anchor: targetLine.to },
-          scrollIntoView: true,
-        });
-        return true;
-      } else {
-        // HR is first line - go to start of document
-        view.dispatch({
-          selection: { anchor: 0 },
-          scrollIntoView: true,
-        });
-        return true;
-      }
-    }
-  }
-  return false;
-}
 
 /**
  * Handle Backspace when cursor is at start of line after a horizontal rule
@@ -2449,53 +1758,12 @@ function handleDeleteBeforeHorizontalRule(view: EditorView): boolean {
 }
 
 /**
- * Handle Delete at start of line - merge with content above (including headings)
- *
- * When cursor is at start of a paragraph and there's a heading above,
- * delete should merge the paragraph into the heading.
- */
-function handleDeleteAtLineStart(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-
-  // Must be at start of line (or start of heading content)
-  const headingMatch = line.text.match(/^(#{1,6})\s/);
-  const contentStart = headingMatch ? line.from + headingMatch[0].length : line.from;
-
-  if (pos !== contentStart) return false;
-
-  // Must not be the last line
-  if (line.number >= state.doc.lines) return false;
-
-  // This is for when we're at start of content and want to merge with line below
-  // Actually, Delete at start of line should merge content below INTO this line
-  // But the user's case is different - they want Delete to merge THIS line into the line ABOVE
-
-  // Wait, re-reading: cursor is at |paragraph, pressing Delete...
-  // Delete key deletes FORWARD, so it would delete the 'p' in paragraph
-  // But the user wants it to merge with the heading above
-
-  // Actually I think the user means: at the start of the paragraph,
-  // there's nothing to delete forward on this line before the content,
-  // so delete should act like "merge up" similar to backspace
-
-  // Hmm, but that's not standard Delete behavior. Let me re-read...
-  // "and hit delete, the paragraph should become part of the header"
-  //
-  // I think the user might mean Backspace? Or they want Delete to also merge up?
-  // Let me implement it as: Delete at start of line merges with line above
-
-  return false;
-}
-
-/**
  * Get the content start position for any line (handles headings, lists, blockquotes)
  * Returns the position where actual content starts, after any markers
  */
 function getContentStartForLine(line: { from: number; text: string }): number {
   // Check for heading: # ## ### etc.
-  const headingMatch = line.text.match(/^(#{1,6})\s/);
+  const headingMatch = line.text.match(HEADING_PREFIX_RE);
   if (headingMatch) {
     return line.from + headingMatch[0].length;
   }
@@ -2626,7 +1894,7 @@ function handleBackspaceAtHeadingStart(view: EditorView): boolean {
 
   // Check if we're in a heading by looking for # at start of line
   const lineText = line.text;
-  const headingMatch = lineText.match(/^(#{1,6})\s/);
+  const headingMatch = lineText.match(HEADING_PREFIX_RE);
 
   if (!headingMatch) return false;
 
@@ -2759,100 +2027,14 @@ function handleDeleteEmptyFormatting(view: EditorView): boolean {
  */
 function getFormattingContextBeforeOpening(state: EditorState): FormattingContext | null {
   const pos = state.selection.main.head;
-  let result: FormattingContext | null = null;
-
-  syntaxTree(state).iterate({
-    enter(node) {
-      if (node.name === "StrongEmphasis" && pos === node.from) {
-        const markers: { from: number; to: number }[] = [];
-        node.node.cursor().iterate((child) => {
-          if (child.name === "EmphasisMark") {
-            markers.push({ from: child.from, to: child.to });
-          }
-        });
-        if (markers.length >= 2) {
-          result = {
-            type: "strong",
-            from: node.from,
-            to: node.to,
-            contentFrom: markers[0].to,
-            contentTo: markers[markers.length - 1].from,
-            closingMarkerFrom: markers[markers.length - 1].from,
-            closingMarkerTo: markers[markers.length - 1].to,
-          };
-        }
-      }
-
-      if (node.name === "Emphasis" && pos === node.from) {
-        const markers: { from: number; to: number }[] = [];
-        node.node.cursor().iterate((child) => {
-          if (child.name === "EmphasisMark") {
-            markers.push({ from: child.from, to: child.to });
-          }
-        });
-        if (markers.length >= 2) {
-          result = {
-            type: "emphasis",
-            from: node.from,
-            to: node.to,
-            contentFrom: markers[0].to,
-            contentTo: markers[markers.length - 1].from,
-            closingMarkerFrom: markers[markers.length - 1].from,
-            closingMarkerTo: markers[markers.length - 1].to,
-          };
-        }
-      }
-
-      if (node.name === "InlineCode" && pos === node.from) {
-        const markers: { from: number; to: number }[] = [];
-        node.node.cursor().iterate((child) => {
-          if (child.name === "CodeMark") {
-            markers.push({ from: child.from, to: child.to });
-          }
-        });
-        if (markers.length >= 2) {
-          result = {
-            type: "code",
-            from: node.from,
-            to: node.to,
-            contentFrom: markers[0].to,
-            contentTo: markers[markers.length - 1].from,
-            closingMarkerFrom: markers[markers.length - 1].from,
-            closingMarkerTo: markers[markers.length - 1].to,
-          };
-        }
-      }
-
-      if (node.name === "Strikethrough" && pos === node.from) {
-        const markers: { from: number; to: number }[] = [];
-        node.node.cursor().iterate((child) => {
-          if (child.name === "StrikethroughMark") {
-            markers.push({ from: child.from, to: child.to });
-          }
-        });
-        if (markers.length >= 2) {
-          result = {
-            type: "strikethrough",
-            from: node.from,
-            to: node.to,
-            contentFrom: markers[0].to,
-            contentTo: markers[markers.length - 1].from,
-            closingMarkerFrom: markers[markers.length - 1].from,
-            closingMarkerTo: markers[markers.length - 1].to,
-          };
-        }
-      }
-    },
-  });
+  let result = findFormattingByAST(state, (from, _to) => pos === from);
 
   // Fallback: check with regex for patterns parser might miss
   if (!result) {
-    const doc = state.doc;
-    const text = doc.toString();
+    const text = state.doc.toString();
 
     // Check for ** at cursor position (opening bold)
     if (text.slice(pos, pos + 2) === "**") {
-      // Find the closing **
       const afterOpen = text.slice(pos + 2);
       const closeIdx = afterOpen.indexOf("**");
       if (closeIdx !== -1) {
@@ -2870,7 +2052,6 @@ function getFormattingContextBeforeOpening(state: EditorState): FormattingContex
     // Check for * (italic, not bold)
     else if (text[pos] === "*" && text[pos + 1] !== "*") {
       const afterOpen = text.slice(pos + 1);
-      // Find closing * that's not **
       for (let i = 0; i < afterOpen.length; i++) {
         if (afterOpen[i] === "*" && afterOpen[i + 1] !== "*" && (i === 0 || afterOpen[i - 1] !== "*")) {
           result = {
@@ -2976,158 +2157,6 @@ function handleDeleteAtEndOfContent(view: EditorView): boolean {
     return true;
   }
 
-  return false;
-}
-
-/**
- * Handle right arrow - skip over opening markers
- * text|**bold** → text**|bold**
- */
-function handleArrowRight(view: EditorView): boolean {
-  const ctx = getFormattingContextBeforeOpening(view.state);
-  if (!ctx) return false;
-
-  // Cursor is right before opening marker, skip to content start
-  view.dispatch({
-    selection: { anchor: ctx.contentFrom },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Handle right arrow at end of content - skip over closing marker
- * **bold|** → **bold**|
- */
-function handleArrowRightAtEnd(view: EditorView): boolean {
-  const ctx = getFormattingContext(view.state);
-  if (!ctx || !isAtEndOfFormatting(view.state, ctx)) return false;
-
-  // Cursor is at end of content, skip over closing marker
-  view.dispatch({
-    selection: { anchor: ctx.closingMarkerTo },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Handle left arrow - skip over closing markers
- * **bold**|text → **bold|**text
- */
-function handleArrowLeft(view: EditorView): boolean {
-  const ctx = getFormattingContextAfterClosing(view.state);
-  if (!ctx) return false;
-
-  // Cursor is right after closing marker, skip to content end
-  view.dispatch({
-    selection: { anchor: ctx.contentTo },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Handle left arrow at start of content - skip over opening marker
- * **|bold** → |**bold**
- */
-function handleArrowLeftAtStart(view: EditorView): boolean {
-  const ctx = getFormattingContext(view.state);
-  if (!ctx) return false;
-
-  const pos = view.state.selection.main.head;
-  if (pos !== ctx.contentFrom) return false;
-
-  // Cursor is at start of content, skip over opening marker
-  view.dispatch({
-    selection: { anchor: ctx.from },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-// ===========================================
-// LINK NAVIGATION HANDLERS
-// ===========================================
-
-/**
- * Handle right arrow at end of link text - skip over hidden ](url) portion
- * [link|](url) → [link](url)|
- */
-function handleArrowRightFromLinkText(view: EditorView): boolean {
-  const ctx = getLinkContext(view.state);
-  if (!ctx) return false;
-
-  if (!isAtEndOfLinkText(view.state, ctx)) return false;
-
-  // Skip over ](url) to after )
-  view.dispatch({
-    selection: { anchor: ctx.to },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Handle left arrow from after link - skip into link text
- * [link](url)|text → [link|](url)text
- */
-function handleArrowLeftAfterLink(view: EditorView): boolean {
-  const ctx = getLinkContextAfterClosing(view.state);
-  if (!ctx) return false;
-
-  // Skip to end of link text (before ])
-  view.dispatch({
-    selection: { anchor: ctx.textTo },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Handle left arrow at start of link text - skip over [
- * [|link](url) → |[link](url)
- */
-function handleArrowLeftFromLinkTextStart(view: EditorView): boolean {
-  const ctx = getLinkContext(view.state);
-  if (!ctx) return false;
-
-  if (!isAtStartOfLinkText(view.state, ctx)) return false;
-
-  // Skip over [ to before link
-  view.dispatch({
-    selection: { anchor: ctx.from },
-    scrollIntoView: true,
-  });
-  return true;
-}
-
-/**
- * Handle right arrow into link - skip [ to reach link text
- * |[link](url) → [|link](url)
- */
-function handleArrowRightIntoLink(view: EditorView): boolean {
-  const state = view.state;
-  const pos = state.selection.main.head;
-  const doc = state.doc;
-  const text = doc.toString();
-
-  // Check if next char is [ starting a link
-  if (pos < text.length && text[pos] === "[") {
-    // Check if this is actually a link
-    const linkRegex = /\[([^\]]*)\]\(([^)]*)\)/g;
-    let match: RegExpExecArray | null;
-    while ((match = linkRegex.exec(text)) !== null) {
-      if (match.index === pos) {
-        // This is a link starting at cursor
-        view.dispatch({
-          selection: { anchor: pos + 1 }, // Skip [
-          scrollIntoView: true,
-        });
-        return true;
-      }
-    }
-  }
   return false;
 }
 
@@ -3382,43 +2411,7 @@ function handleContextMenuOpenLink() {
  * Get link context at a specific document position
  */
 function getLinkContextAtPos(state: EditorState, pos: number): LinkContext | null {
-  const doc = state.doc;
-  const text = doc.toString();
-  const linkRegex = /\[([^\]]*)\]\(([^)]*)\)/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = linkRegex.exec(text)) !== null) {
-    const from = match.index;
-    const to = match.index + match[0].length;
-
-    if (pos >= from && pos <= to) {
-      const bracketOpen = from;
-      const bracketClose = from + 1 + match[1].length;
-      const parenOpen = bracketClose + 1;
-      const parenClose = to - 1;
-      const textFrom = bracketOpen + 1;
-      const textTo = bracketClose;
-      const urlFrom = parenOpen + 1;
-      const urlTo = parenClose;
-
-      return {
-        from,
-        to,
-        textFrom,
-        textTo,
-        urlFrom,
-        urlTo,
-        bracketOpen,
-        bracketClose,
-        parenOpen,
-        parenClose,
-        url: match[2],
-        text: match[1],
-      };
-    }
-  }
-
-  return null;
+  return findLinkByRegex(state, (from, to) => pos >= from && pos <= to);
 }
 
 /**
@@ -3592,114 +2585,252 @@ function toggleTaskCheckboxOnLine(view: EditorView): boolean {
 }
 
 /**
+ * Check if cursor is inside a fenced code block.
+ * When true, all special key handlers should be bypassed for plain text editing.
+ */
+function isCursorInCodeBlock(view: EditorView): boolean {
+  const pos = view.state.selection.main.head;
+  const line = view.state.doc.lineAt(pos);
+  return getCodeBlockAtLine(view.state, line.number) !== null;
+}
+
+/**
+ * Wrap a keymap handler to bypass it when cursor is inside a code block.
+ * Returns false (letting default behavior handle the key) when inside a code block.
+ */
+function bypassInCodeBlock(handler: (view: EditorView) => boolean): (view: EditorView) => boolean {
+  return (view) => isCursorInCodeBlock(view) ? false : handler(view);
+}
+
+/**
+ * Event filter for rectangular selection: only allow inside code blocks.
+ * Uses Alt+drag (default) and checks the target position against code block ranges.
+ */
+function isRectangularSelectionInCodeBlock(event: MouseEvent): boolean {
+  if (!event.altKey || event.button !== 0) return false;
+  const target = event.target as HTMLElement | null;
+  if (!target) return false;
+  const view = EditorView.findFromDOM(target);
+  if (!view) return false;
+  const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+  if (pos == null) return false;
+  const line = view.state.doc.lineAt(pos);
+  return getCodeBlockAtLine(view.state, line.number) !== null;
+}
+
+const codeBlockRectangularSelection = rectangularSelection({
+  eventFilter: isRectangularSelectionInCodeBlock,
+});
+
+/**
+ * Handle Tab inside a code block by inserting a tab character.
+ * For selections, indent each selected line with a tab.
+ */
+function handleTabInCodeBlock(view: EditorView): boolean {
+  if (!isCursorInCodeBlock(view)) return false;
+
+  const state = view.state;
+  const sel = state.selection.main;
+
+  // Collapsed selection: insert a tab at the cursor
+  if (sel.empty) {
+    const pos = sel.head;
+    view.dispatch({
+      changes: { from: pos, to: pos, insert: "\t" },
+      selection: { anchor: pos + 1 },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  const from = Math.min(sel.anchor, sel.head);
+  const to = Math.max(sel.anchor, sel.head);
+  const startLine = state.doc.lineAt(from);
+  const endLine = state.doc.lineAt(to);
+  const lineStarts: number[] = [];
+
+  for (let lineNum = startLine.number; lineNum <= endLine.number; lineNum++) {
+    const line = state.doc.line(lineNum);
+    // If selection ends at the start of a line, don't indent that line
+    if (line.from === to && to > from) break;
+    lineStarts.push(line.from);
+  }
+
+  if (lineStarts.length === 0) return false;
+
+  const changes = lineStarts.map((lineFrom) => ({ from: lineFrom, to: lineFrom, insert: "\t" }));
+
+  const shiftPos = (pos: number) => {
+    let shift = 0;
+    for (const lineFrom of lineStarts) {
+      if (lineFrom <= pos) shift++;
+    }
+    return pos + shift;
+  };
+
+  const newAnchor = shiftPos(sel.anchor);
+  const newHead = shiftPos(sel.head);
+
+  view.dispatch({
+    changes,
+    selection: { anchor: newAnchor, head: newHead },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
+ * Handle Shift-Tab inside a code block by removing a leading tab.
+ * For selections, outdent each selected line if it starts with a tab.
+ */
+function handleShiftTabInCodeBlock(view: EditorView): boolean {
+  if (!isCursorInCodeBlock(view)) return false;
+
+  const state = view.state;
+  const sel = state.selection.main;
+
+  // Collapsed selection: remove a single tab before cursor if present
+  if (sel.empty) {
+    const pos = sel.head;
+    if (pos <= 0) return false;
+    const before = state.doc.sliceString(pos - 1, pos);
+    if (before !== "\t") return false;
+    view.dispatch({
+      changes: { from: pos - 1, to: pos, insert: "" },
+      selection: { anchor: pos - 1 },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+
+  const from = Math.min(sel.anchor, sel.head);
+  const to = Math.max(sel.anchor, sel.head);
+  const startLine = state.doc.lineAt(from);
+  const endLine = state.doc.lineAt(to);
+  const lineStarts: number[] = [];
+
+  for (let lineNum = startLine.number; lineNum <= endLine.number; lineNum++) {
+    const line = state.doc.line(lineNum);
+    if (line.from === to && to > from) break;
+    if (line.text.startsWith("\t")) {
+      lineStarts.push(line.from);
+    }
+  }
+
+  if (lineStarts.length === 0) return false;
+
+  const changes = lineStarts.map((lineFrom) => ({ from: lineFrom, to: lineFrom + 1, insert: "" }));
+
+  const shiftPos = (pos: number) => {
+    let shift = 0;
+    for (const lineFrom of lineStarts) {
+      if (lineFrom < pos) shift--;
+    }
+    return pos + shift;
+  };
+
+  const newAnchor = shiftPos(sel.anchor);
+  const newHead = shiftPos(sel.head);
+
+  view.dispatch({
+    changes,
+    selection: { anchor: newAnchor, head: newHead },
+    scrollIntoView: true,
+  });
+  return true;
+}
+
+/**
  * Create keymap for formatting escape commands
  */
 const formattingEscapeKeymap = keymap.of([
   // Backspace: handle code blocks, HR, lists, blockquotes, paragraph merging, headings, empty formatting, selection, links, then skip over invisible closing markers
   {
     key: "Backspace",
-    run: (view) => handleBackspaceAfterCodeBlock(view) || handleBackspaceAfterHorizontalRule(view) || handleBackspaceInList(view) || handleBackspaceInBlockquote(view) || handleBackspaceAtParagraphStart(view) || handleBackspaceAtHeadingStart(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleBackspaceAfterLink(view) || handleBackspaceAtLinkTextStart(view) || handleBackspaceAtClosingMarker(view),
+    run: bypassInCodeBlock((view) => handleBackspaceAfterCodeBlock(view) || handleBackspaceAfterHorizontalRule(view) || handleBackspaceInList(view) || handleBackspaceInBlockquote(view) || handleBackspaceAtParagraphStart(view) || handleBackspaceAtHeadingStart(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleBackspaceAfterLink(view) || handleBackspaceAtLinkTextStart(view) || handleBackspaceAtClosingMarker(view)),
   },
   // Delete: handle code blocks, HR, end of line (merge with content below), empty formatting, selection, links, then skip over invisible markers
   {
     key: "Delete",
-    run: (view) => handleDeleteBeforeCodeBlock(view) || handleDeleteBeforeHorizontalRule(view) || handleDeleteAtEndOfLine(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleDeleteAtLinkTextEnd(view) || handleDeleteAtOpeningMarker(view) || handleDeleteAtEndOfContent(view),
+    run: bypassInCodeBlock((view) => handleDeleteBeforeCodeBlock(view) || handleDeleteBeforeHorizontalRule(view) || handleDeleteAtEndOfLine(view) || handleDeleteEmptyFormatting(view) || handleDeleteWithSelection(view) || handleDeleteAtLinkTextEnd(view) || handleDeleteAtOpeningMarker(view) || handleDeleteAtEndOfContent(view)),
   },
-  // Arrow Right: skip over invisible markers, heading markers, list markers, blockquote markers, links, and blank lines
-  {
-    key: "ArrowRight",
-    run: (view) => handleArrowRight(view) || handleArrowRightAtEnd(view) || handleArrowRightFromLinkText(view) || handleArrowRightIntoLink(view) || handleArrowRightIntoHeading(view) || handleArrowRightIntoList(view) || handleArrowRightIntoBlockquote(view) || handleArrowRightOverBlankLines(view),
-  },
-  // Arrow Left: skip over invisible markers, heading markers, list markers, blockquote markers, links, and blank lines
-  {
-    key: "ArrowLeft",
-    run: (view) => handleArrowLeft(view) || handleArrowLeftAtStart(view) || handleArrowLeftAfterLink(view) || handleArrowLeftFromLinkTextStart(view) || handleArrowLeftFromHeadingStart(view) || handleArrowLeftFromListStart(view) || handleArrowLeftFromBlockquoteStart(view) || handleArrowLeftOverBlankLines(view),
-  },
+  // Arrow Right/Left: navigation handled by selectionSnapper transaction filter
   // Cmd+B: toggle bold or escape
   {
     key: "Mod-b",
-    run: toggleBoldOrEscape,
+    run: bypassInCodeBlock(toggleBoldOrEscape),
   },
   // Cmd+I: toggle italic or escape
   {
     key: "Mod-i",
-    run: toggleItalicOrEscape,
+    run: bypassInCodeBlock(toggleItalicOrEscape),
   },
   // Cmd+K: create or edit link
   {
     key: "Mod-k",
-    run: handleLinkCommand,
+    run: bypassInCodeBlock(handleLinkCommand),
   },
   // Cmd+`: toggle inline code or escape
   {
     key: "Mod-`",
-    run: toggleCodeOrEscape,
+    run: bypassInCodeBlock(toggleCodeOrEscape),
   },
   // Cmd+Shift+S: toggle strikethrough or escape
   {
     key: "Mod-Shift-s",
-    run: toggleStrikethroughOrEscape,
+    run: bypassInCodeBlock(toggleStrikethroughOrEscape),
   },
   // Cmd+1-6: set heading level
   {
     key: "Mod-1",
-    run: setHeading1,
+    run: bypassInCodeBlock(setHeading1),
   },
   {
     key: "Mod-2",
-    run: setHeading2,
+    run: bypassInCodeBlock(setHeading2),
   },
   {
     key: "Mod-3",
-    run: setHeading3,
+    run: bypassInCodeBlock(setHeading3),
   },
   {
     key: "Mod-4",
-    run: setHeading4,
+    run: bypassInCodeBlock(setHeading4),
   },
   {
     key: "Mod-5",
-    run: setHeading5,
+    run: bypassInCodeBlock(setHeading5),
   },
   {
     key: "Mod-6",
-    run: setHeading6,
+    run: bypassInCodeBlock(setHeading6),
   },
   // Tab: indent list or escape formatting
   {
     key: "Tab",
-    run: (view) => handleTabInList(view) || escapeFormatting(view),
+    run: (view) => handleTabInCodeBlock(view) || handleTabInList(view) || escapeFormatting(view),
   },
   // Shift+Tab: outdent list
   {
     key: "Shift-Tab",
-    run: handleShiftTabInList,
+    run: (view) => handleShiftTabInCodeBlock(view) || handleShiftTabInList(view),
   },
   // Enter: new paragraph (double newline for proper markdown)
   {
     key: "Enter",
-    run: handleEnter,
+    run: bypassInCodeBlock(handleEnter),
   },
   // Shift+Enter: soft line break (single newline, same paragraph)
   {
     key: "Shift-Enter",
-    run: handleShiftEnter,
+    run: bypassInCodeBlock(handleShiftEnter),
   },
   // Mod+Enter: toggle task checkbox on current line
   {
     key: "Mod-Enter",
-    run: toggleTaskCheckboxOnLine,
+    run: bypassInCodeBlock(toggleTaskCheckboxOnLine),
   },
-  // ArrowUp: skip code blocks, horizontal rules and blank lines
-  {
-    key: "ArrowUp",
-    run: (view) => handleArrowUpPastCodeBlock(view) || handleArrowUpPastHorizontalRule(view) || handleArrowUp(view),
-  },
-  // ArrowDown: skip code blocks, horizontal rules and blank lines
-  {
-    key: "ArrowDown",
-    run: (view) => handleArrowDownPastCodeBlock(view) || handleArrowDownPastHorizontalRule(view) || handleArrowDown(view),
-  },
+  // ArrowUp/Down: navigation handled by selectionSnapper transaction filter
 ]);
 
 /**
@@ -3748,6 +2879,15 @@ const formattingInputHandler = EditorView.inputHandler.of(
         return false;
       }
     }
+
+    // ===========================================
+    // CODE BLOCK GUARD: Inside a code block, skip all special input handling
+    // ===========================================
+
+    const currentLine = doc.lineAt(from);
+    const insideCodeBlock = getCodeBlockAtLine(view.state, currentLine.number) !== null;
+
+    if (insideCodeBlock) return false;
 
     // ===========================================
     // STRIKETHROUGH AUTO-CLOSE: Handle ~~ specially
@@ -3988,6 +3128,26 @@ const formattingInputHandler = EditorView.inputHandler.of(
     }
 
     // ===========================================
+    // CODE BLOCK: Single ` at start of empty line creates code block
+    // ===========================================
+
+    if (text === "`") {
+      const line = doc.lineAt(from);
+      const lineStart = line.from;
+      const textBeforeCursor = doc.sliceString(lineStart, from);
+
+      // At start of empty line → create full code block immediately
+      if (textBeforeCursor === "") {
+        view.dispatch({
+          changes: { from: lineStart, to: from, insert: "```\n\n```" },
+          selection: { anchor: lineStart + 4 }, // Position on empty line
+          scrollIntoView: true,
+        });
+        return true;
+      }
+    }
+
+    // ===========================================
     // AUTO-CLOSE: Outside formatting, auto-pair markers
     // ===========================================
 
@@ -4007,25 +3167,8 @@ const formattingInputHandler = EditorView.inputHandler.of(
       return true;
     }
 
-    // Auto-close ` → `|`
-    // But first check for code block creation: `` + ` at line start → ```\n\n```
+    // Auto-close ` → `|` (for inline code)
     if (text === "`") {
-      const line = doc.lineAt(from);
-      const lineStart = line.from;
-      const textBeforeCursor = doc.sliceString(lineStart, from);
-
-      // Check if we have `` at start of line and this is the third backtick
-      if (textBeforeCursor === "``") {
-        // Create a fenced code block with cursor on the empty line between fences
-        view.dispatch({
-          changes: { from: lineStart, to: from, insert: "```\n\n```" },
-          selection: { anchor: lineStart + 4 }, // Position on empty line
-          scrollIntoView: true,
-        });
-        return true;
-      }
-
-      // Regular auto-close for inline code
       view.dispatch({
         changes: { from, to, insert: "``" },
         selection: { anchor: from + 1 },
@@ -4080,154 +3223,197 @@ const formattingInputHandler = EditorView.inputHandler.of(
 );
 
 // ===========================================
-// HIDDEN SYNTAX DECORATION (NO atomicRanges)
+// HIDDEN RANGE MODEL — Single Source of Truth
 // ===========================================
 
-const hiddenDecoration = Decoration.replace({});
+type HiddenRangeKind =
+  | "inline-marker"      // **, *, ~~, `
+  | "heading-prefix"     // ## (and trailing space)
+  | "list-marker"        // - , 1. (and trailing space)
+  | "task-marker"        // [ ] or [x] (and trailing space)
+  | "blockquote-prefix"  // > (one or more levels)
+  | "link-bracket-open"  // the [ of [text](url)
+  | "link-tail"          // ](url) portion
+  | "code-fence-open"    // opening ``` line
+  | "code-fence-close"   // closing ``` line
+  | "horizontal-rule";   // entire --- line
+
+interface HiddenRange {
+  from: number;
+  to: number;
+  kind: HiddenRangeKind;
+  /** Start of the AST node this range belongs to */
+  nodeFrom: number;
+  /** End of the AST node this range belongs to */
+  nodeTo: number;
+  /** For line-prefix kinds: visible start after ALL stacked prefixes */
+  contentStart?: number;
+  /** For line-prefix kinds: end of visible content */
+  contentEnd?: number;
+  /** Extra metadata (e.g., language for code-fence-open, level for blockquote) */
+  meta?: Record<string, unknown>;
+}
 
 /**
- * Build decorations that hide syntax markers
+ * Walk the Lezer AST and return all hidden ranges.
+ * Both decorations and selection snapping consume this cached result.
  *
- * KEY INSIGHT: We use Decoration.replace() but do NOT add atomicRanges.
- * This hides the markers visually but keeps the text editable.
+ * Prefix stacking (blockquote + list + task): computes per-line
+ * "effectiveContentStart" by walking the line from its start and
+ * accumulating all prefix ranges.
  *
- * For list markers, we use widget decorations to show bullets/numbers.
- *
- * Uses BOTH parser AND regex fallback to hide markers the parser misses.
+ * Code block exclusion: first pass collects fenced code extents;
+ * subsequent iteration ignores positions inside code blocks.
  */
-function buildHiddenSyntax(state: EditorState) {
+function getHiddenRanges(state: EditorState): HiddenRange[] {
   const doc = state.doc;
+  const ranges: HiddenRange[] = [];
 
-  // Collect all ranges to hide, then sort before adding to builder
-  // RangeSetBuilder requires ranges in sorted order
-  const rangesToHide: Array<{ from: number; to: number }> = [];
+  // First pass: collect code block extents so we can exclude their content
+  const codeBlockExtents = collectCodeBlockExtents(state);
 
-  // List markers get widget decorations instead of being hidden
-  const listMarkers: Array<{ from: number; to: number; isOrdered: boolean; num: number }> = [];
+  const isInsideCodeBlock = (pos: number) =>
+    isInCodeBlock(pos, codeBlockExtents);
 
-  // Task markers ([ ] or [x]) get checkbox widget decorations
-  const taskMarkers: Array<{ from: number; to: number; checked: boolean; pos: number }> = [];
-
-  // Blockquote markers get widget decorations showing the bar
-  const blockquoteMarkers: Array<{ from: number; to: number; level: number }> = [];
-
-  // Horizontal rules get widget decorations showing an hr line
-  const horizontalRules: Array<{ from: number; to: number }> = [];
-
-  // Code block fences get widget decorations (opening shows language badge, closing is hidden)
-  const codeBlockOpens: Array<{ from: number; to: number; language: string }> = [];
-  const codeBlockCloses: Array<{ from: number; to: number }> = [];
-
-  // Track which lines we've already processed for blockquotes (to handle nested)
+  // Track which lines we've processed for blockquotes (to handle nested)
   const processedBlockquoteLines = new Set<number>();
 
+  // Second pass: walk the AST to find all hidden ranges
   syntaxTree(state).iterate({
     enter(node) {
-      // Hide emphasis marks (* or _)
-      if (node.name === "EmphasisMark") {
-        rangesToHide.push({ from: node.from, to: node.to });
+      // Skip nodes inside code blocks (but still process FencedCode itself)
+      if (isInsideCodeBlock(node.from) && node.name !== "FencedCode") return;
+
+      // Inline markers: EmphasisMark, CodeMark, StrikethroughMark
+      if (node.name === "EmphasisMark" || node.name === "CodeMark" || node.name === "StrikethroughMark") {
+        ranges.push({
+          from: node.from,
+          to: node.to,
+          kind: "inline-marker",
+          nodeFrom: node.from,
+          nodeTo: node.to,
+        });
       }
 
-      // Hide code marks (`)
-      if (node.name === "CodeMark") {
-        rangesToHide.push({ from: node.from, to: node.to });
-      }
-
-      // For strikethrough, we need to find the ~~ markers
-      if (node.name === "StrikethroughMark") {
-        rangesToHide.push({ from: node.from, to: node.to });
-      }
-
-      // Hide header marks (# symbols and trailing space)
+      // Heading prefix: HeaderMark + trailing space
       if (node.name === "HeaderMark") {
-        rangesToHide.push({ from: node.from, to: node.to });
-
-        // Also hide the trailing space after the header mark
         const nextChar = doc.sliceString(node.to, node.to + 1);
-        if (nextChar === " ") {
-          rangesToHide.push({ from: node.to, to: node.to + 1 });
-        }
+        const to = nextChar === " " ? node.to + 1 : node.to;
+        // Find the ATXHeading parent to get full line info
+        const line = doc.lineAt(node.from);
+        ranges.push({
+          from: node.from,
+          to,
+          kind: "heading-prefix",
+          nodeFrom: node.from,
+          nodeTo: line.to,
+          contentStart: to,
+          contentEnd: line.to,
+        });
       }
 
-      // Replace list marks with widget decorations
+      // List markers
       if (node.name === "ListMark") {
+        const nextChar = doc.sliceString(node.to, node.to + 1);
+        const to = nextChar === " " ? node.to + 1 : node.to;
         const markText = doc.sliceString(node.from, node.to);
-
-        // Determine if ordered or unordered
         const isOrdered = /^\d+\.$/.test(markText);
         const num = isOrdered ? parseInt(markText) : 0;
-
-        // Include the trailing space in the replacement range
-        const nextChar = doc.sliceString(node.to, node.to + 1);
-        const to = nextChar === " " ? node.to + 1 : node.to;
-
-        listMarkers.push({ from: node.from, to, isOrdered, num });
+        const line = doc.lineAt(node.from);
+        ranges.push({
+          from: node.from,
+          to,
+          kind: "list-marker",
+          nodeFrom: node.from,
+          nodeTo: line.to,
+          contentStart: to,
+          contentEnd: line.to,
+          meta: { isOrdered, num },
+        });
       }
 
-      // Replace task markers ([ ] or [x]) with checkbox widget decorations
+      // Task markers
       if (node.name === "TaskMarker") {
         const markerText = doc.sliceString(node.from, node.to);
-        const isChecked = /\[[xX]\]/.test(markerText);
-
-        // Include trailing space in the replacement range if present
+        const isChecked = /\[[xX]]/.test(markerText);
         const nextChar = doc.sliceString(node.to, node.to + 1);
         const to = nextChar === " " ? node.to + 1 : node.to;
-
-        taskMarkers.push({ from: node.from, to, checked: isChecked, pos: node.from });
+        const line = doc.lineAt(node.from);
+        ranges.push({
+          from: node.from,
+          to,
+          kind: "task-marker",
+          nodeFrom: node.from,
+          nodeTo: line.to,
+          contentStart: to,
+          contentEnd: line.to,
+          meta: { checked: isChecked, pos: node.from },
+        });
       }
 
-      // Handle QuoteMark nodes from the parser
+      // Blockquote prefix (QuoteMark)
       if (node.name === "QuoteMark") {
         const line = doc.lineAt(node.from);
-
-        // Only process each line once (multiple QuoteMarks on same line = nested)
         if (!processedBlockquoteLines.has(line.number)) {
           processedBlockquoteLines.add(line.number);
-
-          // Get the full blockquote info for this line
           const quoteInfo = getBlockquoteInfo(line);
           if (quoteInfo) {
-            blockquoteMarkers.push({
+            ranges.push({
               from: line.from,
               to: quoteInfo.contentStart,
-              level: quoteInfo.level,
+              kind: "blockquote-prefix",
+              nodeFrom: line.from,
+              nodeTo: line.to,
+              contentStart: quoteInfo.contentStart,
+              contentEnd: line.to,
+              meta: { level: quoteInfo.level },
             });
           }
         }
       }
 
-      // Handle HorizontalRule nodes - replace with widget
+      // Horizontal rule
       if (node.name === "HorizontalRule") {
         const line = doc.lineAt(node.from);
-        horizontalRules.push({ from: line.from, to: line.to });
+        ranges.push({
+          from: line.from,
+          to: line.to,
+          kind: "horizontal-rule",
+          nodeFrom: line.from,
+          nodeTo: line.to,
+        });
       }
 
-      // Handle FencedCode nodes - hide opening fence (show language badge) and closing fence
+      // Fenced code blocks
       if (node.name === "FencedCode") {
         const startLine = doc.lineAt(node.from);
         const endLine = doc.lineAt(node.to);
-
-        // Extract language from opening fence line
         const langMatch = startLine.text.match(/^`{3,}(\w*)/);
         const language = langMatch ? langMatch[1] : "";
 
-        // Opening fence: replace entire first line with language badge widget
-        codeBlockOpens.push({
+        // Opening fence
+        ranges.push({
           from: startLine.from,
           to: startLine.to,
-          language,
+          kind: "code-fence-open",
+          nodeFrom: node.from,
+          nodeTo: node.to,
+          meta: { language },
         });
 
-        // Closing fence: hide it entirely (the last line with ```)
+        // Closing fence (if different line)
         if (endLine.number !== startLine.number) {
-          codeBlockCloses.push({
+          ranges.push({
             from: endLine.from,
             to: endLine.to,
+            kind: "code-fence-close",
+            nodeFrom: node.from,
+            nodeTo: node.to,
           });
         }
       }
 
-      // Handle Link nodes - hide [ and ](url) portions, keep text visible
+      // Links: hide [ and ](url)
       if (node.name === "Link") {
         let bracketOpen = -1;
         let bracketClose = -1;
@@ -4236,36 +3422,42 @@ function buildHiddenSyntax(state: EditorState) {
         node.node.cursor().iterate((child) => {
           if (child.name === "LinkMark") {
             const markText = doc.sliceString(child.from, child.to);
-            if (markText === "[") {
-              bracketOpen = child.from;
-            } else if (markText === "]") {
-              bracketClose = child.from;
-            } else if (markText === ")") {
-              parenClose = child.from;
-            }
+            if (markText === "[") bracketOpen = child.from;
+            else if (markText === "]") bracketClose = child.from;
+            else if (markText === ")") parenClose = child.from;
           }
         });
 
-        // Hide [ at start
         if (bracketOpen !== -1) {
-          rangesToHide.push({ from: bracketOpen, to: bracketOpen + 1 });
+          ranges.push({
+            from: bracketOpen,
+            to: bracketOpen + 1,
+            kind: "link-bracket-open",
+            nodeFrom: node.from,
+            nodeTo: node.to,
+          });
         }
-        // Hide ](url) portion - from ] to after )
         if (bracketClose !== -1 && parenClose !== -1) {
-          rangesToHide.push({ from: bracketClose, to: parenClose + 1 });
+          ranges.push({
+            from: bracketClose,
+            to: parenClose + 1,
+            kind: "link-tail",
+            nodeFrom: node.from,
+            nodeTo: node.to,
+          });
         }
       }
     },
   });
 
   // ===========================================
-  // REGEX FALLBACK: Hide markers the parser misses
+  // REGEX FALLBACK: catch markers the parser misses
   // ===========================================
 
   const text = doc.toString();
 
   const isAlreadyCollected = (from: number, to: number) =>
-    rangesToHide.some((r) => r.from === from && r.to === to);
+    ranges.some((r) => r.from === from && r.to === to);
 
   // Bold markers: **
   const boldRegex = /\*\*(.+?)\*\*/g;
@@ -4275,12 +3467,12 @@ function buildHiddenSyntax(state: EditorState) {
     const openTo = match.index + 2;
     const closeFrom = match.index + 2 + match[1].length;
     const closeTo = closeFrom + 2;
-
+    if (isInsideCodeBlock(openFrom)) continue;
     if (!isAlreadyCollected(openFrom, openTo)) {
-      rangesToHide.push({ from: openFrom, to: openTo });
+      ranges.push({ from: openFrom, to: openTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
     }
     if (!isAlreadyCollected(closeFrom, closeTo)) {
-      rangesToHide.push({ from: closeFrom, to: closeTo });
+      ranges.push({ from: closeFrom, to: closeTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
     }
   }
 
@@ -4291,12 +3483,12 @@ function buildHiddenSyntax(state: EditorState) {
     const openTo = match.index + 1;
     const closeFrom = match.index + 1 + match[1].length;
     const closeTo = closeFrom + 1;
-
+    if (isInsideCodeBlock(openFrom)) continue;
     if (!isAlreadyCollected(openFrom, openTo)) {
-      rangesToHide.push({ from: openFrom, to: openTo });
+      ranges.push({ from: openFrom, to: openTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
     }
     if (!isAlreadyCollected(closeFrom, closeTo)) {
-      rangesToHide.push({ from: closeFrom, to: closeTo });
+      ranges.push({ from: closeFrom, to: closeTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
     }
   }
 
@@ -4307,145 +3499,415 @@ function buildHiddenSyntax(state: EditorState) {
     const openTo = match.index + 2;
     const closeFrom = match.index + 2 + match[1].length;
     const closeTo = closeFrom + 2;
-
+    if (isInsideCodeBlock(openFrom)) continue;
     if (!isAlreadyCollected(openFrom, openTo)) {
-      rangesToHide.push({ from: openFrom, to: openTo });
+      ranges.push({ from: openFrom, to: openTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
     }
     if (!isAlreadyCollected(closeFrom, closeTo)) {
-      rangesToHide.push({ from: closeFrom, to: closeTo });
+      ranges.push({ from: closeFrom, to: closeTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
     }
   }
 
-  // Link markers: [text](url) - hide [ and ](url)
-  const linkRegex = /\[([^\]]*)\]\(([^)]*)\)/g;
+  // Link markers: [text](url)
+  const linkRegex = /\[([^\]]*)]\(([^)]*)\)/g;
   while ((match = linkRegex.exec(text)) !== null) {
     const bracketOpen = match.index;
     const bracketClose = match.index + 1 + match[1].length;
     const parenClose = match.index + match[0].length - 1;
-
-    // Hide opening [
+    if (isInsideCodeBlock(bracketOpen)) continue;
     if (!isAlreadyCollected(bracketOpen, bracketOpen + 1)) {
-      rangesToHide.push({ from: bracketOpen, to: bracketOpen + 1 });
+      ranges.push({ from: bracketOpen, to: bracketOpen + 1, kind: "link-bracket-open", nodeFrom: bracketOpen, nodeTo: parenClose + 1 });
     }
-    // Hide ](url) portion
     if (!isAlreadyCollected(bracketClose, parenClose + 1)) {
-      rangesToHide.push({ from: bracketClose, to: parenClose + 1 });
+      ranges.push({ from: bracketClose, to: parenClose + 1, kind: "link-tail", nodeFrom: bracketOpen, nodeTo: parenClose + 1 });
     }
   }
 
-  // Blockquote markers: lines starting with > (regex fallback)
-  // Process each line for blockquote markers
+  // Blockquote markers: regex fallback for lines the parser missed
   for (let i = 1; i <= doc.lines; i++) {
     if (processedBlockquoteLines.has(i)) continue;
-
     const line = doc.line(i);
+    if (isInsideCodeBlock(line.from)) continue;
     const quoteInfo = getBlockquoteInfo(line);
     if (quoteInfo) {
-      blockquoteMarkers.push({
+      ranges.push({
         from: line.from,
         to: quoteInfo.contentStart,
-        level: quoteInfo.level,
+        kind: "blockquote-prefix",
+        nodeFrom: line.from,
+        nodeTo: line.to,
+        contentStart: quoteInfo.contentStart,
+        contentEnd: line.to,
+        meta: { level: quoteInfo.level },
       });
     }
   }
 
-  // Combine all decorations with their types for sorting
-  type DecorationEntry =
-    | { from: number; to: number; type: "hide" }
-    | { from: number; to: number; type: "list"; isOrdered: boolean; num: number }
-    | { from: number; to: number; type: "task"; checked: boolean; pos: number }
-    | { from: number; to: number; type: "blockquote"; level: number }
-    | { from: number; to: number; type: "hr" }
-    | { from: number; to: number; type: "codeblock-open"; language: string }
-    | { from: number; to: number; type: "codeblock-close" };
+  // ===========================================
+  // Compute per-line effective contentStart for stacked prefixes
+  // ===========================================
 
-  // Helper to check if a range overlaps with any horizontal rule
-  const overlapsWithHR = (from: number, to: number): boolean => {
-    return horizontalRules.some(hr => from >= hr.from && to <= hr.to);
-  };
+  // Group prefix ranges by line and compute effective contentStart
+  const prefixKinds: Set<HiddenRangeKind> = new Set([
+    "heading-prefix", "list-marker", "task-marker", "blockquote-prefix",
+  ]);
+  const prefixRangesByLine = new Map<number, HiddenRange[]>();
 
-  // Helper to check if a range overlaps with any code block fence
-  const overlapsWithCodeBlockFence = (from: number, to: number): boolean => {
-    return codeBlockOpens.some(cb => from >= cb.from && to <= cb.to) ||
-           codeBlockCloses.some(cb => from >= cb.from && to <= cb.to);
-  };
+  for (const r of ranges) {
+    if (!prefixKinds.has(r.kind)) continue;
+    const lineNum = doc.lineAt(r.from).number;
+    let arr = prefixRangesByLine.get(lineNum);
+    if (!arr) {
+      arr = [];
+      prefixRangesByLine.set(lineNum, arr);
+    }
+    arr.push(r);
+  }
 
-  // Filter out decorations that overlap with horizontal rules or code block fences
-  const filteredRangesToHide = rangesToHide.filter(r => !overlapsWithHR(r.from, r.to) && !overlapsWithCodeBlockFence(r.from, r.to));
-  const filteredListMarkers = listMarkers.filter(m => !overlapsWithHR(m.from, m.to) && !overlapsWithCodeBlockFence(m.from, m.to));
-  const filteredTaskMarkers = taskMarkers.filter(t => !overlapsWithHR(t.from, t.to) && !overlapsWithCodeBlockFence(t.from, t.to));
-  const filteredBlockquoteMarkers = blockquoteMarkers.filter(b => !overlapsWithHR(b.from, b.to) && !overlapsWithCodeBlockFence(b.from, b.to));
-
-  const allDecorations: DecorationEntry[] = [
-    ...filteredRangesToHide.map(r => ({ ...r, type: "hide" as const })),
-    ...filteredListMarkers.map(m => ({ ...m, type: "list" as const })),
-    ...filteredTaskMarkers.map(t => ({ ...t, type: "task" as const })),
-    ...filteredBlockquoteMarkers.map(b => ({ ...b, type: "blockquote" as const })),
-    ...horizontalRules.map(hr => ({ ...hr, type: "hr" as const })),
-    ...codeBlockOpens.map(cb => ({ ...cb, type: "codeblock-open" as const })),
-    ...codeBlockCloses.map(cb => ({ ...cb, type: "codeblock-close" as const })),
-  ];
-
-  // Sort by 'from' position, then by 'to' position for stability (required by RangeSetBuilder)
-  allDecorations.sort((a, b) => a.from - b.from || a.to - b.to);
-
-  // Now add to builder in sorted order
-  const builder = new RangeSetBuilder<Decoration>();
-  for (const entry of allDecorations) {
-    if (entry.type === "hide") {
-      builder.add(entry.from, entry.to, hiddenDecoration);
-    } else if (entry.type === "list") {
-      // List marker - use widget decoration
-      const listEntry = entry as { from: number; to: number; type: "list"; isOrdered: boolean; num: number };
-      const widget = listEntry.isOrdered
-        ? new NumberWidget(listEntry.num)
-        : new BulletWidget();
-      builder.add(entry.from, entry.to, Decoration.replace({ widget }));
-    } else if (entry.type === "task") {
-      // Task marker - use checkbox widget decoration
-      const taskEntry = entry as { from: number; to: number; type: "task"; checked: boolean; pos: number };
-      const widget = new CheckboxWidget(taskEntry.checked, taskEntry.pos);
-      builder.add(entry.from, entry.to, Decoration.replace({ widget }));
-    } else if (entry.type === "blockquote") {
-      // Blockquote marker - use widget decoration with bar
-      const quoteEntry = entry as { from: number; to: number; type: "blockquote"; level: number };
-      const widget = new BlockquoteBarWidget(quoteEntry.level);
-      builder.add(entry.from, entry.to, Decoration.replace({ widget }));
-    } else if (entry.type === "hr") {
-      // Horizontal rule - use block widget decoration
-      const widget = new HorizontalRuleWidget();
-      builder.add(entry.from, entry.to, Decoration.replace({ widget, block: true }));
-    } else if (entry.type === "codeblock-open") {
-      // Code block opening fence - show language badge widget
-      const cbEntry = entry as { from: number; to: number; type: "codeblock-open"; language: string };
-      const widget = new CodeBlockOpenWidget(cbEntry.language);
-      builder.add(entry.from, entry.to, Decoration.replace({ widget, block: true }));
-    } else if (entry.type === "codeblock-close") {
-      // Code block closing fence - hide it
-      const widget = new CodeBlockCloseWidget();
-      builder.add(entry.from, entry.to, Decoration.replace({ widget, block: true }));
+  for (const [, lineRanges] of prefixRangesByLine) {
+    if (lineRanges.length <= 1) continue;
+    // Sort by from position (leftmost first)
+    lineRanges.sort((a, b) => a.from - b.from);
+    // The effective contentStart is the `to` of the last (rightmost) prefix range
+    const effectiveContentStart = lineRanges[lineRanges.length - 1].to;
+    const line = doc.lineAt(lineRanges[0].from);
+    // Update all prefix ranges on this line to share the same contentStart
+    for (const r of lineRanges) {
+      r.contentStart = effectiveContentStart;
+      r.contentEnd = line.to;
     }
   }
 
+  return ranges;
+}
+
+/**
+ * StateField that caches HiddenRange[] and recomputes on doc change.
+ * All consumers (decorations, snapper) read from this field.
+ */
+const hiddenRangesField = StateField.define<HiddenRange[]>({
+  create: (state) => getHiddenRanges(state),
+  update: (value, tr) => {
+    if (tr.docChanged) {
+      return getHiddenRanges(tr.state);
+    }
+    return value;
+  },
+});
+
+// ===========================================
+// SELECTION SNAPPING
+// ===========================================
+
+/**
+ * Snap a position directionally away from hidden ranges.
+ * direction > 0: moving right → snap to range.to
+ * direction < 0: moving left → snap to range.from
+ */
+function snapDirectional(pos: number, direction: number, hiddenRanges: HiddenRange[], state: EditorState): number {
+  const maxIterations = 5;
+  let current = pos;
+
+  for (let iter = 0; iter < maxIterations; iter++) {
+    const prev = current;
+    let snapped = false;
+
+    // Block-level ranges first (HR, code fences)
+    for (const r of hiddenRanges) {
+      if (current < r.from || current > r.to) continue; // not inside
+      if (current === r.from || current === r.to) continue; // on edge is ok for some kinds
+
+      if (r.kind === "horizontal-rule" || r.kind === "code-fence-open" || r.kind === "code-fence-close") {
+        if (current >= r.from && current <= r.to) {
+          // Jump to line before/after
+          const line = state.doc.lineAt(r.from);
+          const prevLine = line.number > 1 ? state.doc.line(line.number - 1) : null;
+          const nextLine = line.number < state.doc.lines ? state.doc.line(line.number + 1) : null;
+
+          if (direction > 0) {
+            // Prefer moving down; if no next line, move up instead
+            if (nextLine) current = nextLine.from;
+            else if (prevLine) current = prevLine.to;
+            else current = r.to;
+          } else {
+            // Prefer moving up; if no previous line, move down instead
+            if (prevLine) current = prevLine.to;
+            else if (nextLine) current = nextLine.from;
+            else current = r.from;
+          }
+          snapped = true;
+          break;
+        }
+      }
+    }
+
+    // Line-prefix ranges (heading, list, task, blockquote)
+    for (const r of hiddenRanges) {
+      if (r.contentStart === undefined) continue;
+      if (current >= r.from && current < r.contentStart) {
+        if (direction < 0 && r.from > 0) {
+          // Moving left into prefix → go to end of previous line
+          const line = state.doc.lineAt(r.from);
+          if (line.number > 1) {
+            const prevLine = state.doc.line(line.number - 1);
+            current = prevLine.to;
+          } else {
+            current = r.from;
+          }
+        } else {
+          // Moving right or click → snap to contentStart
+          current = r.contentStart;
+        }
+        snapped = true;
+        break;
+      }
+    }
+
+    // Inline markers (**, *, ~~, `, link brackets)
+    for (const r of hiddenRanges) {
+      if (r.kind !== "inline-marker" && r.kind !== "link-bracket-open" && r.kind !== "link-tail") continue;
+      if (current > r.from && current < r.to) {
+        current = direction >= 0 ? r.to : r.from;
+        snapped = true;
+        break;
+      }
+    }
+
+    if (!snapped || current === prev) break;
+  }
+
+  return current;
+}
+
+/**
+ * Snap a position to the nearest visible edge (for pointer clicks).
+ */
+function snapToNearest(pos: number, hiddenRanges: HiddenRange[], state: EditorState): number {
+  const maxIterations = 5;
+  let current = pos;
+
+  for (let iter = 0; iter < maxIterations; iter++) {
+    const prev = current;
+    let snapped = false;
+
+    // Block-level: snap to nearest line boundary
+    for (const r of hiddenRanges) {
+      if (r.kind === "horizontal-rule" || r.kind === "code-fence-open" || r.kind === "code-fence-close") {
+        if (current >= r.from && current <= r.to) {
+          const line = state.doc.lineAt(r.from);
+          const prevLine = line.number > 1 ? state.doc.line(line.number - 1) : null;
+          const nextLine = line.number < state.doc.lines ? state.doc.line(line.number + 1) : null;
+
+          if (!prevLine && nextLine) {
+            current = nextLine.from;
+          } else if (!nextLine && prevLine) {
+            current = prevLine.to;
+          } else if (!prevLine && !nextLine) {
+            current = r.to;
+          } else {
+            const distBefore = current - prevLine!.to;
+            const distAfter = nextLine!.from - current;
+            current = distBefore <= distAfter ? prevLine!.to : nextLine!.from;
+          }
+          snapped = true;
+          break;
+        }
+      }
+    }
+
+    // Line-prefix: snap to contentStart
+    for (const r of hiddenRanges) {
+      if (r.contentStart === undefined) continue;
+      if (current >= r.from && current < r.contentStart) {
+        current = r.contentStart;
+        snapped = true;
+        break;
+      }
+    }
+
+    // Inline: snap to nearest edge
+    for (const r of hiddenRanges) {
+      if (r.kind !== "inline-marker" && r.kind !== "link-bracket-open" && r.kind !== "link-tail") continue;
+      if (current > r.from && current < r.to) {
+        const distFrom = current - r.from;
+        const distTo = r.to - current;
+        current = distFrom <= distTo ? r.from : r.to;
+        snapped = true;
+        break;
+      }
+    }
+
+    if (!snapped || current === prev) break;
+  }
+
+  return current;
+}
+
+/**
+ * Transaction filter that snaps collapsed selections away from hidden ranges.
+ *
+ * Rules:
+ * - Only collapsed selections are ever snapped
+ * - Ranged (non-empty) selections are never interfered with
+ * - Pointer clicks snap to nearest visible edge
+ * - Non-pointer events use directional snapping (based on old vs new head)
+ * - Composition events are skipped
+ */
+const selectionSnapper = EditorState.transactionFilter.of((tr) => {
+  if (!tr.selection) return tr;
+  if (tr.isUserEvent("input.type.compose")) return tr;
+
+  const isPointer = tr.isUserEvent("select.pointer");
+  const hiddenRanges = tr.state.field(hiddenRangesField);
+
+  const oldRanges = tr.startState.selection.ranges;
+  const newRanges = tr.selection.ranges;
+  let needsSnap = false;
+  const snapped: import("@codemirror/state").SelectionRange[] = [];
+
+  for (let i = 0; i < newRanges.length; i++) {
+    const newR = newRanges[i];
+    const oldR = oldRanges[Math.min(i, oldRanges.length - 1)];
+
+    // Only collapsed selections are ever snapped
+    if (!newR.empty) {
+      snapped.push(newR);
+      continue;
+    }
+
+    let head: number;
+
+    if (isPointer) {
+      head = snapToNearest(newR.head, hiddenRanges, tr.state);
+    } else {
+      const headDir = newR.head >= oldR.head ? 1 : -1;
+      head = snapDirectional(newR.head, headDir, hiddenRanges, tr.state);
+    }
+
+    if (head !== newR.head) {
+      needsSnap = true;
+      snapped.push(EditorSelection.cursor(head));
+    } else {
+      snapped.push(newR);
+    }
+  }
+
+  if (!needsSnap) return tr;
+  return [tr, { selection: EditorSelection.create(snapped, tr.selection.mainIndex) }];
+});
+
+// ===========================================
+// HIDDEN SYNTAX DECORATION (NO atomicRanges)
+// ===========================================
+
+const hiddenDecoration = Decoration.replace({});
+
+/**
+ * Build decorations from HiddenRange[].
+ * Unified decoration builder — single source of truth.
+ *
+ * - inline-marker → Decoration.replace({})
+ * - heading-prefix → Decoration.replace({})
+ * - list-marker → BulletWidget or NumberWidget
+ * - task-marker → CheckboxWidget
+ * - blockquote-prefix → BlockquoteBarWidget
+ * - code-fence-open → CodeBlockOpenWidget
+ * - code-fence-close → CodeBlockCloseWidget
+ * - horizontal-rule → HorizontalRuleWidget
+ * - link-bracket-open → Decoration.replace({})
+ * - link-tail → Decoration.replace({})
+ */
+function buildDecorationsFromRanges(hiddenRanges: HiddenRange[]) {
+  // Collect HR and code fence ranges for overlap filtering
+  const hrRanges = hiddenRanges.filter(r => r.kind === "horizontal-rule");
+  const codeFenceRanges = hiddenRanges.filter(r => r.kind === "code-fence-open" || r.kind === "code-fence-close");
+
+  const overlapsWithHR = (from: number, to: number): boolean =>
+    hrRanges.some(hr => from >= hr.from && to <= hr.to);
+
+  const overlapsWithCodeFence = (from: number, to: number): boolean =>
+    codeFenceRanges.some(cb => from >= cb.from && to <= cb.to);
+
+  type DecorationEntry = { from: number; to: number; deco: Decoration };
+  const entries: DecorationEntry[] = [];
+
+  for (const r of hiddenRanges) {
+    // Filter out ranges that overlap with HR or code fences (except the HR/fence ranges themselves)
+    if (r.kind !== "horizontal-rule" && r.kind !== "code-fence-open" && r.kind !== "code-fence-close") {
+      if (overlapsWithHR(r.from, r.to) || overlapsWithCodeFence(r.from, r.to)) continue;
+    }
+
+    switch (r.kind) {
+      case "inline-marker":
+      case "link-bracket-open":
+      case "link-tail":
+      case "heading-prefix":
+        entries.push({ from: r.from, to: r.to, deco: hiddenDecoration });
+        break;
+      case "list-marker": {
+        const isOrdered = r.meta?.isOrdered as boolean;
+        const num = r.meta?.num as number;
+        const widget = isOrdered ? new NumberWidget(num) : new BulletWidget();
+        entries.push({ from: r.from, to: r.to, deco: Decoration.replace({ widget }) });
+        break;
+      }
+      case "task-marker": {
+        const checked = r.meta?.checked as boolean;
+        const pos = r.meta?.pos as number;
+        const widget = new CheckboxWidget(checked, pos);
+        entries.push({ from: r.from, to: r.to, deco: Decoration.replace({ widget }) });
+        break;
+      }
+      case "blockquote-prefix": {
+        const level = r.meta?.level as number;
+        const widget = new BlockquoteBarWidget(level);
+        entries.push({ from: r.from, to: r.to, deco: Decoration.replace({ widget }) });
+        break;
+      }
+      case "horizontal-rule": {
+        const widget = new HorizontalRuleWidget();
+        entries.push({ from: r.from, to: r.to, deco: Decoration.replace({ widget, block: true }) });
+        break;
+      }
+      case "code-fence-open": {
+        const language = r.meta?.language as string;
+        const widget = new CodeBlockOpenWidget(language);
+        entries.push({ from: r.from, to: r.to, deco: Decoration.replace({ widget, block: true }) });
+        break;
+      }
+      case "code-fence-close": {
+        const widget = new CodeBlockCloseWidget();
+        entries.push({ from: r.from, to: r.to, deco: Decoration.replace({ widget, block: true }) });
+        break;
+      }
+    }
+  }
+
+  // Sort by 'from' position, then 'to' (required by RangeSetBuilder)
+  entries.sort((a, b) => a.from - b.from || a.to - b.to);
+
+  const builder = new RangeSetBuilder<Decoration>();
+  for (const e of entries) {
+    builder.add(e.from, e.to, e.deco);
+  }
   return builder.finish();
 }
 
 /**
- * StateField that tracks hidden syntax decorations
+ * StateField that tracks hidden syntax decorations.
+ * Consumes HiddenRange[] from hiddenRangesField.
  *
- * NOTE: We only provide EditorView.decorations, NOT EditorView.atomicRanges
- * This is the key difference from the failed migration.
+ * NOTE: We only provide EditorView.decorations, NOT EditorView.atomicRanges.
  */
 const hiddenSyntaxField = StateField.define({
-  create: (state) => buildHiddenSyntax(state),
+  create: (state) => buildDecorationsFromRanges(state.field(hiddenRangesField)),
   update: (value, tr) => {
     if (tr.docChanged) {
-      return buildHiddenSyntax(tr.state);
+      return buildDecorationsFromRanges(tr.state.field(hiddenRangesField));
     }
     return value;
   },
   provide: (field) => EditorView.decorations.from(field),
-  // INTENTIONALLY NOT providing atomicRanges - this is the experiment!
 });
 
 // ===========================================
@@ -4541,62 +4003,6 @@ const pendingFormatTheme = EditorView.updateListener.of((update) => {
   }
 });
 
-/**
- * Extension that ensures cursor can never be inside heading, list, blockquote markers,
- * or hidden link portions (the ](url) part).
- * If cursor ends up in a hidden region, move it to an appropriate position.
- */
-const cursorGuard = EditorView.updateListener.of((update) => {
-  if (!update.selectionSet) return;
-
-  const state = update.state;
-  const pos = state.selection.main.head;
-  const line = state.doc.lineAt(pos);
-
-  let newPos: number | null = null;
-
-  // Check if cursor is inside hidden link portion
-  const linkCtx = getLinkContext(state);
-  if (linkCtx && isInHiddenLinkPortion(state, linkCtx)) {
-    // Move cursor to end of link text (textTo)
-    newPos = linkCtx.textTo;
-  }
-
-  // Check if this is a heading line
-  if (newPos === null) {
-    const headingMatch = line.text.match(/^(#{1,6})\s/);
-    if (headingMatch && pos < line.from + headingMatch[0].length) {
-      newPos = line.from + headingMatch[0].length;
-    }
-  }
-
-  // Check if this is a list item line
-  if (newPos === null) {
-    const listMatch = line.text.match(/^(\s*)([-*+]|\d+\.)\s/);
-    if (listMatch && pos < line.from + listMatch[0].length) {
-      newPos = line.from + listMatch[0].length;
-    }
-  }
-
-  // Check if this is a blockquote line
-  if (newPos === null) {
-    const quoteInfo = getBlockquoteInfo(line);
-    if (quoteInfo && pos < quoteInfo.contentStart) {
-      newPos = quoteInfo.contentStart;
-    }
-  }
-
-  if (newPos === null) return;
-
-  // Move cursor to the appropriate position
-  // Use requestAnimationFrame to avoid dispatch during update
-  requestAnimationFrame(() => {
-    update.view.dispatch({
-      selection: { anchor: newPos! },
-    });
-  });
-});
-
 // ===========================================
 // STYLING DECORATIONS
 // ===========================================
@@ -4633,8 +4039,17 @@ function buildStyleDecorations(state: EditorState) {
   // RangeSetBuilder requires ranges in sorted order
   const rangesToDecorate: Array<{ from: number; to: number; decoration: Decoration }> = [];
 
+  // Collect code block ranges - no styling should be applied inside them
+  const codeBlockRanges = collectCodeBlockExtents(state);
+
+  const isInsideCodeBlock = (pos: number) =>
+    isInCodeBlock(pos, codeBlockRanges);
+
   syntaxTree(state).iterate({
     enter(node) {
+      // Skip any nodes inside code blocks - no markdown styling there
+      if (isInsideCodeBlock(node.from)) return;
+
       // Strong (bold) - style the content between markers
       if (node.name === "StrongEmphasis") {
         const content = node.node;
@@ -4814,6 +4229,7 @@ function buildStyleDecorations(state: EditorState) {
   const boldRegex = /\*\*(.+?)\*\*/g;
   let match: RegExpExecArray | null;
   while ((match = boldRegex.exec(text)) !== null) {
+    if (isInsideCodeBlock(match.index)) continue;
     const contentFrom = match.index + 2;
     const contentTo = match.index + 2 + match[1].length;
     if (!isAlreadyCollected(contentFrom, contentTo) && contentFrom < contentTo) {
@@ -4824,6 +4240,7 @@ function buildStyleDecorations(state: EditorState) {
   // Italic: *...* (but not **)
   const italicRegex = /(?<!\*)\*([^*]+?)\*(?!\*)/g;
   while ((match = italicRegex.exec(text)) !== null) {
+    if (isInsideCodeBlock(match.index)) continue;
     const contentFrom = match.index + 1;
     const contentTo = match.index + 1 + match[1].length;
     if (!isAlreadyCollected(contentFrom, contentTo) && contentFrom < contentTo) {
@@ -4834,6 +4251,7 @@ function buildStyleDecorations(state: EditorState) {
   // Strikethrough: ~~...~~
   const strikeRegex = /~~(.+?)~~/g;
   while ((match = strikeRegex.exec(text)) !== null) {
+    if (isInsideCodeBlock(match.index)) continue;
     const contentFrom = match.index + 2;
     const contentTo = match.index + 2 + match[1].length;
     if (!isAlreadyCollected(contentFrom, contentTo) && contentFrom < contentTo) {
@@ -4842,8 +4260,9 @@ function buildStyleDecorations(state: EditorState) {
   }
 
   // Links: [text](url) - style the text portion
-  const linkStyleRegex = /\[([^\]]*)\]\([^)]*\)/g;
+  const linkStyleRegex = /\[([^\]]*)]\([^)]*\)/g;
   while ((match = linkStyleRegex.exec(text)) !== null) {
+    if (isInsideCodeBlock(match.index)) continue;
     const textFrom = match.index + 1; // After [
     const textTo = match.index + 1 + match[1].length; // Before ]
     if (!isAlreadyCollected(textFrom, textTo) && textFrom < textTo) {
@@ -4969,8 +4388,8 @@ const theme = EditorView.theme({
   // Horizontal rule styles
   ".cm-horizontal-rule": {
     display: "block",
-    margin: "16px 0",
-    padding: "0",
+    margin: "0",
+    padding: "16px 0",
     lineHeight: "0",
     userSelect: "none",
   },
@@ -4984,8 +4403,9 @@ const theme = EditorView.theme({
   // Code block fence styles (opening badge and closing marker)
   ".cm-code-block-open": {
     display: "block",
-    marginTop: "8px",
-    marginBottom: "4px",
+    margin: "0",
+    paddingTop: "8px",
+    paddingBottom: "4px",
   },
   ".cm-code-block-lang-badge": {
     display: "inline-block",
@@ -5003,7 +4423,8 @@ const theme = EditorView.theme({
   ".cm-code-block-close": {
     display: "block",
     height: "4px",
-    marginBottom: "8px",
+    margin: "0",
+    paddingBottom: "8px",
   },
   // Pending format styles - style the cursor/caret when in pending format mode
   "&.cm-pending-bold .cm-cursor": {
@@ -5128,7 +4549,7 @@ function LinkEditorPopup() {
     });
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     applyLink(url);
   };
@@ -5226,6 +4647,7 @@ function Editor({ initialContent, hidesSyntax, onChange }: EditorProps) {
     const extensions = [
       // Input handler FIRST to intercept before markdown parser
       formattingInputHandler,
+      codeBlockRectangularSelection,
       markdown({ extensions: [GFM] }),
       history(),
       // Formatting escape keymap with HIGHEST priority to override markdown extension's list handling
@@ -5242,10 +4664,11 @@ function Editor({ initialContent, hidesSyntax, onChange }: EditorProps) {
 
     // Only add hidden syntax if enabled
     if (hidesSyntax) {
+      extensions.push(hiddenRangesField);
       extensions.push(hiddenSyntaxField);
+      extensions.push(selectionSnapper);
       extensions.push(pendingFormattingField);
       extensions.push(pendingFormatTheme);
-      extensions.push(cursorGuard);
     }
 
     const state = EditorState.create({
@@ -5850,15 +5273,12 @@ export {
   hiddenSyntaxField,
   pendingFormattingField,
   pendingFormatTheme,
-  cursorGuard,
   styleField,
   theme,
 
   // Blockquote handlers
   handleEnterInBlockquote,
   handleBackspaceInBlockquote,
-  handleArrowLeftFromBlockquoteStart,
-  handleArrowRightIntoBlockquote,
   getBlockquoteInfo,
 
   // List handlers
@@ -5866,8 +5286,6 @@ export {
   handleBackspaceInList,
   handleTabInList,
   handleShiftTabInList,
-  handleArrowLeftFromListStart,
-  handleArrowRightIntoList,
   getListInfo,
   getNextOrderNumber,
   isAtListContentStart,
@@ -5878,32 +5296,15 @@ export {
   toggleTaskCheckboxOnLine,
 
   // Heading handlers
-  handleArrowRightIntoHeading,
-  handleArrowLeftFromHeadingStart,
   handleBackspaceAtHeadingStart,
-  getLineContentStart,
-  getLineContentLength,
-
-  // Navigation handlers
-  handleArrowRight,
-  handleArrowRightAtEnd,
-  handleArrowLeft,
-  handleArrowLeftAtStart,
-  handleArrowRightOverBlankLines,
-  handleArrowLeftOverBlankLines,
-  handleArrowUp,
-  handleArrowDown,
 
   // Horizontal rule handlers
-  handleArrowDownPastHorizontalRule,
-  handleArrowUpPastHorizontalRule,
   handleBackspaceAfterHorizontalRule,
   handleDeleteBeforeHorizontalRule,
+  HEADING_PREFIX_RE,
   HR_REGEX,
 
   // Code block handlers
-  handleArrowDownPastCodeBlock,
-  handleArrowUpPastCodeBlock,
   handleBackspaceAfterCodeBlock,
   handleDeleteBeforeCodeBlock,
   getCodeBlockAtLine,
@@ -5913,7 +5314,6 @@ export {
   handleEnter,
   handleShiftEnter,
   handleDeleteAtEndOfLine,
-  handleDeleteAtLineStart,
   handleDeleteEmptyFormatting,
   handleDeleteAtOpeningMarker,
   handleDeleteAtEndOfContent,
@@ -5938,10 +5338,6 @@ export {
   setHeading6,
 
   // Link handlers
-  handleArrowRightFromLinkText,
-  handleArrowLeftAfterLink,
-  handleArrowLeftFromLinkTextStart,
-  handleArrowRightIntoLink,
   handleBackspaceAfterLink,
   handleBackspaceAtLinkTextStart,
   handleDeleteAtLinkTextEnd,
@@ -5952,7 +5348,6 @@ export {
   getLinkContextAfterClosing,
   isAtEndOfLinkText,
   isAtStartOfLinkText,
-  isInHiddenLinkPortion,
 
   // Link editor state
   openLinkEditor,
@@ -5979,7 +5374,20 @@ export {
   isAtEndOfFormatting,
   getPendingFormat,
 
+  // Hidden Range model
+  getHiddenRanges,
+  hiddenRangesField,
+  snapDirectional,
+  snapToNearest,
+  selectionSnapper,
+  handleTabInCodeBlock,
+  handleShiftTabInCodeBlock,
+  codeBlockRectangularSelection,
+  isRectangularSelectionInCodeBlock,
+
   // Types
   type FormattingContext,
   type LinkContext,
+  type HiddenRange,
+  type HiddenRangeKind,
 };

@@ -2,28 +2,28 @@
  * Tests for code block handlers in the CodeMirror WYSIWYG experiment
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { markdown } from "@codemirror/lang-markdown";
+import { createTestView, createMinimalView, getDocWithCursor, type TestView } from "./testUtils";
 import {
-  handleArrowDownPastCodeBlock,
-  handleArrowUpPastCodeBlock,
   handleBackspaceAfterCodeBlock,
   handleDeleteBeforeCodeBlock,
+  handleTabInCodeBlock,
+  handleShiftTabInCodeBlock,
+  isRectangularSelectionInCodeBlock,
   getCodeBlockAtLine,
   isCodeFenceStart,
 } from "../harness";
 
-// Helper to create a test editor view
-function createView(content: string, cursorPos?: number): EditorView {
-  const state = EditorState.create({
-    doc: content,
-    selection: cursorPos !== undefined ? { anchor: cursorPos } : undefined,
-    extensions: [markdown()],
-  });
-  return new EditorView({ state });
-}
+let tv: TestView;
+let view: EditorView;
+
+afterEach(() => {
+  tv?.destroy();
+  view?.destroy();
+});
 
 describe("isCodeFenceStart", () => {
   it("matches ``` fence start", () => {
@@ -70,6 +70,78 @@ describe("isCodeFenceStart", () => {
   });
 });
 
+describe("handleTabInCodeBlock", () => {
+  it("inserts a tab at the cursor inside a code block", () => {
+    tv = createMinimalView("```\ncon|sole.log()\n```");
+
+    const handled = handleTabInCodeBlock(tv.view);
+
+    expect(handled).toBe(true);
+    expect(tv.view.state.doc.toString()).toBe("```\ncon\tsole.log()\n```");
+  });
+
+  it("returns false when not inside a code block", () => {
+    tv = createMinimalView("not code|");
+
+    const handled = handleTabInCodeBlock(tv.view);
+
+    expect(handled).toBe(false);
+  });
+});
+
+describe("handleShiftTabInCodeBlock", () => {
+  it("removes a tab before the cursor inside a code block", () => {
+    tv = createMinimalView("```\n\t|console\n```");
+
+    const handled = handleShiftTabInCodeBlock(tv.view);
+
+    expect(handled).toBe(true);
+    expect(tv.view.state.doc.toString()).toBe("```\nconsole\n```");
+  });
+});
+
+describe("rectangular selection in code blocks", () => {
+  let testView: TestView;
+
+  afterEach(() => {
+    testView?.destroy();
+  });
+
+  it("allows Alt+drag inside a code block", () => {
+    testView = createTestView("```\nco|de\n```");
+    const v = testView.view as EditorView & { posAtCoords: (coords: { x: number; y: number }) => number | null };
+    const pos = v.state.doc.line(2).from + 1; // inside code block content
+    v.posAtCoords = () => pos;
+
+    const event = {
+      altKey: true,
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+      target: v.dom,
+    } as unknown as MouseEvent;
+
+    expect(isRectangularSelectionInCodeBlock(event)).toBe(true);
+  });
+
+  it("blocks Alt+drag outside a code block", () => {
+    testView = createTestView("plain |text");
+    const v = testView.view as EditorView & { posAtCoords: (coords: { x: number; y: number }) => number | null };
+    const pos = 2;
+    v.posAtCoords = () => pos;
+
+    const event = {
+      altKey: true,
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+      target: v.dom,
+    } as unknown as MouseEvent;
+
+    expect(isRectangularSelectionInCodeBlock(event)).toBe(false);
+  });
+});
+
 describe("getCodeBlockAtLine", () => {
   it("returns code block info when on opening fence", () => {
     const content = "text\n```javascript\nconst x = 1;\n```\nmore text";
@@ -103,20 +175,9 @@ describe("getCodeBlockAtLine", () => {
 
     const result = getCodeBlockAtLine(state, 4); // Line 4 is closing ```
 
-    // Note: When cursor is on the closing fence (```), the function first checks
-    // if it's an opening fence (which it matches), then looks for a closing fence
-    // after it, which it won't find. So the backward search kicks in.
-    // The current implementation returns the code block when searching backwards
-    // finds the opening fence that closes before or at our line.
-    // If result is null here, it means the closing fence lookup doesn't include
-    // the closing fence line itself in the "inside" check.
-    // This is actually acceptable behavior - the important tests are for lines
-    // inside the code block content.
     if (result) {
       expect(result?.code).toBe("const x = 1;");
     }
-    // Either finding the block or returning null is acceptable for the closing fence
-    // The key handlers will work because they check the next/prev line, not the current
   });
 
   it("returns null when not inside a code block", () => {
@@ -178,135 +239,49 @@ describe("getCodeBlockAtLine", () => {
   });
 });
 
-describe("handleArrowDownPastCodeBlock", () => {
-  it("skips over code block when moving down", () => {
-    const content = "Line 1\n```javascript\ncode\n```\nLine 5";
-    const view = createView(content, 0); // Cursor at start of Line 1
+describe("code block tab integration", () => {
+  let testView: TestView;
 
-    const result = handleArrowDownPastCodeBlock(view);
-
-    expect(result).toBe(true);
-    // Should be at start of Line 5 (after the code block)
-    const line5Start = content.indexOf("Line 5");
-    expect(view.state.selection.main.head).toBe(line5Start);
+  afterEach(() => {
+    testView?.destroy();
   });
 
-  it("returns false when next line is not a code block", () => {
-    const content = "Line 1\nLine 2\nLine 3";
-    const view = createView(content, 0);
+  it("tabs inside a code fence in the full editor", () => {
+    testView = createTestView("```\nco|de\n```");
 
-    const result = handleArrowDownPastCodeBlock(view);
+    const handled = handleTabInCodeBlock(testView.view);
 
-    expect(result).toBe(false);
-    expect(view.state.selection.main.head).toBe(0);
-  });
-
-  it("handles code block at end of document", () => {
-    const content = "Line 1\n```\ncode\n```";
-    const view = createView(content, 0);
-
-    const result = handleArrowDownPastCodeBlock(view);
-
-    expect(result).toBe(true);
-    // Should be at end of document
-    expect(view.state.selection.main.head).toBe(content.length);
-  });
-
-  it("returns false when on last line", () => {
-    const content = "Only line";
-    const view = createView(content, 0);
-
-    const result = handleArrowDownPastCodeBlock(view);
-
-    expect(result).toBe(false);
-  });
-
-  it("works with different languages", () => {
-    const content = "Line 1\n```python\nprint('hi')\n```\nLine 5";
-    const view = createView(content, 0);
-
-    const result = handleArrowDownPastCodeBlock(view);
-
-    expect(result).toBe(true);
-    const line5Start = content.indexOf("Line 5");
-    expect(view.state.selection.main.head).toBe(line5Start);
-  });
-});
-
-describe("handleArrowUpPastCodeBlock", () => {
-  it("skips over code block when moving up", () => {
-    const content = "Line 1\n```\ncode\n```\nLine 5";
-    const line5Start = content.indexOf("Line 5");
-    const view = createView(content, line5Start); // Cursor at start of Line 5
-
-    const result = handleArrowUpPastCodeBlock(view);
-
-    expect(result).toBe(true);
-    // Should be at end of Line 1
-    expect(view.state.selection.main.head).toBe(6); // "Line 1".length
-  });
-
-  it("returns false when previous line is not end of code block", () => {
-    const content = "Line 1\nLine 2\nLine 3";
-    const view = createView(content, 14); // Cursor at start of Line 3
-
-    const result = handleArrowUpPastCodeBlock(view);
-
-    expect(result).toBe(false);
-  });
-
-  it("handles code block at start of document", () => {
-    const content = "```\ncode\n```\nLine 4";
-    const line4Start = content.indexOf("Line 4");
-    const view = createView(content, line4Start);
-
-    const result = handleArrowUpPastCodeBlock(view);
-
-    expect(result).toBe(true);
-    // Should be at start of document
-    expect(view.state.selection.main.head).toBe(0);
-  });
-
-  it("returns false when on first line", () => {
-    const content = "Only line";
-    const view = createView(content, 5);
-
-    const result = handleArrowUpPastCodeBlock(view);
-
-    expect(result).toBe(false);
+    expect(handled).toBe(true);
+    expect(getDocWithCursor(testView.view)).toBe("```\nco\t|de\n```");
   });
 });
 
 describe("handleBackspaceAfterCodeBlock", () => {
   it("deletes code block when cursor is at start of line after code block", () => {
-    const content = "Line 1\n```\ncode\n```\nLine 5";
-    const line5Start = content.indexOf("Line 5");
-    const view = createView(content, line5Start);
+    tv = createMinimalView("Line 1\n```\ncode\n```\n|Line 5");
 
-    const result = handleBackspaceAfterCodeBlock(view);
+    const result = handleBackspaceAfterCodeBlock(tv.view);
 
     expect(result).toBe(true);
-    expect(view.state.doc.toString()).toBe("Line 1\nLine 5");
+    expect(tv.view.state.doc.toString()).toBe("Line 1\nLine 5");
   });
 
   it("returns false when cursor is not at start of line", () => {
-    const content = "Line 1\n```\ncode\n```\nLine 5";
-    const view = createView(content, content.indexOf("Line 5") + 2);
+    tv = createMinimalView("Line 1\n```\ncode\n```\nLi|ne 5");
 
-    const result = handleBackspaceAfterCodeBlock(view);
+    const result = handleBackspaceAfterCodeBlock(tv.view);
 
     expect(result).toBe(false);
-    expect(view.state.doc.toString()).toBe(content);
+    expect(tv.view.state.doc.toString()).toBe("Line 1\n```\ncode\n```\nLine 5");
   });
 
   it("returns false when previous line is not end of code block", () => {
-    const content = "Line 1\nLine 2\nLine 3";
-    const view = createView(content, content.indexOf("Line 3"));
+    tv = createMinimalView("Line 1\nLine 2\n|Line 3");
 
-    const result = handleBackspaceAfterCodeBlock(view);
+    const result = handleBackspaceAfterCodeBlock(tv.view);
 
     expect(result).toBe(false);
-    expect(view.state.doc.toString()).toBe(content);
+    expect(tv.view.state.doc.toString()).toBe("Line 1\nLine 2\nLine 3");
   });
 
   it("returns false when there is a selection", () => {
@@ -316,7 +291,7 @@ describe("handleBackspaceAfterCodeBlock", () => {
       selection: { anchor: content.indexOf("Line 5"), head: content.indexOf("Line 5") + 4 },
       extensions: [markdown()],
     });
-    const view = new EditorView({ state });
+    view = new EditorView({ state });
 
     const result = handleBackspaceAfterCodeBlock(view);
 
@@ -324,10 +299,9 @@ describe("handleBackspaceAfterCodeBlock", () => {
   });
 
   it("returns false on first line", () => {
-    const content = "Line 1";
-    const view = createView(content, 0);
+    tv = createMinimalView("|Line 1");
 
-    const result = handleBackspaceAfterCodeBlock(view);
+    const result = handleBackspaceAfterCodeBlock(tv.view);
 
     expect(result).toBe(false);
   });
@@ -335,33 +309,30 @@ describe("handleBackspaceAfterCodeBlock", () => {
 
 describe("handleDeleteBeforeCodeBlock", () => {
   it("deletes code block when cursor is at end of line before code block", () => {
-    const content = "Line 1\n```\ncode\n```\nLine 5";
-    const view = createView(content, 6); // End of "Line 1"
+    tv = createMinimalView("Line 1|\n```\ncode\n```\nLine 5");
 
-    const result = handleDeleteBeforeCodeBlock(view);
+    const result = handleDeleteBeforeCodeBlock(tv.view);
 
     expect(result).toBe(true);
-    expect(view.state.doc.toString()).toBe("Line 1\nLine 5");
+    expect(tv.view.state.doc.toString()).toBe("Line 1\nLine 5");
   });
 
   it("returns false when cursor is not at end of line", () => {
-    const content = "Line 1\n```\ncode\n```\nLine 5";
-    const view = createView(content, 3); // Middle of "Line 1"
+    tv = createMinimalView("Lin|e 1\n```\ncode\n```\nLine 5");
 
-    const result = handleDeleteBeforeCodeBlock(view);
+    const result = handleDeleteBeforeCodeBlock(tv.view);
 
     expect(result).toBe(false);
-    expect(view.state.doc.toString()).toBe(content);
+    expect(tv.view.state.doc.toString()).toBe("Line 1\n```\ncode\n```\nLine 5");
   });
 
   it("returns false when next line is not a code block", () => {
-    const content = "Line 1\nLine 2\nLine 3";
-    const view = createView(content, 6); // End of "Line 1"
+    tv = createMinimalView("Line 1|\nLine 2\nLine 3");
 
-    const result = handleDeleteBeforeCodeBlock(view);
+    const result = handleDeleteBeforeCodeBlock(tv.view);
 
     expect(result).toBe(false);
-    expect(view.state.doc.toString()).toBe(content);
+    expect(tv.view.state.doc.toString()).toBe("Line 1\nLine 2\nLine 3");
   });
 
   it("returns false when there is a selection", () => {
@@ -371,7 +342,7 @@ describe("handleDeleteBeforeCodeBlock", () => {
       selection: { anchor: 3, head: 6 },
       extensions: [markdown()],
     });
-    const view = new EditorView({ state });
+    view = new EditorView({ state });
 
     const result = handleDeleteBeforeCodeBlock(view);
 
@@ -379,10 +350,9 @@ describe("handleDeleteBeforeCodeBlock", () => {
   });
 
   it("returns false on last line", () => {
-    const content = "Line 1";
-    const view = createView(content, content.length);
+    tv = createMinimalView("Line 1|");
 
-    const result = handleDeleteBeforeCodeBlock(view);
+    const result = handleDeleteBeforeCodeBlock(tv.view);
 
     expect(result).toBe(false);
   });

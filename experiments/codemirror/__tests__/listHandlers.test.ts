@@ -6,8 +6,6 @@
  * - handleBackspaceInList: Remove marker or merge on Backspace
  * - handleTabInList: Indent list item
  * - handleShiftTabInList: Outdent list item
- * - handleArrowLeftFromListStart: Skip to previous line
- * - handleArrowRightIntoList: Skip to content start
  * - getListInfo: Parse list markers
  * - getNextOrderNumber: Get next number for ordered list
  * - isAtListContentStart: Check if cursor at list content start
@@ -16,14 +14,12 @@
  */
 
 import { describe, it, expect, afterEach } from "vitest";
-import { createTestView, getDocWithCursor, type TestView } from "./testUtils";
+import { createTestView, getDocWithCursor, type TestView, typeText } from "./testUtils";
 import {
   handleEnterInList,
   handleBackspaceInList,
   handleTabInList,
   handleShiftTabInList,
-  handleArrowLeftFromListStart,
-  handleArrowRightIntoList,
   getListInfo,
   getNextOrderNumber,
   isAtListContentStart,
@@ -195,6 +191,15 @@ describe("List Handlers", () => {
       expect(getDocWithCursor(testView.view)).toBe("Content\n\n\n|Item");
     });
 
+    it("preserves indentation when removing marker", () => {
+      testView = createTestView("  - |Item");
+
+      const handled = handleBackspaceInList(testView.view);
+
+      expect(handled).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("  |Item");
+    });
+
     it("returns false for non-list line", () => {
       testView = createTestView("|Regular");
 
@@ -250,6 +255,23 @@ describe("List Handlers", () => {
     });
   });
 
+  describe("integration: indent UL → backspace → convert to OL", () => {
+    it("keeps indent after removing bullet and allows ordered marker", () => {
+      testView = createTestView("- |Item");
+
+      const indented = handleTabInList(testView.view);
+      expect(indented).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("  - |Item");
+
+      const removed = handleBackspaceInList(testView.view);
+      expect(removed).toBe(true);
+      expect(getDocWithCursor(testView.view)).toBe("  |Item");
+
+      typeText(testView.view, "1. ");
+      expect(getDocWithCursor(testView.view)).toBe("  1. |Item");
+    });
+  });
+
   describe("handleShiftTabInList", () => {
     it("removes up to 2 spaces of indentation", () => {
       testView = createTestView("  - |Item");
@@ -284,87 +306,6 @@ describe("List Handlers", () => {
 
       expect(handled).toBe(true);
       expect(testView.view.state.doc.line(1).text).toBe("  - Item");
-    });
-  });
-
-  describe("handleArrowRightIntoList", () => {
-    it("skips to content start when at line start", () => {
-      testView = createTestView("|- Item", { hidesSyntax: false });
-
-      const handled = handleArrowRightIntoList(testView.view);
-
-      expect(handled).toBe(true);
-      expect(testView.view.state.selection.main.head).toBe(2); // After "- "
-    });
-
-    it("returns false when not at line start", () => {
-      testView = createTestView("- It|em", { hidesSyntax: false });
-
-      const handled = handleArrowRightIntoList(testView.view);
-
-      expect(handled).toBe(false);
-    });
-
-    it("returns false for non-list line", () => {
-      testView = createTestView("|Regular", { hidesSyntax: false });
-
-      const handled = handleArrowRightIntoList(testView.view);
-
-      expect(handled).toBe(false);
-    });
-
-    it("handles indented list", () => {
-      testView = createTestView("|  - Item", { hidesSyntax: false });
-
-      const handled = handleArrowRightIntoList(testView.view);
-
-      expect(handled).toBe(true);
-      expect(testView.view.state.selection.main.head).toBe(4); // After "  - "
-    });
-
-    it("handles ordered list", () => {
-      testView = createTestView("|1. Item", { hidesSyntax: false });
-
-      const handled = handleArrowRightIntoList(testView.view);
-
-      expect(handled).toBe(true);
-      expect(testView.view.state.selection.main.head).toBe(3); // After "1. "
-    });
-  });
-
-  describe("handleArrowLeftFromListStart", () => {
-    it("goes to end of previous line", () => {
-      testView = createTestView("Previous\n- |Content");
-
-      const handled = handleArrowLeftFromListStart(testView.view);
-
-      expect(handled).toBe(true);
-      expect(testView.view.state.selection.main.head).toBe(8); // End of "Previous"
-    });
-
-    it("returns false when not at content start", () => {
-      testView = createTestView("- Con|tent");
-
-      const handled = handleArrowLeftFromListStart(testView.view);
-
-      expect(handled).toBe(false);
-    });
-
-    it("returns false on first line", () => {
-      testView = createTestView("- |First");
-
-      const handled = handleArrowLeftFromListStart(testView.view);
-
-      expect(handled).toBe(false);
-    });
-
-    it("skips blank lines", () => {
-      testView = createTestView("Content\n\n- |Item");
-
-      const handled = handleArrowLeftFromListStart(testView.view);
-
-      expect(handled).toBe(true);
-      expect(testView.view.state.selection.main.head).toBe(7); // End of "Content"
     });
   });
 

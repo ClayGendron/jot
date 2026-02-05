@@ -12,12 +12,14 @@ import { GFM } from "@lezer/markdown";
 import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
 
 import {
+  codeBlockRectangularSelection,
   formattingEscapeKeymap,
   formattingInputHandler,
+  hiddenRangesField,
   hiddenSyntaxField,
+  selectionSnapper,
   pendingFormattingField,
   pendingFormatTheme,
-  cursorGuard,
   styleField,
   theme,
 } from "../harness";
@@ -78,6 +80,7 @@ export function createTestView(
 
   const extensions = [
     formattingInputHandler,
+    codeBlockRectangularSelection,
     markdown({ extensions: [GFM] }),
     history(),
     Prec.highest(formattingEscapeKeymap),
@@ -87,10 +90,11 @@ export function createTestView(
   ];
 
   if (hidesSyntax) {
+    extensions.push(hiddenRangesField);
     extensions.push(hiddenSyntaxField);
+    extensions.push(selectionSnapper);
     extensions.push(pendingFormattingField);
     extensions.push(pendingFormatTheme);
-    extensions.push(cursorGuard);
   }
 
   const view = new EditorView({
@@ -129,30 +133,6 @@ export function getDocWithCursor(view: EditorView): string {
 }
 
 /**
- * Get document string with selection marked by [| and |]
- *
- * @param view - EditorView instance
- * @returns Document content with [| at anchor and |] at head (or | if collapsed)
- */
-export function getDocWithSelection(view: EditorView): string {
-  const doc = view.state.doc.toString();
-  const { anchor, head } = view.state.selection.main;
-
-  if (anchor === head) {
-    return doc.slice(0, head) + "|" + doc.slice(head);
-  }
-
-  const [start, end] = anchor < head ? [anchor, head] : [head, anchor];
-  return (
-    doc.slice(0, start) +
-    "[|" +
-    doc.slice(start, end) +
-    "|]" +
-    doc.slice(end)
-  );
-}
-
-/**
  * Type text at current cursor position
  *
  * @param view - EditorView instance
@@ -163,18 +143,6 @@ export function typeText(view: EditorView, text: string): void {
   view.dispatch({
     changes: { from: pos, to: pos, insert: text },
     selection: { anchor: pos + text.length },
-  });
-}
-
-/**
- * Set cursor to a specific position
- *
- * @param view - EditorView instance
- * @param pos - Position to set cursor to
- */
-export function setCursor(view: EditorView, pos: number): void {
-  view.dispatch({
-    selection: { anchor: pos },
   });
 }
 
@@ -192,31 +160,30 @@ export function setSelection(view: EditorView, anchor: number, head: number): vo
 }
 
 /**
- * Get the current cursor position
+ * Create a minimal EditorView with only markdown parsing (no WYSIWYG extensions).
+ * Use for testing handler functions that don't need hidden syntax decorations.
  *
- * @param view - EditorView instance
- * @returns Current cursor position (selection head)
+ * @param docWithCursor - Document content with | marking cursor position.
+ * @returns TestView with view and destroy function
  */
-export function getCursorPos(view: EditorView): number {
-  return view.state.selection.main.head;
+export function createMinimalView(docWithCursor: string): TestView {
+  const cursorIdx = docWithCursor.indexOf("|");
+  const doc = cursorIdx >= 0
+    ? docWithCursor.slice(0, cursorIdx) + docWithCursor.slice(cursorIdx + 1)
+    : docWithCursor;
+  const pos = cursorIdx >= 0 ? cursorIdx : doc.length;
+
+  const view = new EditorView({
+    state: EditorState.create({
+      doc,
+      selection: { anchor: pos },
+      extensions: [markdown({ extensions: [GFM] })],
+    }),
+  });
+
+  return {
+    view,
+    destroy: () => view.destroy(),
+  };
 }
 
-/**
- * Get the document text
- *
- * @param view - EditorView instance
- * @returns Document content as string
- */
-export function getDoc(view: EditorView): string {
-  return view.state.doc.toString();
-}
-
-/**
- * Check if the selection is empty (cursor with no range)
- *
- * @param view - EditorView instance
- * @returns True if selection is empty
- */
-export function isSelectionEmpty(view: EditorView): boolean {
-  return view.state.selection.main.empty;
-}
