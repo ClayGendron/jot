@@ -1,14 +1,22 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { Heading } from "@/lib/markdown/parser";
 import { generateHeadingId } from "@/lib/markdown/parser";
-import { extractHeadingsFromHtml } from "@/lib/links/linkService";
+import {
+  extractHeadingsFromHtml,
+  extractHeadingsFromMarkdown,
+} from "@/lib/links/linkService";
 
 // Re-export for backward compatibility
-export { extractHeadingsFromHtml };
+export { extractHeadingsFromHtml, extractHeadingsFromMarkdown };
+
+/** Content format type for editor detection */
+export type ContentFormat = "html" | "markdown";
 
 interface UseDocumentOutlineOptions {
-  /** HTML content from the editor */
+  /** Content from the editor (HTML or Markdown) */
   content: string;
+  /** Content format: 'html' for TipTap, 'markdown' for CodeMirror */
+  contentFormat?: ContentFormat;
   /** Ref to the scrollable container */
   scrollContainerRef?: React.RefObject<HTMLElement | null>;
   /** Debounce delay for scroll tracking in ms */
@@ -27,32 +35,57 @@ interface UseDocumentOutlineResult {
 /**
  * Hook for document outline functionality
  *
- * Extracts headings from HTML content and tracks the active heading
- * based on scroll position.
+ * Extracts headings from content and tracks the active heading
+ * based on scroll position. Supports both HTML (TipTap) and Markdown (CodeMirror) formats.
  */
 export function useDocumentOutline({
   content,
+  contentFormat = "html",
   scrollContainerRef,
   scrollDebounce = 100,
 }: UseDocumentOutlineOptions): UseDocumentOutlineResult {
   const [activeHeadingId, setActiveHeadingId] = useState<string | null>(null);
 
-  // Extract headings from content
-  const headings = useMemo(() => extractHeadingsFromHtml(content), [content]);
+  // Extract headings from content based on format
+  const headings = useMemo(
+    () =>
+      contentFormat === "markdown"
+        ? extractHeadingsFromMarkdown(content)
+        : extractHeadingsFromHtml(content),
+    [content, contentFormat]
+  );
 
   // Track active heading based on scroll position
   useEffect(() => {
-    const container = scrollContainerRef?.current || document.querySelector(".main-content");
+    const container =
+      scrollContainerRef?.current || document.querySelector(".main-content");
     if (!container || headings.length === 0) return;
 
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const updateActiveHeading = () => {
-      // Find all heading elements in the editor
-      const editorElement = container.querySelector(".tiptap-editor");
+      // Find the editor element (TipTap or CodeMirror)
+      const editorElement =
+        container.querySelector(".cm-editor") ||
+        container.querySelector(".tiptap-editor");
       if (!editorElement) return;
 
-      const headingElements = editorElement.querySelectorAll("h1, h2, h3, h4, h5, h6");
+      // Find heading elements based on editor type
+      const isCodeMirror = editorElement.classList.contains("cm-editor");
+      let headingElements: NodeListOf<Element>;
+
+      if (isCodeMirror) {
+        // CodeMirror: headings are styled spans with .cm-h1, .cm-h2, etc.
+        headingElements = editorElement.querySelectorAll(
+          ".cm-h1, .cm-h2, .cm-h3, .cm-h4, .cm-h5, .cm-h6"
+        );
+      } else {
+        // TipTap: headings are actual h1-h6 elements
+        headingElements = editorElement.querySelectorAll(
+          "h1, h2, h3, h4, h5, h6"
+        );
+      }
+
       if (headingElements.length === 0) return;
 
       const containerRect = container.getBoundingClientRect();
@@ -101,19 +134,36 @@ export function useDocumentOutline({
         clearTimeout(timeoutId);
       }
     };
-  }, [headings, scrollContainerRef, scrollDebounce]);
+  }, [headings, scrollContainerRef, scrollDebounce, contentFormat]);
 
   // Scroll to a specific heading
   const scrollToHeading = useCallback(
     (id: string) => {
-      const container = scrollContainerRef?.current || document.querySelector(".main-content");
+      const container =
+        scrollContainerRef?.current || document.querySelector(".main-content");
       if (!container) return;
 
-      const editorElement = container.querySelector(".tiptap-editor");
+      // Find the editor element (TipTap or CodeMirror)
+      const editorElement =
+        container.querySelector(".cm-editor") ||
+        container.querySelector(".tiptap-editor");
       if (!editorElement) return;
 
-      // Find the heading element with matching text
-      const headingElements = editorElement.querySelectorAll("h1, h2, h3, h4, h5, h6");
+      // Find heading elements based on editor type
+      const isCodeMirror = editorElement.classList.contains("cm-editor");
+      let headingElements: NodeListOf<Element>;
+
+      if (isCodeMirror) {
+        // CodeMirror: headings are styled spans with .cm-h1, .cm-h2, etc.
+        headingElements = editorElement.querySelectorAll(
+          ".cm-h1, .cm-h2, .cm-h3, .cm-h4, .cm-h5, .cm-h6"
+        );
+      } else {
+        // TipTap: headings are actual h1-h6 elements
+        headingElements = editorElement.querySelectorAll(
+          "h1, h2, h3, h4, h5, h6"
+        );
+      }
 
       for (const element of headingElements) {
         const text = element.textContent?.trim() || "";
@@ -123,7 +173,8 @@ export function useDocumentOutline({
           // Scroll the heading into view with some offset
           const elementRect = element.getBoundingClientRect();
           const containerRect = container.getBoundingClientRect();
-          const offsetTop = elementRect.top - containerRect.top + container.scrollTop;
+          const offsetTop =
+            elementRect.top - containerRect.top + container.scrollTop;
 
           container.scrollTo({
             top: offsetTop - 80, // 80px offset from top for toolbar
