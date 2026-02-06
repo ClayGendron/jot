@@ -416,22 +416,19 @@ pub fn update_file_path(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
-    use std::fs;
+    use tempfile::TempDir;
 
-    fn setup_test_workspace() -> String {
-        let temp_dir = env::temp_dir().join(format!("jot_test_{}", Utc::now().timestamp_millis()));
-        fs::create_dir_all(&temp_dir).unwrap();
-        temp_dir.to_string_lossy().to_string()
-    }
-
-    fn cleanup_test_workspace(path: &str) {
-        let _ = fs::remove_dir_all(path);
+    /// Create a temp workspace directory that lives as long as the returned TempDir.
+    /// The TempDir must be kept alive for the entire test to avoid "readonly database" errors.
+    fn setup_test_workspace() -> (TempDir, String) {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().to_string_lossy().to_string();
+        (tmp, path)
     }
 
     #[test]
     fn test_save_and_get_version() {
-        let workspace = setup_test_workspace();
+        let (_dir, workspace) = setup_test_workspace();
         let file_path = "/test/document.md";
         let content = "# Hello World\n\nThis is a test.";
 
@@ -441,18 +438,15 @@ mod tests {
         let version = get_version(&workspace, version_id).unwrap().unwrap();
         assert_eq!(version.file_path, file_path);
         assert_eq!(version.content, content);
-        assert_eq!(version.word_count, 6);
-
-        cleanup_test_workspace(&workspace);
+        assert_eq!(version.word_count, 7); // #, Hello, World, This, is, a, test.
     }
 
     #[test]
     fn test_get_versions_list() {
-        let workspace = setup_test_workspace();
+        let (_dir, workspace) = setup_test_workspace();
         let file_path = "/test/document.md";
 
-        // Save multiple versions - no artificial delays needed
-        // save_version now handles timestamp collisions with retry logic
+        // save_version handles timestamp collisions with retry logic
         save_version(&workspace, file_path, "Version 1").unwrap();
         save_version(&workspace, file_path, "Version 2").unwrap();
         save_version(&workspace, file_path, "Version 3").unwrap();
@@ -464,13 +458,11 @@ mod tests {
         assert!(versions[0].preview.contains("Version 3"));
         assert!(versions[1].preview.contains("Version 2"));
         assert!(versions[2].preview.contains("Version 1"));
-
-        cleanup_test_workspace(&workspace);
     }
 
     #[test]
     fn test_diff_versions() {
-        let workspace = setup_test_workspace();
+        let (_dir, workspace) = setup_test_workspace();
         let file_path = "/test/document.md";
 
         let v1_id = save_version(&workspace, file_path, "Line 1\nLine 2\nLine 3").unwrap();
@@ -481,13 +473,11 @@ mod tests {
         assert!(diff.additions > 0);
         assert!(diff.deletions > 0);
         assert!(!diff.lines.is_empty());
-
-        cleanup_test_workspace(&workspace);
     }
 
     #[test]
     fn test_is_content_changed() {
-        let workspace = setup_test_workspace();
+        let (_dir, workspace) = setup_test_workspace();
         let file_path = "/test/document.md";
         let content = "Same content";
 
@@ -501,7 +491,36 @@ mod tests {
 
         // Different content - should be changed
         assert!(is_content_changed(&workspace, file_path, "Different content").unwrap());
+    }
 
-        cleanup_test_workspace(&workspace);
+    #[test]
+    fn test_count_words() {
+        assert_eq!(count_words(""), 0);
+        assert_eq!(count_words("hello"), 1);
+        assert_eq!(count_words("hello world"), 2);
+        assert_eq!(count_words("  spaced  out  "), 2);
+        assert_eq!(count_words("# Heading\n\nParagraph text."), 4); // #, Heading, Paragraph, text.
+    }
+
+    #[test]
+    fn test_create_preview_short_content() {
+        let short = "Hello world";
+        assert_eq!(create_preview(short, 100), "Hello world");
+    }
+
+    #[test]
+    fn test_create_preview_long_content() {
+        let long = "word ".repeat(30); // 150 chars
+        let preview = create_preview(&long, 100);
+        assert!(preview.ends_with("..."));
+        assert!(preview.len() < long.len());
+    }
+
+    #[test]
+    fn test_create_preview_utf8() {
+        // Ensure multi-byte chars don't cause panics
+        let content = "🎉 ".repeat(60); // lots of emoji
+        let preview = create_preview(&content, 100);
+        assert!(preview.ends_with("..."));
     }
 }

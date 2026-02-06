@@ -246,3 +246,80 @@ fn search_file(file_path: &Path, regex: &regex::Regex) -> Result<Vec<SearchMatch
 
     Ok(matches)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_byte_offset_to_utf16_ascii() {
+        // ASCII: byte offsets == UTF-16 offsets
+        let text = "hello world";
+        assert_eq!(byte_offset_to_utf16_offset(text, 0), 0);
+        assert_eq!(byte_offset_to_utf16_offset(text, 5), 5);
+        assert_eq!(byte_offset_to_utf16_offset(text, 11), 11);
+    }
+
+    #[test]
+    fn test_byte_offset_to_utf16_emoji() {
+        // Emoji (U+1F389) = 4 bytes in UTF-8, 2 code units in UTF-16
+        let text = "a🎉b";
+        // "a" = 1 byte, "🎉" = 4 bytes, "b" = 1 byte
+        assert_eq!(byte_offset_to_utf16_offset(text, 0), 0); // before 'a'
+        assert_eq!(byte_offset_to_utf16_offset(text, 1), 1); // after 'a', before emoji
+        assert_eq!(byte_offset_to_utf16_offset(text, 5), 3); // after emoji (1 + 2 UTF-16 units)
+        assert_eq!(byte_offset_to_utf16_offset(text, 6), 4); // after 'b'
+    }
+
+    #[test]
+    fn test_byte_offset_to_utf16_cjk() {
+        // CJK chars (BMP) = 3 bytes in UTF-8, 1 code unit in UTF-16
+        let text = "a中b";
+        assert_eq!(byte_offset_to_utf16_offset(text, 0), 0);
+        assert_eq!(byte_offset_to_utf16_offset(text, 1), 1); // after 'a'
+        assert_eq!(byte_offset_to_utf16_offset(text, 4), 2); // after '中' (3 bytes → 1 UTF-16 unit)
+        assert_eq!(byte_offset_to_utf16_offset(text, 5), 3); // after 'b'
+    }
+
+    #[test]
+    fn test_collect_markdown_files_filters_correctly() {
+        let tmp = TempDir::new().unwrap();
+
+        // Create markdown files
+        fs::write(tmp.path().join("notes.md"), "# Notes").unwrap();
+        fs::write(tmp.path().join("readme.md"), "# Readme").unwrap();
+
+        // Create non-markdown file
+        fs::write(tmp.path().join("data.txt"), "data").unwrap();
+
+        // Create hidden file
+        fs::write(tmp.path().join(".hidden.md"), "hidden").unwrap();
+
+        // Create hidden directory with markdown inside
+        let hidden_dir = tmp.path().join(".git");
+        fs::create_dir_all(&hidden_dir).unwrap();
+        fs::write(hidden_dir.join("config.md"), "config").unwrap();
+
+        let workspace_root = tmp.path().canonicalize().unwrap();
+        let mut files = Vec::new();
+        let mut visited = std::collections::HashSet::new();
+        collect_markdown_files(
+            tmp.path(),
+            &mut files,
+            &workspace_root,
+            0,
+            &mut visited,
+        ).unwrap();
+
+        let names: Vec<String> = files.iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+            .collect();
+
+        assert!(names.contains(&"notes.md".to_string()));
+        assert!(names.contains(&"readme.md".to_string()));
+        assert!(!names.contains(&"data.txt".to_string()));
+        assert!(!names.contains(&".hidden.md".to_string()));
+        assert!(!names.contains(&"config.md".to_string()));
+    }
+}

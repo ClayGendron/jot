@@ -195,3 +195,104 @@ pub(crate) fn detect_case_sensitivity(workspace_path: &Path) -> Result<bool, Str
 
     Err("Unable to determine filesystem case sensitivity".to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_validate_in_workspace_accepts_nested_path() {
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().to_string_lossy().to_string();
+        let nested = tmp.path().join("subdir");
+        fs::create_dir_all(&nested).unwrap();
+        let file = nested.join("test.md");
+        fs::write(&file, "").unwrap();
+
+        let result = validate_in_workspace(
+            file.to_str().unwrap(),
+            &workspace,
+            true,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_in_workspace_rejects_outside_path() {
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().to_string_lossy().to_string();
+
+        let result = validate_in_workspace("/etc/hosts", &workspace, true);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_in_workspace_new_file() {
+        let tmp = TempDir::new().unwrap();
+        let workspace = tmp.path().to_string_lossy().to_string();
+        let new_file = tmp.path().join("new-file.md");
+
+        // must_exist = false — file doesn't exist yet but parent does
+        let result = validate_in_workspace(
+            new_file.to_str().unwrap(),
+            &workspace,
+            false,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_atomic_write_creates_and_overwrites() {
+        let tmp = TempDir::new().unwrap();
+        let file_path = tmp.path().join("test.md");
+        let path_str = file_path.to_string_lossy().to_string();
+
+        // Create new file
+        atomic_write(&path_str, "first content").unwrap();
+        assert_eq!(fs::read_to_string(&file_path).unwrap(), "first content");
+
+        // Overwrite existing file
+        atomic_write(&path_str, "second content").unwrap();
+        assert_eq!(fs::read_to_string(&file_path).unwrap(), "second content");
+    }
+
+    #[test]
+    fn test_atomic_write_creates_intermediate_dirs() {
+        let tmp = TempDir::new().unwrap();
+        let file_path = tmp.path().join("a").join("b").join("test.md");
+        let path_str = file_path.to_string_lossy().to_string();
+
+        atomic_write(&path_str, "nested").unwrap();
+        assert_eq!(fs::read_to_string(&file_path).unwrap(), "nested");
+    }
+
+    #[test]
+    fn test_is_hidden_file_dotfile() {
+        let tmp = TempDir::new().unwrap();
+        let hidden = tmp.path().join(".hidden");
+        fs::write(&hidden, "").unwrap();
+        let visible = tmp.path().join("visible.md");
+        fs::write(&visible, "").unwrap();
+
+        for entry in fs::read_dir(tmp.path()).unwrap() {
+            let entry = entry.unwrap();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name == ".hidden" {
+                assert!(is_hidden_file(&entry));
+            } else if name == "visible.md" {
+                assert!(!is_hidden_file(&entry));
+            }
+        }
+    }
+
+    #[test]
+    fn test_is_markdown_file() {
+        assert!(is_markdown_file("notes.md"));
+        assert!(is_markdown_file("README.MD"));
+        assert!(is_markdown_file("doc.Md"));
+        assert!(!is_markdown_file("file.txt"));
+        assert!(!is_markdown_file("file.rs"));
+        assert!(!is_markdown_file("no_extension"));
+    }
+}

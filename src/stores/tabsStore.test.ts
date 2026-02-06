@@ -631,6 +631,71 @@ describe("tabsStore", () => {
     });
   });
 
+  describe("Edge cases: non-existent tab IDs", () => {
+    it("updateTabContent with non-existent tab ID is a no-op", () => {
+      const { openTab, updateTabContent } = useTabsStore.getState();
+
+      openTab("/path/to/doc.md", "original");
+
+      // Should not crash or mutate anything
+      updateTabContent("non-existent-id", "new content");
+
+      const state = useTabsStore.getState();
+      expect(state.tabs).toHaveLength(1);
+      expect(state.tabs[0].content).toBe("original");
+      expect(state.tabs[0].isDirty).toBe(false);
+    });
+
+    it("markTabSaved with non-existent tab ID is a no-op", () => {
+      const { openTab, markTabDirty, markTabSaved } = useTabsStore.getState();
+
+      const tabId = openTab("/path/to/doc.md", "content");
+      markTabDirty(tabId);
+
+      // Should not crash or affect existing tabs
+      markTabSaved("non-existent-id");
+
+      const state = useTabsStore.getState();
+      expect(state.tabs[0].isDirty).toBe(true); // Still dirty
+    });
+
+    it("markTabDirty with non-existent tab ID is a no-op", () => {
+      const { openTab, markTabDirty } = useTabsStore.getState();
+
+      openTab("/path/to/doc.md", "content");
+
+      // Should not crash
+      markTabDirty("non-existent-id");
+
+      const state = useTabsStore.getState();
+      expect(state.tabs[0].isDirty).toBe(false); // Still clean
+    });
+
+    it("updateTabScroll with non-existent tab ID is a no-op", () => {
+      const { openTab, updateTabScroll } = useTabsStore.getState();
+
+      openTab("/path/to/doc.md", "content");
+
+      // Should not crash
+      updateTabScroll("non-existent-id", 999);
+
+      const state = useTabsStore.getState();
+      expect(state.tabs[0].scrollTop).toBe(0);
+    });
+
+    it("togglePinTab with non-existent tab ID is a no-op", () => {
+      const { openTab, togglePinTab } = useTabsStore.getState();
+
+      openTab("/path/to/doc.md", "content");
+
+      // Should not crash
+      togglePinTab("non-existent-id");
+
+      const state = useTabsStore.getState();
+      expect(state.tabs[0].isPinned).toBe(false);
+    });
+  });
+
   describe("File switching edge cases", () => {
     it("setActiveTab preserves other tabs' content and scrollTop", () => {
       const { openTab, updateTabContent, updateTabScroll, setActiveTab } =
