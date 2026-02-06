@@ -139,6 +139,7 @@ export {
   stripMarkersOfType,
   findLinkByRegex,
   collectCodeBlockExtents,
+  codeBlockExtentsField,
   isInCodeBlock,
   collectTableExtents,
   isInTable,

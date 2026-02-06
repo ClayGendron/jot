@@ -13,6 +13,7 @@ import { EditorState, EditorSelection } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { GFM } from "@lezer/markdown";
 import {
+  codeBlockExtentsField,
   hiddenRangesField,
   snapDirectional,
   snapToNearest,
@@ -36,6 +37,7 @@ function createState(docWithCursor: string): EditorState {
     selection: { anchor: pos },
     extensions: [
       markdown({ extensions: [GFM] }),
+      codeBlockExtentsField,
       hiddenRangesField,
     ],
   });

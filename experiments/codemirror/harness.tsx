@@ -3336,6 +3336,15 @@ function collectCodeBlockExtents(state: EditorState): Array<{ from: number; to: 
   return extents;
 }
 
+/**
+ * StateField that caches code block extents, recomputing only on doc change.
+ * Shared by hiddenRangesField and styleField to avoid duplicate AST walks.
+ */
+const codeBlockExtentsField = StateField.define<Array<{ from: number; to: number }>>({
+  create: (state) => collectCodeBlockExtents(state),
+  update: (extents, tr) => tr.docChanged ? collectCodeBlockExtents(tr.state) : extents,
+});
+
 function isInCodeBlock(pos: number, extents: Array<{ from: number; to: number }>): boolean {
   return extents.some((r) => pos >= r.from && pos < r.to);
 }
@@ -5363,8 +5372,8 @@ function getHiddenRanges(state: EditorState): HiddenRange[] {
   const ranges: HiddenRange[] = [];
   const tableRanges: Array<{ from: number; to: number }> = [];
 
-  // First pass: collect code block extents so we can exclude their content
-  const codeBlockExtents = collectCodeBlockExtents(state);
+  // Read cached code block extents from shared StateField
+  const codeBlockExtents = state.field(codeBlockExtentsField);
 
   const isInsideCodeBlock = (pos: number) =>
     isInCodeBlock(pos, codeBlockExtents);
@@ -6207,8 +6216,8 @@ function buildStyleDecorations(state: EditorState) {
   // RangeSetBuilder requires ranges in sorted order
   const rangesToDecorate: Array<{ from: number; to: number; decoration: Decoration }> = [];
 
-  // Collect code block ranges - no styling should be applied inside them
-  const codeBlockRanges = collectCodeBlockExtents(state);
+  // Read cached code block extents from shared StateField
+  const codeBlockRanges = state.field(codeBlockExtentsField);
 
   const isInsideCodeBlock = (pos: number) =>
     isInCodeBlock(pos, codeBlockRanges);
@@ -7060,6 +7069,7 @@ function Editor({ initialContent, hidesSyntax, onChange }: EditorProps) {
 
     // Only add hidden syntax if enabled
     if (hidesSyntax) {
+      extensions.push(codeBlockExtentsField);
       extensions.push(hiddenRangesField);
       extensions.push(hiddenSyntaxField);
       extensions.push(selectionSnapper);
@@ -7780,6 +7790,7 @@ export {
   HighlightExtension,
 
   // Hidden Range model
+  codeBlockExtentsField,
   getHiddenRanges,
   hiddenRangesField,
   snapDirectional,

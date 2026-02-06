@@ -15,7 +15,7 @@ import { syntaxTree } from "@codemirror/language";
 import { HighlightStyle } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import {
-  collectCodeBlockExtents,
+  codeBlockExtentsField,
   isInCodeBlock,
 } from "../utils/sharedHelpers";
 
@@ -63,8 +63,8 @@ function buildStyleDecorations(state: EditorState) {
   // RangeSetBuilder requires ranges in sorted order
   const rangesToDecorate: Array<{ from: number; to: number; decoration: Decoration }> = [];
 
-  // Collect code block ranges - no styling should be applied inside them
-  const codeBlockRanges = collectCodeBlockExtents(state);
+  // Read cached code block extents from shared StateField
+  const codeBlockRanges = state.field(codeBlockExtentsField);
 
   const isInsideCodeBlock = (pos: number) =>
     isInCodeBlock(pos, codeBlockRanges);
@@ -269,8 +269,14 @@ function buildStyleDecorations(state: EditorState) {
 
   const text = doc.toString();
 
-  const isAlreadyCollected = (from: number, to: number) =>
-    rangesToDecorate.some((r) => !(to <= r.from || from >= r.to));
+  const collectedKeys = new Set<string>();
+  for (const r of rangesToDecorate) {
+    collectedKeys.add(`${r.from}-${r.to}`);
+  }
+  const isAlreadyCollected = (from: number, to: number) => {
+    if (collectedKeys.has(`${from}-${to}`)) return true;
+    return rangesToDecorate.some((r) => !(to <= r.from || from >= r.to));
+  };
 
   // Bold: **...**
   const boldRegex = /\*\*(.+?)\*\*/g;
@@ -281,6 +287,7 @@ function buildStyleDecorations(state: EditorState) {
     const contentTo = match.index + 2 + match[1].length;
     if (!isAlreadyCollected(contentFrom, contentTo) && contentFrom < contentTo) {
       rangesToDecorate.push({ from: contentFrom, to: contentTo, decoration: boldMark });
+      collectedKeys.add(`${contentFrom}-${contentTo}`);
     }
   }
 
@@ -292,6 +299,7 @@ function buildStyleDecorations(state: EditorState) {
     const contentTo = match.index + 1 + match[1].length;
     if (!isAlreadyCollected(contentFrom, contentTo) && contentFrom < contentTo) {
       rangesToDecorate.push({ from: contentFrom, to: contentTo, decoration: italicMark });
+      collectedKeys.add(`${contentFrom}-${contentTo}`);
     }
   }
 
@@ -303,6 +311,7 @@ function buildStyleDecorations(state: EditorState) {
     const contentTo = match.index + 2 + match[1].length;
     if (!isAlreadyCollected(contentFrom, contentTo) && contentFrom < contentTo) {
       rangesToDecorate.push({ from: contentFrom, to: contentTo, decoration: strikethroughMark });
+      collectedKeys.add(`${contentFrom}-${contentTo}`);
     }
   }
 
@@ -314,6 +323,7 @@ function buildStyleDecorations(state: EditorState) {
     const contentTo = match.index + 2 + match[1].length;
     if (!isAlreadyCollected(contentFrom, contentTo) && contentFrom < contentTo) {
       rangesToDecorate.push({ from: contentFrom, to: contentTo, decoration: highlightMark });
+      collectedKeys.add(`${contentFrom}-${contentTo}`);
     }
   }
 
@@ -325,6 +335,7 @@ function buildStyleDecorations(state: EditorState) {
     const textTo = match.index + 1 + match[1].length; // Before ]
     if (!isAlreadyCollected(textFrom, textTo) && textFrom < textTo) {
       rangesToDecorate.push({ from: textFrom, to: textTo, decoration: linkMark });
+      collectedKeys.add(`${textFrom}-${textTo}`);
     }
   }
 

@@ -53,6 +53,7 @@ import { formattingInputHandler } from "./inputHandler";
 import { formattingEscapeKeymap, defaultKeymapWithHistory } from "./keymap";
 import { theme } from "./theme";
 import { pendingFormattingField, pendingFormatTheme } from "./pendingFormat";
+import { codeBlockExtentsField } from "../utils/sharedHelpers";
 import { getCodeBlockAtLine } from "../handlers/tableHandlers";
 
 // ===========================================
@@ -105,6 +106,8 @@ export function createWysiwygExtensions() {
     rectangularSelection({
       eventFilter: isRectangularSelectionInCodeBlock,
     }),
+    // Code block extents (shared by hiddenRangesField and styleField)
+    codeBlockExtentsField,
     // Hidden ranges field (must be before hiddenSyntaxField)
     hiddenRangesField,
     // Hidden syntax decorations (replaces markdown markers with widgets)

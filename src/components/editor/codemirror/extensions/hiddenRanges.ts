@@ -13,7 +13,7 @@ import { StateField } from "@codemirror/state";
 import type { EditorState } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 import {
-  collectCodeBlockExtents,
+  codeBlockExtentsField,
   isInCodeBlock,
 } from "../utils/sharedHelpers";
 import { getBlockquoteInfo } from "../handlers/blockquoteHandlers";
@@ -72,8 +72,8 @@ export function getHiddenRanges(state: EditorState): HiddenRange[] {
   const ranges: HiddenRange[] = [];
   const tableRanges: Array<{ from: number; to: number }> = [];
 
-  // First pass: collect code block extents so we can exclude their content
-  const codeBlockExtents = collectCodeBlockExtents(state);
+  // Read cached code block extents from shared StateField
+  const codeBlockExtents = state.field(codeBlockExtentsField);
 
   const isInsideCodeBlock = (pos: number) =>
     isInCodeBlock(pos, codeBlockExtents);
@@ -277,8 +277,12 @@ export function getHiddenRanges(state: EditorState): HiddenRange[] {
 
   const text = doc.toString();
 
+  const collectedKeys = new Set<string>();
+  for (const r of ranges) {
+    collectedKeys.add(`${r.from}-${r.to}`);
+  }
   const isAlreadyCollected = (from: number, to: number) =>
-    ranges.some((r) => r.from === from && r.to === to);
+    collectedKeys.has(`${from}-${to}`);
 
   // Bold markers: **
   const boldRegex = /\*\*(.+?)\*\*/g;
@@ -291,9 +295,11 @@ export function getHiddenRanges(state: EditorState): HiddenRange[] {
     if (isInsideCodeBlock(openFrom)) continue;
     if (!isAlreadyCollected(openFrom, openTo)) {
       ranges.push({ from: openFrom, to: openTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
+      collectedKeys.add(`${openFrom}-${openTo}`);
     }
     if (!isAlreadyCollected(closeFrom, closeTo)) {
       ranges.push({ from: closeFrom, to: closeTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
+      collectedKeys.add(`${closeFrom}-${closeTo}`);
     }
   }
 
@@ -307,9 +313,11 @@ export function getHiddenRanges(state: EditorState): HiddenRange[] {
     if (isInsideCodeBlock(openFrom)) continue;
     if (!isAlreadyCollected(openFrom, openTo)) {
       ranges.push({ from: openFrom, to: openTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
+      collectedKeys.add(`${openFrom}-${openTo}`);
     }
     if (!isAlreadyCollected(closeFrom, closeTo)) {
       ranges.push({ from: closeFrom, to: closeTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
+      collectedKeys.add(`${closeFrom}-${closeTo}`);
     }
   }
 
@@ -323,9 +331,11 @@ export function getHiddenRanges(state: EditorState): HiddenRange[] {
     if (isInsideCodeBlock(openFrom)) continue;
     if (!isAlreadyCollected(openFrom, openTo)) {
       ranges.push({ from: openFrom, to: openTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
+      collectedKeys.add(`${openFrom}-${openTo}`);
     }
     if (!isAlreadyCollected(closeFrom, closeTo)) {
       ranges.push({ from: closeFrom, to: closeTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
+      collectedKeys.add(`${closeFrom}-${closeTo}`);
     }
   }
 
@@ -339,9 +349,11 @@ export function getHiddenRanges(state: EditorState): HiddenRange[] {
     if (isInsideCodeBlock(openFrom)) continue;
     if (!isAlreadyCollected(openFrom, openTo)) {
       ranges.push({ from: openFrom, to: openTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
+      collectedKeys.add(`${openFrom}-${openTo}`);
     }
     if (!isAlreadyCollected(closeFrom, closeTo)) {
       ranges.push({ from: closeFrom, to: closeTo, kind: "inline-marker", nodeFrom: openFrom, nodeTo: closeTo });
+      collectedKeys.add(`${closeFrom}-${closeTo}`);
     }
   }
 
@@ -354,9 +366,11 @@ export function getHiddenRanges(state: EditorState): HiddenRange[] {
     if (isInsideCodeBlock(bracketOpen)) continue;
     if (!isAlreadyCollected(bracketOpen, bracketOpen + 1)) {
       ranges.push({ from: bracketOpen, to: bracketOpen + 1, kind: "link-bracket-open", nodeFrom: bracketOpen, nodeTo: parenClose + 1 });
+      collectedKeys.add(`${bracketOpen}-${bracketOpen + 1}`);
     }
     if (!isAlreadyCollected(bracketClose, parenClose + 1)) {
       ranges.push({ from: bracketClose, to: parenClose + 1, kind: "link-tail", nodeFrom: bracketOpen, nodeTo: parenClose + 1 });
+      collectedKeys.add(`${bracketClose}-${parenClose + 1}`);
     }
   }
 

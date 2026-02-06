@@ -14,6 +14,7 @@ import { GFM } from "@lezer/markdown";
 import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
 
 import {
+  codeBlockExtentsField,
   codeBlockRectangularSelection,
   formattingEscapeKeymap,
   formattingInputHandler,
@@ -91,6 +92,7 @@ export function createTestView(
     Prec.highest(formattingEscapeKeymap),
     keymap.of([...defaultKeymap, ...historyKeymap]),
     theme,
+    codeBlockExtentsField,
     styleField,
   ];
 

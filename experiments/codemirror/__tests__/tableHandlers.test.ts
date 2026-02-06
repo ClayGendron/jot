@@ -20,6 +20,7 @@ import {
   addTableColumn,
   removeTableColumn,
   collectTableExtents,
+  codeBlockExtentsField,
   hiddenRangesField,
   hiddenSyntaxField,
   snapDirectional,
@@ -63,6 +64,7 @@ function createState(doc: string): EditorState {
     doc,
     extensions: [
       markdown({ extensions: [GFM, HighlightExtension] }),
+      codeBlockExtentsField,
       hiddenRangesField,
     ],
   });
@@ -94,6 +96,7 @@ function createTableViewWithRanges(doc: string, cursorPos?: number): EditorView 
       selection: { anchor: pos },
       extensions: [
         markdown({ extensions: [GFM, HighlightExtension] }),
+        codeBlockExtentsField,
         hiddenRangesField,
       ],
     }),
@@ -109,6 +112,7 @@ function createTableViewWithWidget(doc: string): EditorView {
       doc,
       extensions: [
         markdown({ extensions: [GFM, HighlightExtension] }),
+        codeBlockExtentsField,
         hiddenRangesField,
         hiddenSyntaxField,
       ],

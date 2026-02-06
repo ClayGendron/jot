@@ -4,6 +4,7 @@
  * Common utilities used across multiple modules.
  */
 
+import { StateField } from "@codemirror/state";
 import type { EditorState } from "@codemirror/state";
 import { syntaxTree } from "@codemirror/language";
 
@@ -40,6 +41,15 @@ export function collectCodeBlockExtents(state: EditorState): Array<{ from: numbe
   });
   return extents;
 }
+
+/**
+ * StateField that caches code block extents, recomputing only on doc change.
+ * Shared by hiddenRangesField and styleField to avoid duplicate AST walks.
+ */
+export const codeBlockExtentsField = StateField.define<Array<{ from: number; to: number }>>({
+  create: (state) => collectCodeBlockExtents(state),
+  update: (extents, tr) => tr.docChanged ? collectCodeBlockExtents(tr.state) : extents,
+});
 
 /**
  * Check if a position is inside a code block.

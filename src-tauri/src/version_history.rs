@@ -124,12 +124,17 @@ fn count_words(text: &str) -> i64 {
 }
 
 /// Create a content preview (first ~100 chars, trimmed to word boundary)
+/// Uses char_indices for UTF-8 safety (byte indexing can panic on multi-byte chars)
 fn create_preview(content: &str, max_len: usize) -> String {
-    if content.len() <= max_len {
+    if content.chars().count() <= max_len {
         return content.to_string();
     }
 
-    let truncated = &content[..max_len];
+    let byte_pos = content.char_indices()
+        .nth(max_len)
+        .map(|(i, _)| i)
+        .unwrap_or(content.len());
+    let truncated = &content[..byte_pos];
     // Find last space to avoid cutting words
     if let Some(pos) = truncated.rfind(' ') {
         format!("{}...", &truncated[..pos])
@@ -192,7 +197,7 @@ pub fn get_versions(
     let conn = get_connection(workspace_path)?;
 
     let mut stmt = conn.prepare(
-        "SELECT id, file_path, content, created_at, byte_size, word_count
+        "SELECT id, file_path, SUBSTR(content, 1, 150), created_at, byte_size, word_count -- 150 chars: headroom for create_preview's word-boundary trim to 100
          FROM versions
          WHERE file_path = ?1
          ORDER BY created_at DESC
