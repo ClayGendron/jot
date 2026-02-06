@@ -5,7 +5,7 @@
  * Mirrors the TipTap EditorToolbar interface.
  */
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { EditorView } from "@codemirror/view";
 import {
   Bold,
@@ -48,9 +48,17 @@ import {
 } from "./handlers/headingHandlers";
 import { insertTable } from "./handlers/tableHandlers";
 import { handleLinkCommand } from "./handlers/linkHandlers";
-
-// Import list/block handlers (these will be implemented)
-// For now, we'll use placeholder implementations
+import {
+  toggleBulletList,
+  toggleOrderedList,
+  toggleTaskList,
+  getListInfo,
+} from "./handlers/listHandlers";
+import { toggleBlockquote, getBlockquoteInfo } from "./handlers/blockquoteHandlers";
+import { insertCodeBlock, isCursorInCodeBlock } from "./handlers/codeBlockHandlers";
+import { getFormattingContext } from "./handlers/formattingHandlers";
+import { HEADING_PREFIX_RE } from "./utils/sharedHelpers";
+import { getLinkContext } from "./handlers/linkHandlers";
 
 interface CodeMirrorToolbarProps {
   view: EditorView | null;
@@ -172,34 +180,29 @@ export function CodeMirrorToolbar({ view }: CodeMirrorToolbarProps) {
     }
   }, [view]);
 
-  // Lists - placeholder handlers (Phase 2 of toolbar implementation)
-  // These buttons are present but do not modify the document yet.
-  // Implementation requires: toggle list at cursor position, convert paragraph to list item
-  const toggleBulletList = useCallback(() => {
-    // TODO(Phase 2): Implement toggleBulletList in listHandlers.ts
-    // Should toggle bullet list marker on current line(s)
-  }, []);
+  // Lists
+  const handleToggleBulletList = useCallback(
+    () => runCommand(toggleBulletList),
+    [runCommand]
+  );
+  const handleToggleOrderedList = useCallback(
+    () => runCommand(toggleOrderedList),
+    [runCommand]
+  );
+  const handleToggleTaskList = useCallback(
+    () => runCommand(toggleTaskList),
+    [runCommand]
+  );
 
-  const toggleOrderedList = useCallback(() => {
-    // TODO(Phase 2): Implement toggleOrderedList in listHandlers.ts
-    // Should toggle ordered list marker on current line(s)
-  }, []);
-
-  const toggleTaskList = useCallback(() => {
-    // TODO(Phase 2): Implement toggleTaskList in listHandlers.ts
-    // Should toggle task list checkbox on current line(s)
-  }, []);
-
-  // Blocks - placeholder handlers (Phase 2 of toolbar implementation)
-  const toggleBlockquote = useCallback(() => {
-    // TODO(Phase 2): Implement toggleBlockquote in blockquoteHandlers.ts
-    // Should toggle blockquote prefix on current line(s)
-  }, []);
-
-  const toggleCodeBlock = useCallback(() => {
-    // TODO(Phase 2): Implement toggleCodeBlock in codeBlockHandlers.ts
-    // Should wrap selection in code fence or insert empty code block
-  }, []);
+  // Blocks
+  const handleToggleBlockquote = useCallback(
+    () => runCommand(toggleBlockquote),
+    [runCommand]
+  );
+  const handleToggleCodeBlock = useCallback(
+    () => runCommand(insertCodeBlock),
+    [runCommand]
+  );
 
   const handleInsertHorizontalRule = useCallback(() => {
     if (view) {
@@ -240,23 +243,100 @@ export function CodeMirrorToolbar({ view }: CodeMirrorToolbarProps) {
     }
   }, [view]);
 
-  // Check active states (simplified for now)
-  // TODO: Implement proper active state detection from AST
-  const isBoldActive = false;
-  const isItalicActive = false;
-  const isStrikeActive = false;
-  const isHighlightActive = false;
-  const isCodeActive = false;
-  const isParagraphActive = true;
-  const isH1Active = false;
-  const isH2Active = false;
-  const isH3Active = false;
-  const isBulletListActive = false;
-  const isOrderedListActive = false;
-  const isTaskListActive = false;
-  const isBlockquoteActive = false;
-  const isCodeBlockActive = false;
-  const isLinkActive = false;
+  // Active state tracking
+  const [activeStates, setActiveStates] = useState({
+    bold: false,
+    italic: false,
+    strike: false,
+    highlight: false,
+    code: false,
+    heading: 0 as 0 | 1 | 2 | 3,
+    bulletList: false,
+    orderedList: false,
+    taskList: false,
+    blockquote: false,
+    codeBlock: false,
+    link: false,
+  });
+
+  // Update active states when view state changes
+  useEffect(() => {
+    if (!view) return;
+
+    const updateActiveStates = () => {
+      const state = view.state;
+      const pos = state.selection.main.head;
+      const line = state.doc.lineAt(pos);
+
+      // Get formatting context for inline formatting
+      const formattingCtx = getFormattingContext(state);
+
+      // Check heading prefix
+      const headingMatch = line.text.match(HEADING_PREFIX_RE);
+      const headingLevel = headingMatch ? Math.min(headingMatch[1].length, 3) as 0 | 1 | 2 | 3 : 0;
+
+      // Check list info
+      const listInfo = getListInfo(line);
+
+      // Check blockquote info
+      const blockquoteInfo = getBlockquoteInfo(line);
+
+      // Check code block
+      const inCodeBlock = isCursorInCodeBlock(view);
+
+      // Check link
+      const linkCtx = getLinkContext(state);
+
+      setActiveStates({
+        bold: formattingCtx?.type === "strong",
+        italic: formattingCtx?.type === "emphasis",
+        strike: formattingCtx?.type === "strikethrough",
+        highlight: formattingCtx?.type === "highlight",
+        code: formattingCtx?.type === "code",
+        heading: headingLevel,
+        bulletList: listInfo !== null && !listInfo.isOrdered && !listInfo.isTask,
+        orderedList: listInfo !== null && listInfo.isOrdered && !listInfo.isTask,
+        taskList: listInfo !== null && listInfo.isTask,
+        blockquote: blockquoteInfo !== null,
+        codeBlock: inCodeBlock,
+        link: linkCtx !== null,
+      });
+    };
+
+    // Initial update
+    updateActiveStates();
+
+    // Subscribe to view updates
+    view.dom.addEventListener("keyup", updateActiveStates);
+    view.dom.addEventListener("mouseup", updateActiveStates);
+
+    // Also listen to selection changes
+    const observer = new MutationObserver(updateActiveStates);
+    observer.observe(view.dom, { characterData: true, subtree: true });
+
+    return () => {
+      view.dom.removeEventListener("keyup", updateActiveStates);
+      view.dom.removeEventListener("mouseup", updateActiveStates);
+      observer.disconnect();
+    };
+  }, [view]);
+
+  // Destructure for cleaner usage
+  const isBoldActive = activeStates.bold;
+  const isItalicActive = activeStates.italic;
+  const isStrikeActive = activeStates.strike;
+  const isHighlightActive = activeStates.highlight;
+  const isCodeActive = activeStates.code;
+  const isParagraphActive = activeStates.heading === 0;
+  const isH1Active = activeStates.heading === 1;
+  const isH2Active = activeStates.heading === 2;
+  const isH3Active = activeStates.heading === 3;
+  const isBulletListActive = activeStates.bulletList;
+  const isOrderedListActive = activeStates.orderedList;
+  const isTaskListActive = activeStates.taskList;
+  const isBlockquoteActive = activeStates.blockquote;
+  const isCodeBlockActive = activeStates.codeBlock;
+  const isLinkActive = activeStates.link;
 
   const disabled = !view || sourceMode;
 
@@ -361,7 +441,7 @@ export function CodeMirrorToolbar({ view }: CodeMirrorToolbarProps) {
       {/* Lists */}
       <div className="flex items-center gap-0.5">
         <ToolbarButton
-          onClick={toggleBulletList}
+          onClick={handleToggleBulletList}
           isActive={isBulletListActive}
           label="Bullet List"
           shortcut="⌘⇧8"
@@ -370,7 +450,7 @@ export function CodeMirrorToolbar({ view }: CodeMirrorToolbarProps) {
           <List className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
-          onClick={toggleOrderedList}
+          onClick={handleToggleOrderedList}
           isActive={isOrderedListActive}
           label="Numbered List"
           shortcut="⌘⇧7"
@@ -379,7 +459,7 @@ export function CodeMirrorToolbar({ view }: CodeMirrorToolbarProps) {
           <ListOrdered className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
-          onClick={toggleTaskList}
+          onClick={handleToggleTaskList}
           isActive={isTaskListActive}
           label="Task List"
           shortcut="⌘⇧9"
@@ -394,7 +474,7 @@ export function CodeMirrorToolbar({ view }: CodeMirrorToolbarProps) {
       {/* Blocks */}
       <div className="flex items-center gap-0.5">
         <ToolbarButton
-          onClick={toggleBlockquote}
+          onClick={handleToggleBlockquote}
           isActive={isBlockquoteActive}
           label="Quote"
           shortcut="⌘⇧B"
@@ -403,7 +483,7 @@ export function CodeMirrorToolbar({ view }: CodeMirrorToolbarProps) {
           <Quote className="h-4 w-4" />
         </ToolbarButton>
         <ToolbarButton
-          onClick={toggleCodeBlock}
+          onClick={handleToggleCodeBlock}
           isActive={isCodeBlockActive}
           label="Code Block"
           shortcut="⌘⌥C"

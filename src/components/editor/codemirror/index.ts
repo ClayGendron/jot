@@ -26,6 +26,19 @@ export { formattingInputHandler } from "./extensions/inputHandler";
 export { formattingEscapeKeymap, defaultKeymapWithHistory } from "./extensions/keymap";
 export { theme } from "./extensions/theme";
 export { HighlightExtension } from "./extensions/lezerExtensions";
+export {
+  createSpellcheckExtension,
+  spellcheckField,
+  setSpellcheckEnabledCmd,
+  refreshSpellcheck,
+  subscribeSpellcheckContextMenu,
+  closeSpellcheckContextMenu,
+  getSpellcheckContextMenuState,
+  handleSpellcheckSuggestion,
+  handleAddToPersonalDictionary,
+  handleIgnoreWord,
+  type SpellcheckConfig,
+} from "./extensions/spellcheck";
 
 // Handlers
 export {
@@ -53,12 +66,20 @@ export {
   handleTabInList,
   handleShiftTabInList,
   getListInfo,
+  toggleBulletList,
+  toggleOrderedList,
+  toggleTaskList,
 } from "./handlers/listHandlers";
 export {
   handleEnterInBlockquote,
   handleBackspaceInBlockquote,
   getBlockquoteInfo,
+  toggleBlockquote,
 } from "./handlers/blockquoteHandlers";
+export {
+  isCursorInCodeBlock,
+  insertCodeBlock,
+} from "./handlers/codeBlockHandlers";
 export {
   insertTable,
   isCursorInTable,

@@ -253,3 +253,80 @@ export function handleShiftTabInCodeBlock(view: EditorView): boolean {
   });
   return true;
 }
+
+// ===========================================
+// TOOLBAR INSERT FUNCTION
+// ===========================================
+
+/**
+ * Insert a code block at the current position
+ * - If text is selected: wrap it in code fences
+ * - If no selection: insert empty code block with cursor inside
+ */
+export function insertCodeBlock(view: EditorView): boolean {
+  const state = view.state;
+  const sel = state.selection.main;
+
+  if (sel.empty) {
+    // No selection - insert empty code block
+    const pos = sel.head;
+    const line = state.doc.lineAt(pos);
+    const atLineStart = pos === line.from;
+    const lineIsEmpty = line.text.trim() === "";
+
+    let insert: string;
+    let cursorPos: number;
+
+    if (lineIsEmpty && atLineStart) {
+      // Empty line - insert code block here
+      insert = "```\n\n```";
+      cursorPos = pos + 4; // After opening fence + newline
+    } else {
+      // Not empty or not at start - insert code block on next line
+      insert = "\n```\n\n```";
+      cursorPos = pos + 5; // After newline + opening fence + newline
+    }
+
+    view.dispatch({
+      changes: { from: pos, to: pos, insert },
+      selection: { anchor: cursorPos },
+      scrollIntoView: true,
+    });
+  } else {
+    // Selection exists - wrap in code fences
+    const from = Math.min(sel.anchor, sel.head);
+    const to = Math.max(sel.anchor, sel.head);
+    const selectedText = state.doc.sliceString(from, to);
+    const startLine = state.doc.lineAt(from);
+    const endLine = state.doc.lineAt(to);
+
+    // Check if selection starts at line beginning
+    const atStartOfLine = from === startLine.from;
+    // Check if selection ends at line end
+    const atEndOfLine = to === endLine.to;
+
+    let insert: string;
+    let newFrom: number;
+    let newTo: number;
+
+    if (atStartOfLine && atEndOfLine) {
+      // Selection covers full lines
+      insert = `\`\`\`\n${selectedText}\n\`\`\``;
+      newFrom = from + 4; // After opening fence + newline
+      newTo = from + 4 + selectedText.length;
+    } else {
+      // Partial line selection - add newlines
+      insert = `\n\`\`\`\n${selectedText}\n\`\`\`\n`;
+      newFrom = from + 5; // After newline + opening fence + newline
+      newTo = from + 5 + selectedText.length;
+    }
+
+    view.dispatch({
+      changes: { from, to, insert },
+      selection: { anchor: newFrom, head: newTo },
+      scrollIntoView: true,
+    });
+  }
+
+  return true;
+}

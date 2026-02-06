@@ -298,3 +298,215 @@ export function toggleTaskCheckboxOnLine(view: EditorView): boolean {
   toggleTaskCheckbox(view, listInfo.taskMarkerStart, listInfo.isTaskChecked);
   return true;
 }
+
+// ===========================================
+// TOOLBAR TOGGLE FUNCTIONS
+// ===========================================
+
+/**
+ * Toggle bullet list on current line(s)
+ * - If already a bullet list: remove marker
+ * - If other list type: convert to bullet
+ * - If paragraph: add bullet marker
+ */
+export function toggleBulletList(view: EditorView): boolean {
+  const state = view.state;
+  const { from, to } = state.selection.main;
+  const startLine = state.doc.lineAt(from);
+  const endLine = state.doc.lineAt(to);
+
+  const changes: { from: number; to: number; insert: string }[] = [];
+  let newCursorOffset = 0;
+
+  for (let lineNum = startLine.number; lineNum <= endLine.number; lineNum++) {
+    const line = state.doc.line(lineNum);
+    const listInfo = getListInfo(line);
+
+    if (listInfo) {
+      if (!listInfo.isOrdered && !listInfo.isTask) {
+        // Already a bullet list - remove marker
+        changes.push({
+          from: line.from + listInfo.indent.length,
+          to: listInfo.contentStart,
+          insert: "",
+        });
+        if (lineNum === startLine.number) {
+          newCursorOffset = -(listInfo.contentStart - line.from - listInfo.indent.length);
+        }
+      } else {
+        // Convert from ordered/task to bullet
+        const newMarker = `${listInfo.indent}- `;
+        changes.push({
+          from: line.from,
+          to: listInfo.contentStart,
+          insert: newMarker,
+        });
+        if (lineNum === startLine.number) {
+          newCursorOffset = newMarker.length - (listInfo.contentStart - line.from);
+        }
+      }
+    } else {
+      // Plain paragraph - add bullet marker
+      const indent = line.text.match(/^(\s*)/)?.[1] || "";
+      const newMarker = `${indent}- `;
+      changes.push({
+        from: line.from,
+        to: line.from + indent.length,
+        insert: newMarker,
+      });
+      if (lineNum === startLine.number) {
+        newCursorOffset = newMarker.length - indent.length;
+      }
+    }
+  }
+
+  if (changes.length > 0) {
+    view.dispatch({
+      changes,
+      selection: { anchor: from + newCursorOffset },
+      scrollIntoView: true,
+    });
+  }
+
+  return true;
+}
+
+/**
+ * Toggle ordered list on current line(s)
+ * - If already an ordered list: remove marker
+ * - If other list type: convert to ordered
+ * - If paragraph: add ordered marker
+ */
+export function toggleOrderedList(view: EditorView): boolean {
+  const state = view.state;
+  const { from, to } = state.selection.main;
+  const startLine = state.doc.lineAt(from);
+  const endLine = state.doc.lineAt(to);
+
+  const changes: { from: number; to: number; insert: string }[] = [];
+  let newCursorOffset = 0;
+  let orderNum = 1;
+
+  for (let lineNum = startLine.number; lineNum <= endLine.number; lineNum++) {
+    const line = state.doc.line(lineNum);
+    const listInfo = getListInfo(line);
+
+    if (listInfo) {
+      if (listInfo.isOrdered && !listInfo.isTask) {
+        // Already an ordered list - remove marker
+        changes.push({
+          from: line.from + listInfo.indent.length,
+          to: listInfo.contentStart,
+          insert: "",
+        });
+        if (lineNum === startLine.number) {
+          newCursorOffset = -(listInfo.contentStart - line.from - listInfo.indent.length);
+        }
+      } else {
+        // Convert from bullet/task to ordered
+        const newMarker = `${listInfo.indent}${orderNum}. `;
+        changes.push({
+          from: line.from,
+          to: listInfo.contentStart,
+          insert: newMarker,
+        });
+        if (lineNum === startLine.number) {
+          newCursorOffset = newMarker.length - (listInfo.contentStart - line.from);
+        }
+        orderNum++;
+      }
+    } else {
+      // Plain paragraph - add ordered marker
+      const indent = line.text.match(/^(\s*)/)?.[1] || "";
+      const newMarker = `${indent}${orderNum}. `;
+      changes.push({
+        from: line.from,
+        to: line.from + indent.length,
+        insert: newMarker,
+      });
+      if (lineNum === startLine.number) {
+        newCursorOffset = newMarker.length - indent.length;
+      }
+      orderNum++;
+    }
+  }
+
+  if (changes.length > 0) {
+    view.dispatch({
+      changes,
+      selection: { anchor: from + newCursorOffset },
+      scrollIntoView: true,
+    });
+  }
+
+  return true;
+}
+
+/**
+ * Toggle task list on current line(s)
+ * - If already a task list: remove marker
+ * - If other list type: convert to task
+ * - If paragraph: add task marker
+ */
+export function toggleTaskList(view: EditorView): boolean {
+  const state = view.state;
+  const { from, to } = state.selection.main;
+  const startLine = state.doc.lineAt(from);
+  const endLine = state.doc.lineAt(to);
+
+  const changes: { from: number; to: number; insert: string }[] = [];
+  let newCursorOffset = 0;
+
+  for (let lineNum = startLine.number; lineNum <= endLine.number; lineNum++) {
+    const line = state.doc.line(lineNum);
+    const listInfo = getListInfo(line);
+
+    if (listInfo) {
+      if (listInfo.isTask) {
+        // Already a task list - remove marker entirely
+        changes.push({
+          from: line.from + listInfo.indent.length,
+          to: listInfo.contentStart,
+          insert: "",
+        });
+        if (lineNum === startLine.number) {
+          newCursorOffset = -(listInfo.contentStart - line.from - listInfo.indent.length);
+        }
+      } else {
+        // Convert from bullet/ordered to task
+        const marker = listInfo.isOrdered ? `${listInfo.orderNumber}.` : listInfo.marker;
+        const newMarker = `${listInfo.indent}${marker} [ ] `;
+        changes.push({
+          from: line.from,
+          to: listInfo.contentStart,
+          insert: newMarker,
+        });
+        if (lineNum === startLine.number) {
+          newCursorOffset = newMarker.length - (listInfo.contentStart - line.from);
+        }
+      }
+    } else {
+      // Plain paragraph - add task marker
+      const indent = line.text.match(/^(\s*)/)?.[1] || "";
+      const newMarker = `${indent}- [ ] `;
+      changes.push({
+        from: line.from,
+        to: line.from + indent.length,
+        insert: newMarker,
+      });
+      if (lineNum === startLine.number) {
+        newCursorOffset = newMarker.length - indent.length;
+      }
+    }
+  }
+
+  if (changes.length > 0) {
+    view.dispatch({
+      changes,
+      selection: { anchor: from + newCursorOffset },
+      scrollIntoView: true,
+    });
+  }
+
+  return true;
+}

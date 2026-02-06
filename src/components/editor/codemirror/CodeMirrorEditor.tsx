@@ -17,9 +17,19 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { openSearchPanel, closeSearchPanel } from "@codemirror/search";
 import { useEditorStore } from "@/stores/editorStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
 import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { createWysiwygExtensions } from "./extensions";
+import {
+  createSpellcheckExtension,
+  setSpellcheckEnabledCmd,
+  subscribeSpellcheckContextMenu,
+  closeSpellcheckContextMenu,
+  handleSpellcheckSuggestion,
+  handleAddToPersonalDictionary,
+  handleIgnoreWord,
+} from "./extensions/spellcheck";
 import { getMarkdownFromStore, setMarkdownToStore } from "./storeAdapter";
 import { CodeMirrorToolbar } from "./CodeMirrorToolbar";
 import { SourceEditor } from "../SourceEditor";
@@ -118,9 +128,23 @@ export const CodeMirrorEditor = forwardRef<
   const fontFamily = useEditorStore((state) => state.fontFamily);
   const filePath = useEditorStore((state) => state.filePath);
 
+  // Settings store for spellcheck
+  const spellCheckEnabled = useSettingsStore(
+    (s) => s.appearance?.spellCheckEnabled ?? true
+  );
+
   // Source mode state
   const [markdownSource, setMarkdownSource] = useState("");
   const wasInSourceMode = useRef(false);
+
+  // Spellcheck context menu state
+  const [spellcheckMenu, setSpellcheckMenu] = useState<{
+    visible: boolean;
+    x: number;
+    y: number;
+    word: string;
+    suggestions: string[];
+  } | null>(null);
 
   // Create command wrappers
   const createCommand = useCallback(
@@ -186,6 +210,8 @@ export const CodeMirrorEditor = forwardRef<
     // Create extensions
     const extensions = [
       ...createWysiwygExtensions(),
+      // Spellcheck extension
+      ...createSpellcheckExtension({ enabled: spellCheckEnabled }),
       // Update listener for content changes
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
@@ -295,6 +321,32 @@ export const CodeMirrorEditor = forwardRef<
     };
   }, [onInternalLinkClick, onScrollToHeading]);
 
+  // Subscribe to spellcheck context menu state
+  useEffect(() => {
+    const unsubscribe = subscribeSpellcheckContextMenu((state) => {
+      if (state.visible) {
+        setSpellcheckMenu({
+          visible: true,
+          x: state.x,
+          y: state.y,
+          word: state.word,
+          suggestions: state.suggestions,
+        });
+      } else {
+        setSpellcheckMenu(null);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // Sync spellcheck enabled state with settings
+  useEffect(() => {
+    if (viewRef.current && isReady) {
+      setSpellcheckEnabledCmd(viewRef.current, spellCheckEnabled);
+    }
+  }, [spellCheckEnabled, isReady]);
+
   // Handle link clicks
   useEffect(() => {
     if (!editorContainerRef.current || !viewRef.current) return;
@@ -355,6 +407,64 @@ export const CodeMirrorEditor = forwardRef<
           ref={editorContainerRef}
           className="flex-1 overflow-y-auto"
           data-testid="codemirror-editor"
+        />
+      )}
+
+      {/* Spellcheck Context Menu */}
+      {spellcheckMenu && spellcheckMenu.visible && (
+        <div
+          className="fixed z-50 bg-[var(--color-paper)] border border-[var(--color-border)] rounded-lg shadow-lg py-1 min-w-[160px]"
+          style={{ left: spellcheckMenu.x, top: spellcheckMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {spellcheckMenu.suggestions.length > 0 ? (
+            <>
+              {spellcheckMenu.suggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  className="w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--color-paper-warm)] text-[var(--color-ink)]"
+                  onClick={() => {
+                    if (viewRef.current) {
+                      handleSpellcheckSuggestion(viewRef.current, suggestion);
+                    }
+                  }}
+                >
+                  {suggestion}
+                </button>
+              ))}
+              <div className="h-px bg-[var(--color-border)] my-1" />
+            </>
+          ) : (
+            <div className="px-3 py-1.5 text-sm text-[var(--color-ink-muted)] italic">
+              No suggestions
+            </div>
+          )}
+          <button
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--color-paper-warm)] text-[var(--color-ink)]"
+            onClick={() => {
+              if (viewRef.current) {
+                handleAddToPersonalDictionary(viewRef.current);
+              }
+            }}
+          >
+            Add to Dictionary
+          </button>
+          <button
+            className="w-full px-3 py-1.5 text-left text-sm hover:bg-[var(--color-paper-warm)] text-[var(--color-ink-muted)]"
+            onClick={() => {
+              handleIgnoreWord();
+            }}
+          >
+            Ignore
+          </button>
+        </div>
+      )}
+
+      {/* Click outside to close spellcheck menu */}
+      {spellcheckMenu && spellcheckMenu.visible && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => closeSpellcheckContextMenu()}
         />
       )}
     </div>

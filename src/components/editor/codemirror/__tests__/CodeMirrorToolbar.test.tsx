@@ -18,6 +18,7 @@ vi.mock("../handlers/formattingHandlers", () => ({
   toggleCodeOrEscape: vi.fn(() => true),
   toggleStrikethroughOrEscape: vi.fn(() => true),
   toggleHighlightOrEscape: vi.fn(() => true),
+  getFormattingContext: vi.fn(() => null),
 }));
 
 vi.mock("../handlers/headingHandlers", () => ({
@@ -32,6 +33,28 @@ vi.mock("../handlers/tableHandlers", () => ({
 
 vi.mock("../handlers/linkHandlers", () => ({
   handleLinkCommand: vi.fn(() => true),
+  getLinkContext: vi.fn(() => null),
+}));
+
+vi.mock("../handlers/listHandlers", () => ({
+  toggleBulletList: vi.fn(() => true),
+  toggleOrderedList: vi.fn(() => true),
+  toggleTaskList: vi.fn(() => true),
+  getListInfo: vi.fn(() => null),
+}));
+
+vi.mock("../handlers/blockquoteHandlers", () => ({
+  toggleBlockquote: vi.fn(() => true),
+  getBlockquoteInfo: vi.fn(() => null),
+}));
+
+vi.mock("../handlers/codeBlockHandlers", () => ({
+  insertCodeBlock: vi.fn(() => true),
+  isCursorInCodeBlock: vi.fn(() => false),
+}));
+
+vi.mock("../utils/sharedHelpers", () => ({
+  HEADING_PREFIX_RE: /^(#{1,6})\s/,
 }));
 
 // Import the mocked handlers

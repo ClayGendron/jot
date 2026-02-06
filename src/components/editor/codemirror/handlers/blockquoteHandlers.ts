@@ -237,3 +237,69 @@ export function handleBackspaceInBlockquote(view: EditorView): boolean {
   });
   return true;
 }
+
+// ===========================================
+// TOOLBAR TOGGLE FUNCTION
+// ===========================================
+
+/**
+ * Toggle blockquote on current line(s)
+ * - If already a blockquote: remove marker
+ * - If paragraph: add blockquote marker
+ */
+export function toggleBlockquote(view: EditorView): boolean {
+  const state = view.state;
+  const { from, to } = state.selection.main;
+  const startLine = state.doc.lineAt(from);
+  const endLine = state.doc.lineAt(to);
+
+  const changes: { from: number; to: number; insert: string }[] = [];
+  let newCursorOffset = 0;
+
+  // Check if all lines are already blockquotes
+  let allBlockquotes = true;
+  for (let lineNum = startLine.number; lineNum <= endLine.number; lineNum++) {
+    const line = state.doc.line(lineNum);
+    if (!getBlockquoteInfo(line)) {
+      allBlockquotes = false;
+      break;
+    }
+  }
+
+  for (let lineNum = startLine.number; lineNum <= endLine.number; lineNum++) {
+    const line = state.doc.line(lineNum);
+    const quoteInfo = getBlockquoteInfo(line);
+
+    if (allBlockquotes && quoteInfo) {
+      // Remove blockquote marker
+      changes.push({
+        from: line.from,
+        to: quoteInfo.contentStart,
+        insert: "",
+      });
+      if (lineNum === startLine.number) {
+        newCursorOffset = -quoteInfo.marker.length;
+      }
+    } else if (!quoteInfo) {
+      // Add blockquote marker
+      changes.push({
+        from: line.from,
+        to: line.from,
+        insert: "> ",
+      });
+      if (lineNum === startLine.number) {
+        newCursorOffset = 2;
+      }
+    }
+  }
+
+  if (changes.length > 0) {
+    view.dispatch({
+      changes,
+      selection: { anchor: from + newCursorOffset },
+      scrollIntoView: true,
+    });
+  }
+
+  return true;
+}

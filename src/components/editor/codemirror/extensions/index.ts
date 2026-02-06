@@ -26,6 +26,22 @@ import { HighlightExtension } from "./lezerExtensions";
 // Re-export for convenience
 export { HighlightExtension };
 
+// Spellcheck extension
+export {
+  createSpellcheckExtension,
+  spellcheckField,
+  setSpellcheckEnabledCmd,
+  refreshSpellcheck,
+  subscribeSpellcheckContextMenu,
+  openSpellcheckContextMenu,
+  closeSpellcheckContextMenu,
+  getSpellcheckContextMenuState,
+  handleSpellcheckSuggestion,
+  handleAddToPersonalDictionary,
+  handleIgnoreWord,
+  type SpellcheckConfig,
+} from "./spellcheck";
+
 // Import internal modules for bundle
 import { hiddenRangesField } from "./hiddenRanges";
 import { hiddenSyntaxField } from "./hiddenSyntax";
