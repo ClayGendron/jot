@@ -56,6 +56,7 @@ import { getEffectiveAccent, resolveSystemTheme } from "@/lib/settings/themes";
 import type { ThemeName } from "@/lib/settings/themes";
 import { getRelativePath, joinFsPaths, getParentPath } from "@/lib/path/pathUtils";
 import { saveDocumentPipeline, saveAllDirtyTabs } from "@/services/saveService";
+import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { indexFolder } from "@/services/semanticIndexingService";
 import {
@@ -401,20 +402,42 @@ function App() {
 
   // Check for crash recovery on mount
   useEffect(() => {
-    const recoveryData = checkCrashRecovery();
-    if (recoveryData && recoveryData.content) {
-      const shouldRecover = window.confirm(
-        "It looks like Jot didn't close properly. Would you like to recover your unsaved changes?"
-      );
-      if (shouldRecover) {
-        recoverFromCrash(recoveryData);
-        setEditorContent(recoveryData.content);
-        if (recoveryData.filePath) {
-          setFilePath(recoveryData.filePath);
+    const recoveryMap = checkCrashRecovery();
+    const entries = Object.entries(recoveryMap);
+    if (entries.length === 0) return;
+
+    const fileCount = entries.length;
+    const message = fileCount === 1
+      ? "It looks like Jot didn't close properly. Would you like to recover your unsaved changes?"
+      : `It looks like Jot didn't close properly. ${fileCount} files have unsaved changes. Would you like to recover them?`;
+
+    const shouldRecover = window.confirm(message);
+    if (shouldRecover) {
+      // For multi-file recovery: open tabs with recovered content.
+      // openTab sets content and marks clean; updateTabContent marks dirty
+      // so autosave will persist the recovered content to disk.
+      for (const [recoveredPath, entry] of entries) {
+        // Migration guard: pre-refactor recovery data may contain HTML
+        let content = entry.content;
+        if (content.startsWith("<")) {
+          content = htmlToMarkdown(content);
         }
+        const tabId = openTab(recoveredPath, content);
+        updateTabContent(tabId, content);
       }
+      // Set the first recovered file as active
+      const [firstPath, firstEntry] = entries[0];
+      let firstContent = firstEntry.content;
+      if (firstContent.startsWith("<")) {
+        firstContent = htmlToMarkdown(firstContent);
+      }
+      setEditorContent(firstContent);
+      setFilePath(firstPath);
+      setContent(firstContent);
     }
-  }, [checkCrashRecovery, recoverFromCrash, setFilePath]);
+    // Clear all crash recovery data (whether user accepted or declined)
+    recoverFromCrash(recoveryMap);
+  }, [checkCrashRecovery, recoverFromCrash, setFilePath, openTab, updateTabContent, setContent]);
 
   // Save all dirty tabs on window close (Tauri)
   const isClosingRef = useRef(false);

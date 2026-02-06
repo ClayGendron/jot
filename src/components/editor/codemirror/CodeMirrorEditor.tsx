@@ -13,7 +13,7 @@ import {
   forwardRef,
   useImperativeHandle,
 } from "react";
-import { EditorState } from "@codemirror/state";
+import { Annotation, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { openSearchPanel, closeSearchPanel } from "@codemirror/search";
 import { useEditorStore } from "@/stores/editorStore";
@@ -52,6 +52,12 @@ import {
   getLinkContextAtPos,
   handleLinkClick,
 } from "./handlers/linkHandlers";
+
+/**
+ * Annotation to mark file-switch and source-mode return dispatches.
+ * The updateListener skips these to prevent spurious autosaves.
+ */
+const fileSwitchAnnotation = Annotation.define<boolean>();
 
 export interface CodeMirrorEditorProps {
   /** Initial content (unused — content comes from store) */
@@ -218,6 +224,12 @@ export const CodeMirrorEditor = forwardRef<
       // Update listener for content changes
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
+          // Skip file-switch and source-mode return dispatches to prevent spurious autosaves
+          const isFileSwitch = update.transactions.some(
+            (tr) => tr.annotation(fileSwitchAnnotation)
+          );
+          if (isFileSwitch) return;
+
           const markdown = update.state.doc.toString();
           useEditorStore.getState().setContent(markdown);
           // Use ref to always call the latest onUpdate (avoids stale closure)
@@ -275,6 +287,7 @@ export const CodeMirrorEditor = forwardRef<
           to: viewRef.current.state.doc.length,
           insert: markdown,
         },
+        annotations: fileSwitchAnnotation.of(true),
       });
     }
   }, [filePath, isReady]);
@@ -296,6 +309,7 @@ export const CodeMirrorEditor = forwardRef<
           to: viewRef.current.state.doc.length,
           insert: markdownSource,
         },
+        annotations: fileSwitchAnnotation.of(true),
       });
       // Sync to store
       useEditorStore.getState().setContent(markdownSource);

@@ -2,30 +2,14 @@ import { useCallback, useEffect, useRef } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { useTabsStore } from "@/stores/tabsStore";
 import { saveDocumentPipeline } from "@/services/saveService";
-import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
+import {
+  readCrashRecoveryData,
+  clearAllCrashRecovery,
+  type CrashRecoveryMap,
+} from "@/lib/crashRecovery";
 
 const AUTOSAVE_DELAY_MS = 1000;
 const SAVED_INDICATOR_DURATION_MS = 2000;
-const CRASH_RECOVERY_KEY = "jot_crash_recovery";
-
-interface CrashRecoveryData {
-  filePath: string | null;
-  content: string;
-  timestamp: number;
-}
-
-/**
- * Validates that an object matches CrashRecoveryData shape
- */
-function isValidCrashRecoveryData(data: unknown): data is CrashRecoveryData {
-  if (typeof data !== "object" || data === null) return false;
-  const obj = data as Record<string, unknown>;
-  return (
-    (typeof obj.filePath === "string" || obj.filePath === null) &&
-    typeof obj.content === "string" &&
-    typeof obj.timestamp === "number"
-  );
-}
 
 /**
  * Hook for automatic saving with debounce and crash recovery
@@ -33,7 +17,8 @@ function isValidCrashRecoveryData(data: unknown): data is CrashRecoveryData {
  * Features:
  * - Saves after 1 second of inactivity
  * - Shows "Saving..." / "Saved" indicators
- * - Stores content in localStorage for crash recovery
+ * - Crash recovery data is stored per-tab in tabsStore.updateTabContent
+ * - Crash recovery data is cleared per-file in saveService on successful save
  * - Recovers content on next launch if crash detected
  * - Uses unified save pipeline for consistent behavior
  *
@@ -41,7 +26,9 @@ function isValidCrashRecoveryData(data: unknown): data is CrashRecoveryData {
  * to prevent race condition where user switches tabs during save.
  */
 export function useAutosave(content: string) {
-  const { filePath, isDirty, setSaveStatus, setContent } = useEditorStore();
+  const filePath = useEditorStore((s) => s.filePath);
+  const isDirty = useEditorStore((s) => s.isDirty);
+  const setSaveStatus = useEditorStore((s) => s.setSaveStatus);
   const activeTabId = useTabsStore((state) => state.activeTabId);
 
   // Track if a save is currently in progress
@@ -51,24 +38,6 @@ export function useAutosave(content: string) {
   const savedIndicatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
-
-  // Store content for crash recovery
-  const storeCrashRecovery = useCallback((data: CrashRecoveryData) => {
-    try {
-      localStorage.setItem(CRASH_RECOVERY_KEY, JSON.stringify(data));
-    } catch {
-      // localStorage might be full or unavailable
-    }
-  }, []);
-
-  // Clear crash recovery data after successful save
-  const clearCrashRecovery = useCallback(() => {
-    try {
-      localStorage.removeItem(CRASH_RECOVERY_KEY);
-    } catch {
-      // Ignore errors
-    }
-  }, []);
 
   /**
    * Perform the actual save using the unified pipeline.
@@ -88,13 +57,8 @@ export function useAutosave(content: string) {
         // - Hash computation
         // - Backlinks index update
         // - Store state updates
+        // - Clearing per-file crash recovery on clean save
         const result = await saveDocumentPipeline(tabIdToSave, true);
-
-        // Only clear crash recovery if the document is actually clean
-        // If content changed during save, isDirty is still true and we need recovery data
-        if (result.isClean) {
-          clearCrashRecovery();
-        }
 
         if (result.saved && result.isClean) {
           // Clear any pending indicator timeout
@@ -115,7 +79,7 @@ export function useAutosave(content: string) {
         isSavingRef.current = false;
       }
     },
-    [setSaveStatus, clearCrashRecovery]
+    [setSaveStatus]
   );
 
   // Debounced autosave effect
@@ -128,12 +92,7 @@ export function useAutosave(content: string) {
     // Only autosave if there's a file path and content has changed
     if (!filePath || !isDirty || !activeTabId) return;
 
-    // Store for crash recovery immediately
-    storeCrashRecovery({
-      filePath,
-      content,
-      timestamp: Date.now(),
-    });
+    // Crash recovery is now handled in tabsStore.updateTabContent — no need to store here
 
     // CRITICAL: Capture tab ID NOW at schedule time, not at save time
     // This prevents the race condition where user switches tabs during save
@@ -149,7 +108,7 @@ export function useAutosave(content: string) {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [filePath, isDirty, content, activeTabId, performSave, storeCrashRecovery]);
+  }, [filePath, isDirty, content, activeTabId, performSave]);
 
   // Manual save function (for Cmd+S)
   const saveNow = useCallback(() => {
@@ -168,43 +127,17 @@ export function useAutosave(content: string) {
   }, [performSave]);
 
   // Check for crash recovery data on mount
-  const checkCrashRecovery = useCallback((): CrashRecoveryData | null => {
-    try {
-      const data = localStorage.getItem(CRASH_RECOVERY_KEY);
-      if (data) {
-        const parsed = JSON.parse(data);
-        // Validate the shape of the data
-        if (!isValidCrashRecoveryData(parsed)) {
-          clearCrashRecovery();
-          return null;
-        }
-        // Only consider recovery data from last 24 hours
-        const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-        if (Date.now() - parsed.timestamp < ONE_DAY_MS) {
-          return parsed;
-        }
-        // Clear stale recovery data
-        clearCrashRecovery();
-      }
-    } catch {
-      // Invalid data, clear it
-      clearCrashRecovery();
-    }
-    return null;
-  }, [clearCrashRecovery]);
+  const checkCrashRecovery = useCallback((): CrashRecoveryMap => {
+    return readCrashRecoveryData();
+  }, []);
 
-  // Recover from crash
-  // Migration guard: pre-refactor recovery data may contain HTML — convert to markdown
+  // Clear crash recovery data after user accepts or declines recovery.
+  // App.tsx handles opening tabs and setting content.
   const recoverFromCrash = useCallback(
-    (recoveryData: CrashRecoveryData) => {
-      let content = recoveryData.content;
-      if (content.startsWith("<")) {
-        content = htmlToMarkdown(content);
-      }
-      setContent(content);
-      clearCrashRecovery();
+    (_recoveryMap: CrashRecoveryMap) => {
+      clearAllCrashRecovery();
     },
-    [setContent, clearCrashRecovery]
+    []
   );
 
   // Cleanup on unmount

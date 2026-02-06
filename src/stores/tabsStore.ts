@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { storeCrashRecoveryForFile } from "@/lib/crashRecovery";
 
 /**
  * Tab state management using Zustand
@@ -201,6 +202,10 @@ export const useTabsStore = create<TabsState & TabsActions>((set, get) => ({
   },
 
   updateTabContent: (tabId, content) => {
+    const tab = get().tabs.find((t) => t.id === tabId);
+    if (tab) {
+      storeCrashRecoveryForFile(tab.filePath, content);
+    }
     set((state) => ({
       tabs: state.tabs.map((t) =>
         t.id === tabId ? { ...t, content, isDirty: true } : t

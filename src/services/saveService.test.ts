@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
-import { computeSimpleHash, saveDocumentPipeline, saveAllDirtyTabs } from "./saveService";
+import { computeSimpleHash, saveDocumentPipeline, saveAllDirtyTabs, _resetSaveQueue } from "./saveService";
 import { useTabsStore } from "@/stores/tabsStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
@@ -61,6 +61,9 @@ describe("computeSimpleHash", () => {
 
 describe("saveDocumentPipeline", () => {
   beforeEach(() => {
+    // Reset save queue
+    _resetSaveQueue();
+
     // Reset all stores
     useTabsStore.setState({
       tabs: [],
@@ -445,8 +448,295 @@ describe("saveDocumentPipeline", () => {
   });
 });
 
+describe("per-file save mutex", () => {
+  beforeEach(() => {
+    _resetSaveQueue();
+
+    useTabsStore.setState({
+      tabs: [],
+      activeTabId: null,
+      saveStatus: "idle",
+      saveError: null,
+    });
+
+    useEditorStore.setState({
+      filePath: null,
+      content: "",
+      isDirty: false,
+      lastSaved: null,
+      saveStatus: "idle",
+      saveError: null,
+    });
+
+    useWorkspaceStore.setState({
+      workspacePath: "/workspace",
+      fileTree: [],
+      isLoading: false,
+      error: null,
+    });
+
+    useLinksStore.setState({
+      backlinksIndex: {},
+      isIndexing: false,
+      lastIndexed: null,
+      fileHashes: {},
+    });
+
+    mockWriteFile.mockClear();
+    mockWriteFile.mockResolvedValue(undefined);
+    mockSaveVersion.mockClear();
+    mockSaveVersion.mockResolvedValue(1);
+  });
+
+  it("serializes concurrent saves for the same file", async () => {
+    const writeOrder: number[] = [];
+
+    // First write takes 50ms
+    mockWriteFile.mockImplementationOnce(async () => {
+      writeOrder.push(1);
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    // Second write is fast
+    mockWriteFile.mockImplementationOnce(async () => {
+      writeOrder.push(2);
+    });
+
+    useTabsStore.setState({
+      tabs: [{
+        id: "tab-1",
+        filePath: "/workspace/test.md",
+        displayName: "test",
+        content: "version 1",
+        isDirty: true,
+        isPinned: false,
+        scrollTop: 0,
+      }],
+      activeTabId: "tab-1",
+    });
+
+    // Launch two saves concurrently
+    const save1 = saveDocumentPipeline("tab-1", false);
+
+    // Make tab dirty again for second save
+    useTabsStore.setState({
+      tabs: [{
+        id: "tab-1",
+        filePath: "/workspace/test.md",
+        displayName: "test",
+        content: "version 2",
+        isDirty: true,
+        isPinned: false,
+        scrollTop: 0,
+      }],
+    });
+
+    const save2 = saveDocumentPipeline("tab-1", false);
+
+    await Promise.all([save1, save2]);
+
+    // First write should complete before second starts
+    expect(writeOrder).toEqual([1, 2]);
+  });
+
+  it("allows concurrent saves for different files", async () => {
+    const writeOrder: string[] = [];
+
+    mockWriteFile.mockImplementation(async (path: string) => {
+      writeOrder.push(path);
+      await new Promise((r) => setTimeout(r, 10));
+    });
+
+    useTabsStore.setState({
+      tabs: [
+        {
+          id: "tab-1",
+          filePath: "/workspace/a.md",
+          displayName: "a",
+          content: "A",
+          isDirty: true,
+          isPinned: false,
+          scrollTop: 0,
+        },
+        {
+          id: "tab-2",
+          filePath: "/workspace/b.md",
+          displayName: "b",
+          content: "B",
+          isDirty: true,
+          isPinned: false,
+          scrollTop: 0,
+        },
+      ],
+      activeTabId: "tab-1",
+    });
+
+    // Both should start immediately (different files = no queueing)
+    const [r1, r2] = await Promise.all([
+      saveDocumentPipeline("tab-1", false),
+      saveDocumentPipeline("tab-2", false),
+    ]);
+
+    expect(r1.saved).toBe(true);
+    expect(r2.saved).toBe(true);
+    // Both writes should have happened
+    expect(writeOrder).toContain("/workspace/a.md");
+    expect(writeOrder).toContain("/workspace/b.md");
+  });
+
+  it("second caller no-ops if first save made file clean", async () => {
+    mockWriteFile.mockImplementationOnce(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+
+    useTabsStore.setState({
+      tabs: [{
+        id: "tab-1",
+        filePath: "/workspace/test.md",
+        displayName: "test",
+        content: "content",
+        isDirty: true,
+        isPinned: false,
+        scrollTop: 0,
+      }],
+      activeTabId: "tab-1",
+    });
+
+    const save1 = saveDocumentPipeline("tab-1", false);
+    const save2 = saveDocumentPipeline("tab-1", false);
+
+    const [r1, r2] = await Promise.all([save1, save2]);
+
+    // First save succeeds
+    expect(r1.saved).toBe(true);
+    expect(r1.isClean).toBe(true);
+    // Second caller skips because tab is now clean
+    expect(r2.saved).toBe(false);
+    expect(r2.isClean).toBe(true);
+    // writeFile only called once
+    expect(mockWriteFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("second caller re-saves if content changed during first save", async () => {
+    mockWriteFile.mockImplementationOnce(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+      // Simulate user editing during save — content changes, tab stays dirty
+      useTabsStore.setState({
+        tabs: [{
+          id: "tab-1",
+          filePath: "/workspace/test.md",
+          displayName: "test",
+          content: "edited during save",
+          isDirty: true,
+          isPinned: false,
+          scrollTop: 0,
+        }],
+      });
+    });
+    mockWriteFile.mockImplementationOnce(async () => {
+      // Second write succeeds
+    });
+
+    useTabsStore.setState({
+      tabs: [{
+        id: "tab-1",
+        filePath: "/workspace/test.md",
+        displayName: "test",
+        content: "original",
+        isDirty: true,
+        isPinned: false,
+        scrollTop: 0,
+      }],
+      activeTabId: "tab-1",
+    });
+
+    const save1 = saveDocumentPipeline("tab-1", false);
+    const save2 = saveDocumentPipeline("tab-1", false);
+
+    const [r1, r2] = await Promise.all([save1, save2]);
+
+    // First save wrote but content changed, so not clean
+    expect(r1.saved).toBe(true);
+    expect(r1.isClean).toBe(false);
+    // Second caller sees dirty tab, saves again
+    expect(r2.saved).toBe(true);
+    expect(mockWriteFile).toHaveBeenCalledTimes(2);
+  });
+
+  it("handles first save failure — second caller still attempts", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    mockWriteFile
+      .mockRejectedValueOnce(new Error("Disk full"))
+      .mockResolvedValueOnce(undefined);
+
+    useTabsStore.setState({
+      tabs: [{
+        id: "tab-1",
+        filePath: "/workspace/test.md",
+        displayName: "test",
+        content: "content",
+        isDirty: true,
+        isPinned: false,
+        scrollTop: 0,
+      }],
+      activeTabId: "tab-1",
+    });
+
+    const save1 = saveDocumentPipeline("tab-1", false);
+    const save2 = saveDocumentPipeline("tab-1", false);
+
+    const results = await Promise.allSettled([save1, save2]);
+
+    // First save fails
+    expect(results[0].status).toBe("rejected");
+    // Second save succeeds
+    expect(results[1].status).toBe("fulfilled");
+    if (results[1].status === "fulfilled") {
+      expect(results[1].value.saved).toBe(true);
+    }
+
+    errorSpy.mockRestore();
+  });
+
+  it("cleans up queue entry after save completes", async () => {
+    useTabsStore.setState({
+      tabs: [{
+        id: "tab-1",
+        filePath: "/workspace/test.md",
+        displayName: "test",
+        content: "content",
+        isDirty: true,
+        isPinned: false,
+        scrollTop: 0,
+      }],
+      activeTabId: "tab-1",
+    });
+
+    await saveDocumentPipeline("tab-1", false);
+
+    // After completion, a new save for the same file should not hit the queue path
+    // (it should go directly to executeSave). We verify by checking writeFile is called again.
+    useTabsStore.setState({
+      tabs: [{
+        id: "tab-1",
+        filePath: "/workspace/test.md",
+        displayName: "test",
+        content: "new content",
+        isDirty: true,
+        isPinned: false,
+        scrollTop: 0,
+      }],
+    });
+
+    await saveDocumentPipeline("tab-1", false);
+    expect(mockWriteFile).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("saveAllDirtyTabs", () => {
   beforeEach(() => {
+    _resetSaveQueue();
+
     useTabsStore.setState({
       tabs: [],
       activeTabId: null,

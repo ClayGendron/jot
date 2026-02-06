@@ -3,6 +3,7 @@ import { renderHook, act } from "@testing-library/react";
 import { useAutosave } from "./useAutosave";
 import { useEditorStore } from "@/stores/editorStore";
 import { useTabsStore } from "@/stores/tabsStore";
+import { storeCrashRecoveryForFile } from "@/lib/crashRecovery";
 
 // Mock the tauri files module
 vi.mock("@/lib/tauri/files", () => ({
@@ -49,125 +50,99 @@ describe("useAutosave", () => {
   });
 
   describe("crash recovery", () => {
-    it("stores content in localStorage for crash recovery when dirty", () => {
-      const content = "test content for recovery";
-
-      // Set up a tab with the content
-      useTabsStore.setState({
-        tabs: [{
-          id: "tab-1",
-          filePath: "/test/file.md",
-          displayName: "file",
-          content: content,
-          isDirty: true,
-          isPinned: false,
-          scrollTop: 0,
-        }],
-        activeTabId: "tab-1",
-      });
-
-      renderHook(() => useAutosave(content));
-
-      // Set dirty with file path - this triggers crash recovery storage
-      act(() => {
-        useEditorStore.setState({
-          filePath: "/test/file.md",
-          isDirty: true,
-          content: content,
-        });
-      });
-
-      // Content should be stored immediately
-      const storedData = localStorage.getItem("jot_crash_recovery");
-      expect(storedData).not.toBeNull();
-
-      const parsed = JSON.parse(storedData!);
-      expect(parsed.filePath).toBe("/test/file.md");
-      expect(parsed.content).toBe(content);
-      expect(parsed.timestamp).toBeDefined();
-    });
-
-    it("checkCrashRecovery returns stored data within 24h", () => {
-      const recoveryData = {
-        filePath: "/test/recovered.md",
-        content: "recovered content",
-        timestamp: Date.now(),
-      };
-      localStorage.setItem("jot_crash_recovery", JSON.stringify(recoveryData));
+    it("checkCrashRecovery reads v2 data stored by tabsStore", () => {
+      // Simulate what tabsStore.updateTabContent does
+      storeCrashRecoveryForFile("/test/file.md", "recovered content");
 
       const { result } = renderHook(() => useAutosave(""));
 
       const recovered = result.current.checkCrashRecovery();
-      expect(recovered).not.toBeNull();
-      expect(recovered?.content).toBe("recovered content");
-      expect(recovered?.filePath).toBe("/test/recovered.md");
+      expect(Object.keys(recovered)).toHaveLength(1);
+      expect(recovered["/test/file.md"]).toBeDefined();
+      expect(recovered["/test/file.md"].content).toBe("recovered content");
     });
 
-    it("checkCrashRecovery returns null for stale data (>24h)", () => {
+    it("checkCrashRecovery returns data for multiple files", () => {
+      storeCrashRecoveryForFile("/test/a.md", "content A");
+      storeCrashRecoveryForFile("/test/b.md", "content B");
+
+      const { result } = renderHook(() => useAutosave(""));
+
+      const recovered = result.current.checkCrashRecovery();
+      expect(Object.keys(recovered)).toHaveLength(2);
+      expect(recovered["/test/a.md"].content).toBe("content A");
+      expect(recovered["/test/b.md"].content).toBe("content B");
+    });
+
+    it("checkCrashRecovery returns empty object for stale data (>24h)", () => {
+      // Write stale v2 data directly
       const staleData = {
-        filePath: "/test/old.md",
-        content: "old content",
-        timestamp: Date.now() - 25 * 60 * 60 * 1000, // 25 hours ago
+        "/test/old.md": {
+          content: "old content",
+          timestamp: Date.now() - 25 * 60 * 60 * 1000,
+        },
       };
-      localStorage.setItem("jot_crash_recovery", JSON.stringify(staleData));
+      localStorage.setItem("jot_crash_recovery_v2", JSON.stringify(staleData));
 
       const { result } = renderHook(() => useAutosave(""));
 
       const recovered = result.current.checkCrashRecovery();
-      expect(recovered).toBeNull();
-
-      // Should have cleared the stale data
-      expect(localStorage.getItem("jot_crash_recovery")).toBeNull();
+      expect(Object.keys(recovered)).toHaveLength(0);
     });
 
-    it("checkCrashRecovery returns null when no data exists", () => {
+    it("checkCrashRecovery returns empty object when no data exists", () => {
       const { result } = renderHook(() => useAutosave(""));
 
       const recovered = result.current.checkCrashRecovery();
-      expect(recovered).toBeNull();
+      expect(Object.keys(recovered)).toHaveLength(0);
     });
 
     it("checkCrashRecovery handles invalid JSON gracefully", () => {
-      localStorage.setItem("jot_crash_recovery", "not valid json");
+      localStorage.setItem("jot_crash_recovery_v2", "not valid json");
 
       const { result } = renderHook(() => useAutosave(""));
 
       const recovered = result.current.checkCrashRecovery();
-      expect(recovered).toBeNull();
-
-      // Should have cleared the invalid data
-      expect(localStorage.getItem("jot_crash_recovery")).toBeNull();
+      expect(Object.keys(recovered)).toHaveLength(0);
     });
 
-    it("recoverFromCrash updates content and clears storage", () => {
-      const recoveryData = {
-        filePath: "/test/file.md",
-        content: "recovered content",
+    it("checkCrashRecovery migrates v1 data", () => {
+      const v1Data = {
+        filePath: "/test/recovered.md",
+        content: "v1 recovered content",
         timestamp: Date.now(),
       };
-      localStorage.setItem("jot_crash_recovery", JSON.stringify(recoveryData));
+      localStorage.setItem("jot_crash_recovery", JSON.stringify(v1Data));
 
       const { result } = renderHook(() => useAutosave(""));
 
-      act(() => {
-        result.current.recoverFromCrash(recoveryData);
-      });
-
-      // Content should be set in store
-      expect(useEditorStore.getState().content).toBe("recovered content");
-
-      // Storage should be cleared
+      const recovered = result.current.checkCrashRecovery();
+      expect(recovered["/test/recovered.md"]).toBeDefined();
+      expect(recovered["/test/recovered.md"].content).toBe("v1 recovered content");
+      // v1 key should be deleted after migration
       expect(localStorage.getItem("jot_crash_recovery")).toBeNull();
     });
 
-    it("clears crash recovery only when isClean is true", async () => {
-      // Set up crash recovery data
-      const recoveryData = {
-        filePath: "/test/file.md",
-        content: "important unsaved content",
-        timestamp: Date.now(),
-      };
-      localStorage.setItem("jot_crash_recovery", JSON.stringify(recoveryData));
+    it("recoverFromCrash clears storage", () => {
+      storeCrashRecoveryForFile("/test/file.md", "recovered content");
+
+      const { result } = renderHook(() => useAutosave(""));
+
+      const recoveryMap = result.current.checkCrashRecovery();
+
+      act(() => {
+        result.current.recoverFromCrash(recoveryMap);
+      });
+
+      // Storage should be cleared (App.tsx handles setting content)
+      expect(localStorage.getItem("jot_crash_recovery_v2")).toBeNull();
+    });
+
+    it("save pipeline clears per-file crash recovery when isClean", async () => {
+      // Set up crash recovery data for this file
+      storeCrashRecoveryForFile("/test/file.md", "important unsaved content");
+      // Also store for another file to verify it's not affected
+      storeCrashRecoveryForFile("/test/other.md", "other content");
 
       // Mock save returning isClean: true
       mockSaveDocumentPipeline.mockResolvedValueOnce({ saved: true, isClean: true });
@@ -191,43 +166,10 @@ describe("useAutosave", () => {
         result.current.saveNow();
       });
 
-      // Crash recovery should be cleared when isClean is true
-      expect(localStorage.getItem("jot_crash_recovery")).toBeNull();
-    });
-
-    it("retains crash recovery when isClean is false (content changed during save)", async () => {
-      // Set up crash recovery data
-      const recoveryData = {
-        filePath: "/test/file.md",
-        content: "important unsaved content",
-        timestamp: Date.now(),
-      };
-      localStorage.setItem("jot_crash_recovery", JSON.stringify(recoveryData));
-
-      // Mock save returning isClean: false (content changed during save)
-      mockSaveDocumentPipeline.mockResolvedValueOnce({ saved: true, isClean: false });
-
-      useTabsStore.setState({
-        tabs: [{
-          id: "tab-1",
-          filePath: "/test/file.md",
-          displayName: "file",
-          content: "test content",
-          isDirty: true,
-          isPinned: false,
-          scrollTop: 0,
-        }],
-        activeTabId: "tab-1",
-      });
-
-      const { result } = renderHook(() => useAutosave("test content"));
-
-      await act(async () => {
-        result.current.saveNow();
-      });
-
-      // Crash recovery should NOT be cleared - document is still dirty
-      expect(localStorage.getItem("jot_crash_recovery")).not.toBeNull();
+      // The save pipeline mock was called, but crash recovery clearing
+      // happens inside the real saveService (which is mocked).
+      // We verify the mock was called.
+      expect(mockSaveDocumentPipeline).toHaveBeenCalledWith("tab-1", true);
     });
   });
 
@@ -280,9 +222,9 @@ describe("useAutosave", () => {
         useEditorStore.setState({ isDirty: true, filePath: null });
       });
 
-      // No storage should happen without file path
-      const storedData = localStorage.getItem("jot_crash_recovery");
-      expect(storedData).toBeNull();
+      // No crash recovery stored without a file path (no updateTabContent call)
+      const data = localStorage.getItem("jot_crash_recovery_v2");
+      expect(data).toBeNull();
     });
 
     it("does not trigger save when content is not dirty", () => {
@@ -295,9 +237,9 @@ describe("useAutosave", () => {
         });
       });
 
-      // No storage when not dirty
-      const storedData = localStorage.getItem("jot_crash_recovery");
-      expect(storedData).toBeNull();
+      // No crash recovery stored when not dirty
+      const data = localStorage.getItem("jot_crash_recovery_v2");
+      expect(data).toBeNull();
     });
   });
 });

@@ -23,6 +23,7 @@ import { useTabsStore } from "@/stores/tabsStore";
 import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useLinksStore } from "@/stores/linksStore";
+import { clearCrashRecoveryForFile } from "@/lib/crashRecovery";
 import { queueFileForIndexing } from "./semanticIndexingService";
 
 /**
@@ -51,8 +52,23 @@ export interface SaveResult {
 }
 
 /**
+ * Per-file save queue. Serializes concurrent saves for the same file path
+ * so that only one writeFile is in-flight at a time per file.
+ */
+const saveQueue = new Map<string, Promise<SaveResult>>();
+
+/** Reset the save queue (for tests only) */
+export function _resetSaveQueue(): void {
+  saveQueue.clear();
+}
+
+/**
  * Unified save pipeline - ALL save paths must use this.
  * Ensures consistency: write → version history → hash → store → index
+ *
+ * Concurrent calls for the same file are serialized: the second caller
+ * waits for the in-flight save to finish, then re-checks dirty state
+ * before proceeding. Different files save in parallel.
  *
  * @param tabId - Tab to save
  * @param isActiveDoc - If true, update SaveIndicator; if false, save silently
@@ -72,6 +88,52 @@ export async function saveDocumentPipeline(
 
   if (!tab.isDirty) {
     return { saved: false, isClean: true }; // Already clean, nothing to save
+  }
+
+  const filePath = tab.filePath;
+  const existing = saveQueue.get(filePath);
+
+  if (existing) {
+    // Wait for in-flight save to finish, then re-check dirty state
+    try { await existing; } catch { /* in-flight failed, we still try */ }
+    const freshTab = useTabsStore.getState().tabs.find((t) => t.id === tabId);
+    if (!freshTab) {
+      return { saved: false, isClean: false };
+    }
+    if (!freshTab.isDirty) {
+      return { saved: false, isClean: true };
+    }
+  }
+
+  const savePromise = executeSave(tabId, isActiveDoc);
+  saveQueue.set(filePath, savePromise);
+  try {
+    return await savePromise;
+  } finally {
+    // Only delete if this is still our promise (another caller may have replaced it)
+    if (saveQueue.get(filePath) === savePromise) {
+      saveQueue.delete(filePath);
+    }
+  }
+}
+
+/**
+ * Execute the actual save. Extracted from saveDocumentPipeline to allow
+ * the queue wrapper to handle serialization.
+ */
+async function executeSave(
+  tabId: string,
+  isActiveDoc: boolean
+): Promise<SaveResult> {
+  const tab = useTabsStore.getState().tabs.find((t) => t.id === tabId);
+
+  if (!tab) {
+    console.warn(`executeSave: Tab ${tabId} not found`);
+    return { saved: false, isClean: false };
+  }
+
+  if (!tab.isDirty) {
+    return { saved: false, isClean: true };
   }
 
   // Capture content snapshot at START of save
@@ -119,6 +181,7 @@ export async function saveDocumentPipeline(
     if (contentUnchanged) {
       // Content unchanged during save - safe to mark as saved
       useTabsStore.getState().markTabSaved(tabId);
+      clearCrashRecoveryForFile(tab.filePath);
       if (isActiveDoc) {
         useEditorStore.getState().markSaved();
         useEditorStore.getState().setSaveStatus("saved");
