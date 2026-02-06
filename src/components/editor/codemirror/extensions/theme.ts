@@ -288,4 +288,85 @@ export const theme = EditorView.theme({
   ".cm-table-toolbar-btn:active": {
     backgroundColor: "#d1d5db",
   },
+  // Search panel styles
+  ".cm-panels": {
+    backgroundColor: "var(--color-paper, #f9f8f6)",
+    borderBottom: "1px solid var(--color-ink-muted, #d1d5db)",
+  },
+  ".cm-panel.cm-search": {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: "8px",
+    padding: "8px 16px",
+    fontFamily: "system-ui, -apple-system, sans-serif",
+    fontSize: "14px",
+  },
+  ".cm-search input": {
+    padding: "6px 12px",
+    border: "1px solid var(--color-ink-muted, #d1d5db)",
+    borderRadius: "4px",
+    fontSize: "14px",
+    fontFamily: "inherit",
+    backgroundColor: "var(--color-paper, white)",
+    color: "var(--color-ink, #24292e)",
+    outline: "none",
+    minWidth: "120px",
+  },
+  ".cm-search input:focus": {
+    borderColor: "var(--color-accent, #007aff)",
+    boxShadow: "0 0 0 2px rgba(0, 122, 255, 0.15)",
+  },
+  ".cm-search label": {
+    color: "var(--color-ink, #24292e)",
+    fontSize: "13px",
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
+    cursor: "pointer",
+  },
+  ".cm-search label input[type='checkbox']": {
+    width: "auto",
+    minWidth: "auto",
+    margin: "0",
+    cursor: "pointer",
+  },
+  ".cm-search button": {
+    padding: "6px 12px",
+    fontSize: "13px",
+    fontWeight: "500",
+    color: "var(--color-ink, #57606a)",
+    backgroundColor: "var(--color-paper, #f6f8fa)",
+    border: "1px solid var(--color-ink-muted, #d1d5db)",
+    borderRadius: "4px",
+    cursor: "pointer",
+    fontFamily: "inherit",
+    transition: "background-color 0.1s ease, border-color 0.1s ease",
+  },
+  ".cm-search button:hover": {
+    backgroundColor: "#e5e7eb",
+    borderColor: "#9ca3af",
+  },
+  ".cm-search button:active": {
+    backgroundColor: "#d1d5db",
+  },
+  ".cm-search button[name='close']": {
+    padding: "4px 8px",
+    fontSize: "16px",
+    lineHeight: "1",
+  },
+  // Search match highlighting
+  ".cm-searchMatch": {
+    backgroundColor: "rgba(255, 215, 0, 0.4)",
+    borderRadius: "2px",
+  },
+  ".cm-searchMatch-selected": {
+    backgroundColor: "rgba(255, 150, 0, 0.5)",
+    borderRadius: "2px",
+  },
+  // Selection matches (highlight other occurrences of selected text)
+  ".cm-selectionMatch": {
+    backgroundColor: "rgba(0, 122, 255, 0.15)",
+    borderRadius: "2px",
+  },
 });

@@ -8,6 +8,8 @@ import { markdown } from "@codemirror/lang-markdown";
 import { GFM } from "@lezer/markdown";
 import { history } from "@codemirror/commands";
 import { syntaxHighlighting } from "@codemirror/language";
+import { search, searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import { keymap } from "@codemirror/view";
 
 // Extension modules
 export { hiddenRangesField, getHiddenRanges, type HiddenRange, type HiddenRangeKind } from "./hiddenRanges";
@@ -54,6 +56,14 @@ export function createWysiwygExtensions() {
     }),
     // History (undo/redo)
     history(),
+    // Search and replace (Cmd/Ctrl+F, Cmd/Ctrl+H)
+    search({
+      top: true, // Panel at top of editor
+    }),
+    // Highlight other instances of selected text
+    highlightSelectionMatches(),
+    // Search keymap (must be before default keymap to take priority)
+    keymap.of(searchKeymap),
     // Hidden ranges field (must be before hiddenSyntaxField)
     hiddenRangesField,
     // Hidden syntax decorations (replaces markdown markers with widgets)
