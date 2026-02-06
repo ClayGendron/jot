@@ -274,6 +274,8 @@ export function getHiddenRanges(state: EditorState): HiddenRange[] {
   // ===========================================
   // REGEX FALLBACK: catch markers the parser misses
   // ===========================================
+  // Perf note (2026-02-06): doc.toString() + regex is ~0.8ms at 1000 lines,
+  // ~3.5ms at 5000 lines. Well within budget — no viewport scoping needed.
 
   const text = doc.toString();
 

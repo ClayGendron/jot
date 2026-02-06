@@ -630,4 +630,75 @@ describe("tabsStore", () => {
       expect(secondSave!.getTime()).toBeGreaterThanOrEqual(firstSave!.getTime());
     });
   });
+
+  describe("File switching edge cases", () => {
+    it("setActiveTab preserves other tabs' content and scrollTop", () => {
+      const { openTab, updateTabContent, updateTabScroll, setActiveTab } =
+        useTabsStore.getState();
+
+      const tab1Id = openTab("/path/to/doc1.md", "content1");
+      const tab2Id = openTab("/path/to/doc2.md", "content2");
+
+      // Modify tab1's content and scroll
+      updateTabContent(tab1Id, "modified content1");
+      updateTabScroll(tab1Id, 300);
+
+      // Modify tab2's content and scroll
+      updateTabContent(tab2Id, "modified content2");
+      updateTabScroll(tab2Id, 500);
+
+      // Switch to tab1
+      setActiveTab(tab1Id);
+
+      // Both tabs' content and scrollTop should be preserved
+      const state = useTabsStore.getState();
+      const t1 = state.tabs.find((t) => t.id === tab1Id)!;
+      const t2 = state.tabs.find((t) => t.id === tab2Id)!;
+
+      expect(t1.content).toBe("modified content1");
+      expect(t1.scrollTop).toBe(300);
+      expect(t2.content).toBe("modified content2");
+      expect(t2.scrollTop).toBe(500);
+      expect(state.activeTabId).toBe(tab1Id);
+    });
+
+    it("closeTab prefers right neighbor, then left", () => {
+      const { openTab, closeTab, setActiveTab } = useTabsStore.getState();
+
+      const tab1Id = openTab("/path/to/doc1.md", "c1");
+      const tab2Id = openTab("/path/to/doc2.md", "c2");
+      const tab3Id = openTab("/path/to/doc3.md", "c3");
+
+      // Activate tab2 (middle)
+      setActiveTab(tab2Id);
+
+      // Close tab2 — should prefer right neighbor (tab3)
+      const next1 = closeTab(tab2Id);
+      expect(next1).toBe(tab3Id);
+
+      // Now only tab1 and tab3 remain, tab3 is active
+      // Close tab3 (rightmost) — should fall to tab1 (left)
+      const next2 = closeTab(tab3Id);
+      expect(next2).toBe(tab1Id);
+    });
+
+    it("closeTab keeps current active when closing non-active tab", () => {
+      const { openTab, closeTab } = useTabsStore.getState();
+
+      openTab("/path/to/doc1.md", "c1");
+      openTab("/path/to/doc2.md", "c2");
+      const tab3Id = openTab("/path/to/doc3.md", "c3");
+
+      // tab3 is active (last opened)
+      expect(useTabsStore.getState().activeTabId).toBe(tab3Id);
+
+      // Close tab1 (not active)
+      const tab1Id = useTabsStore.getState().tabs[0].id;
+      closeTab(tab1Id);
+
+      // Active should still be tab3
+      expect(useTabsStore.getState().activeTabId).toBe(tab3Id);
+      expect(useTabsStore.getState().tabs).toHaveLength(2);
+    });
+  });
 });

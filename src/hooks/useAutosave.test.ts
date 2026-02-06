@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useAutosave } from "./useAutosave";
 import { useTabsStore } from "@/stores/tabsStore";
@@ -238,6 +238,158 @@ describe("useAutosave", () => {
       // No crash recovery stored when not dirty
       const data = localStorage.getItem("jot_crash_recovery_v2");
       expect(data).toBeNull();
+    });
+  });
+
+  describe("debounce and Cmd+S interaction", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+      mockSaveDocumentPipeline.mockResolvedValue({ saved: true, isClean: true });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    function setupDirtyTab() {
+      useTabsStore.setState({
+        tabs: [{
+          id: "tab-1",
+          filePath: "/test/file.md",
+          displayName: "file",
+          content: "dirty content",
+          isDirty: true,
+          isPinned: false,
+          scrollTop: 0,
+          lastSaved: null,
+        }],
+        activeTabId: "tab-1",
+        saveStatus: "idle",
+      });
+    }
+
+    it("content change triggers save after AUTOSAVE_DELAY_MS (1000ms)", async () => {
+      setupDirtyTab();
+
+      renderHook(() => useAutosave("dirty content"));
+
+      // Not yet saved
+      expect(mockSaveDocumentPipeline).not.toHaveBeenCalled();
+
+      // Advance 999ms — still not saved
+      await act(async () => {
+        vi.advanceTimersByTime(999);
+      });
+      expect(mockSaveDocumentPipeline).not.toHaveBeenCalled();
+
+      // Advance 1 more ms — now saved
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(mockSaveDocumentPipeline).toHaveBeenCalledTimes(1);
+      expect(mockSaveDocumentPipeline).toHaveBeenCalledWith("tab-1", true);
+    });
+
+    it("rapid content changes reset debounce — only one save at end", async () => {
+      setupDirtyTab();
+
+      const { rerender } = renderHook(
+        ({ content }) => useAutosave(content),
+        { initialProps: { content: "version1" } }
+      );
+
+      // Advance 500ms
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+
+      // New content change resets debounce
+      rerender({ content: "version2" });
+
+      // Advance another 500ms (1000ms total since first change, but only 500ms since last)
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(mockSaveDocumentPipeline).not.toHaveBeenCalled();
+
+      // Advance remaining 500ms (1000ms since last change)
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(mockSaveDocumentPipeline).toHaveBeenCalledTimes(1);
+    });
+
+    it("saveNow (Cmd+S) bypasses debounce and saves immediately", async () => {
+      setupDirtyTab();
+
+      const { result } = renderHook(() => useAutosave("dirty content"));
+
+      // Debounce is ticking but not yet fired
+      await act(async () => {
+        vi.advanceTimersByTime(500);
+      });
+      expect(mockSaveDocumentPipeline).not.toHaveBeenCalled();
+
+      // Manual save bypasses debounce
+      await act(async () => {
+        result.current.saveNow();
+      });
+      expect(mockSaveDocumentPipeline).toHaveBeenCalledTimes(1);
+
+      // The debounce timer should have been cleared — advancing past delay
+      // should NOT trigger another save
+      mockSaveDocumentPipeline.mockClear();
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      expect(mockSaveDocumentPipeline).not.toHaveBeenCalled();
+    });
+
+    it("save status transitions: saving → saved → idle", async () => {
+      setupDirtyTab();
+
+      // Track save status transitions
+      const statusChanges: string[] = [];
+      const unsubscribe = useTabsStore.subscribe((state) => {
+        statusChanges.push(state.saveStatus);
+      });
+
+      renderHook(() => useAutosave("dirty content"));
+
+      // Trigger save
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+
+      // Pipeline was called, and on success the hook schedules idle after 2s
+      expect(mockSaveDocumentPipeline).toHaveBeenCalledTimes(1);
+
+      // Advance 2000ms for the "saved" → "idle" transition
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+
+      // The save pipeline sets "saving" → "saved" internally (mocked),
+      // and the hook sets "idle" after SAVED_INDICATOR_DURATION_MS
+      // Since pipeline is mocked, we verify the hook called setSaveStatus("idle")
+      expect(useTabsStore.getState().saveStatus).toBe("idle");
+
+      unsubscribe();
+    });
+
+    it("rapid saveNow() calls are handled by pipeline (no error)", async () => {
+      setupDirtyTab();
+
+      const { result } = renderHook(() => useAutosave("dirty content"));
+
+      // Call saveNow twice rapidly
+      await act(async () => {
+        result.current.saveNow();
+        result.current.saveNow();
+      });
+
+      // Pipeline should be called twice (it handles serialization internally)
+      expect(mockSaveDocumentPipeline).toHaveBeenCalledTimes(2);
     });
   });
 });

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
+// Note: No isSavingRef guard needed — saveDocumentPipeline serializes
+// concurrent saves per-file via its internal saveQueue.
 import { useTabsStore, selectActiveFilePath, selectActiveIsDirty } from "@/stores/tabsStore";
 import { saveDocumentPipeline } from "@/services/saveService";
 import {
@@ -30,9 +32,6 @@ export function useAutosave(content: string) {
   const setSaveStatus = useTabsStore((s) => s.setSaveStatus);
   const activeTabId = useTabsStore((state) => state.activeTabId);
 
-  // Track if a save is currently in progress
-  const isSavingRef = useRef(false);
-
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedIndicatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -45,10 +44,6 @@ export function useAutosave(content: string) {
    */
   const performSave = useCallback(
     async (tabIdToSave: string) => {
-      if (isSavingRef.current) return;
-
-      isSavingRef.current = true;
-
       try {
         // Use unified save pipeline - it handles:
         // - Writing to disk
@@ -57,6 +52,7 @@ export function useAutosave(content: string) {
         // - Backlinks index update
         // - Store state updates
         // - Clearing per-file crash recovery on clean save
+        // - Serializing concurrent saves per-file via saveQueue
         const result = await saveDocumentPipeline(tabIdToSave, true);
 
         if (result.saved && result.isClean) {
@@ -74,8 +70,6 @@ export function useAutosave(content: string) {
       } catch (error) {
         // Pipeline already sets error status, but log for debugging
         console.error("Autosave failed:", error);
-      } finally {
-        isSavingRef.current = false;
       }
     },
     [setSaveStatus]
@@ -155,7 +149,6 @@ export function useAutosave(content: string) {
     saveNow,
     checkCrashRecovery,
     recoverFromCrash,
-    isSaving: isSavingRef.current,
   };
 }
 
