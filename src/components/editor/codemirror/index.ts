@@ -1,0 +1,132 @@
+/**
+ * CodeMirror Editor Module
+ *
+ * Public API for the CodeMirror-based WYSIWYG markdown editor.
+ */
+
+// Main components
+export { CodeMirrorEditor, type CodeMirrorEditorProps, type CodeMirrorEditorRef } from "./CodeMirrorEditor";
+export { CodeMirrorToolbar } from "./CodeMirrorToolbar";
+
+// Store adapter
+export { createStoreAdapter, useStoreAdapter, getMarkdownFromStore, setMarkdownToStore } from "./storeAdapter";
+
+// Extensions
+export { createWysiwygExtensions } from "./extensions";
+export {
+  hiddenRangesField,
+  getHiddenRanges,
+  type HiddenRange,
+  type HiddenRangeKind,
+} from "./extensions/hiddenRanges";
+export { hiddenSyntaxField } from "./extensions/hiddenSyntax";
+export { selectionSnapper } from "./extensions/selectionSnapper";
+export { styleField, codeHighlightStyle } from "./extensions/styleDecorations";
+export { formattingInputHandler } from "./extensions/inputHandler";
+export { formattingEscapeKeymap, defaultKeymapWithHistory } from "./extensions/keymap";
+export { theme } from "./extensions/theme";
+export { HighlightExtension } from "./extensions/lezerExtensions";
+
+// Handlers
+export {
+  toggleBoldOrEscape,
+  toggleItalicOrEscape,
+  toggleCodeOrEscape,
+  toggleStrikethroughOrEscape,
+  toggleHighlightOrEscape,
+  getFormattingContext,
+  escapeFormatting,
+} from "./handlers/formattingHandlers";
+export {
+  setHeadingLevel,
+  setHeading1,
+  setHeading2,
+  setHeading3,
+  setHeading4,
+  setHeading5,
+  setHeading6,
+  handleBackspaceAtHeadingStart,
+} from "./handlers/headingHandlers";
+export {
+  handleEnterInList,
+  handleBackspaceInList,
+  handleTabInList,
+  handleShiftTabInList,
+  getListInfo,
+} from "./handlers/listHandlers";
+export {
+  handleEnterInBlockquote,
+  handleBackspaceInBlockquote,
+  getBlockquoteInfo,
+} from "./handlers/blockquoteHandlers";
+export {
+  insertTable,
+  isCursorInTable,
+  handleTabInTable,
+  handleShiftTabInTable,
+  handleEnterInTable,
+  handleArrowUpInTable,
+  handleArrowDownInTable,
+  handleEscapeInTable,
+  addTableRow,
+  removeTableRow,
+  addTableColumn,
+  removeTableColumn,
+} from "./handlers/tableHandlers";
+export {
+  handleLinkCommand,
+  getLinkContext,
+  openLinkEditor,
+  closeLinkEditor,
+  applyLink,
+  removeLink,
+  subscribeLinkEditor,
+  openLinkContextMenu,
+  closeLinkContextMenu,
+  handleContextMenuEditLink,
+  handleContextMenuRemoveLink,
+  handleContextMenuCopyLink,
+  handleContextMenuOpenLink,
+  subscribeLinkContextMenu,
+} from "./handlers/linkHandlers";
+
+// Parsers
+export {
+  parseTableFromAST,
+  getCurrentTableInfo,
+  generateTableMarkdown,
+  getAllTableCells,
+  extractCellPositions,
+  parseAlignments,
+  type TableInfo,
+  type TableCellInfo,
+} from "./parsers/tableParser";
+
+// Utilities
+export {
+  WidgetEventManager,
+  createManagedHandler,
+  readAnchorFromDOM,
+  captureFocus,
+  restoreFocus,
+  type ManagedWidgetConfig,
+  type ManagedEventContext,
+  type FocusState,
+} from "./utils/managedWidget";
+export {
+  findFormattingByAST,
+  findAllFormattingOfTypeInRange,
+  findContainingFormattingOfType,
+  isEntireSelectionFormatted,
+  stripMarkersOfType,
+  findLinkByRegex,
+  collectCodeBlockExtents,
+  isInCodeBlock,
+  collectTableExtents,
+  isInTable,
+  HEADING_PREFIX_RE,
+  FORMATTING_NODE_TYPES,
+  ZWSP,
+  type FormattingContext,
+  type LinkContext,
+} from "./utils/sharedHelpers";
