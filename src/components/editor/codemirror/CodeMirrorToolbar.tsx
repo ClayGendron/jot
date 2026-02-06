@@ -172,26 +172,33 @@ export function CodeMirrorToolbar({ view }: CodeMirrorToolbarProps) {
     }
   }, [view]);
 
-  // Lists (placeholder - to be wired to list handlers)
+  // Lists - placeholder handlers (Phase 2 of toolbar implementation)
+  // These buttons are present but do not modify the document yet.
+  // Implementation requires: toggle list at cursor position, convert paragraph to list item
   const toggleBulletList = useCallback(() => {
-    // TODO: Wire to listHandlers when toolbar list toggle is implemented
+    // TODO(Phase 2): Implement toggleBulletList in listHandlers.ts
+    // Should toggle bullet list marker on current line(s)
   }, []);
 
   const toggleOrderedList = useCallback(() => {
-    // TODO: Wire to listHandlers when toolbar list toggle is implemented
+    // TODO(Phase 2): Implement toggleOrderedList in listHandlers.ts
+    // Should toggle ordered list marker on current line(s)
   }, []);
 
   const toggleTaskList = useCallback(() => {
-    // TODO: Wire to listHandlers when toolbar task list toggle is implemented
+    // TODO(Phase 2): Implement toggleTaskList in listHandlers.ts
+    // Should toggle task list checkbox on current line(s)
   }, []);
 
-  // Blocks (placeholder - to be wired to block handlers)
+  // Blocks - placeholder handlers (Phase 2 of toolbar implementation)
   const toggleBlockquote = useCallback(() => {
-    // TODO: Wire to blockquoteHandlers when toolbar blockquote toggle is implemented
+    // TODO(Phase 2): Implement toggleBlockquote in blockquoteHandlers.ts
+    // Should toggle blockquote prefix on current line(s)
   }, []);
 
   const toggleCodeBlock = useCallback(() => {
-    // TODO: Wire to codeBlockHandlers when toolbar code block toggle is implemented
+    // TODO(Phase 2): Implement toggleCodeBlock in codeBlockHandlers.ts
+    // Should wrap selection in code fence or insert empty code block
   }, []);
 
   const handleInsertHorizontalRule = useCallback(() => {

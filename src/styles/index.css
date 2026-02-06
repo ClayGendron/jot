@@ -12,3 +12,6 @@
 
 /* TipTap/ProseMirror editor styles */
 @import "./editor.css";
+
+/* CodeMirror WYSIWYG editor styles */
+@import "./codemirror.css";

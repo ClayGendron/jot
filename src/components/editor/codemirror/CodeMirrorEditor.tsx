@@ -15,11 +15,14 @@ import {
 } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
+import { openSearchPanel, closeSearchPanel } from "@codemirror/search";
 import { useEditorStore } from "@/stores/editorStore";
 import { cn } from "@/lib/utils";
 import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { createWysiwygExtensions } from "./extensions";
 import { getMarkdownFromStore, setMarkdownToStore } from "./storeAdapter";
+import { CodeMirrorToolbar } from "./CodeMirrorToolbar";
+import { SourceEditor } from "../SourceEditor";
 
 // Handlers from modular structure
 import {
@@ -61,6 +64,7 @@ export interface CodeMirrorEditorProps {
 
 /**
  * Editor ref handle for external access
+ * Provides compatibility layer for TipTap-style commands
  */
 export interface CodeMirrorEditorRef {
   view: EditorView | null;
@@ -80,6 +84,9 @@ export interface CodeMirrorEditorRef {
   // Content access
   getMarkdown: () => string;
   setMarkdown: (content: string) => void;
+  // Search (compatibility with TipTap)
+  openSearch: () => void;
+  closeSearch: () => void;
 }
 
 /**
@@ -101,6 +108,7 @@ export const CodeMirrorEditor = forwardRef<
   ref
 ) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const [isReady, setIsReady] = useState(false);
 
@@ -109,6 +117,10 @@ export const CodeMirrorEditor = forwardRef<
   const sourceMode = useEditorStore((state) => state.sourceMode);
   const fontFamily = useEditorStore((state) => state.fontFamily);
   const filePath = useEditorStore((state) => state.filePath);
+
+  // Source mode state
+  const [markdownSource, setMarkdownSource] = useState("");
+  const wasInSourceMode = useRef(false);
 
   // Create command wrappers
   const createCommand = useCallback(
@@ -150,13 +162,23 @@ export const CodeMirrorEditor = forwardRef<
           });
         }
       },
+      openSearch: () => {
+        if (viewRef.current) {
+          openSearchPanel(viewRef.current);
+        }
+      },
+      closeSearch: () => {
+        if (viewRef.current) {
+          closeSearchPanel(viewRef.current);
+        }
+      },
     }),
     [createCommand]
   );
 
   // Initialize CodeMirror
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!editorContainerRef.current) return;
 
     // Get initial markdown content
     const initialMarkdown = getMarkdownFromStore() || "";
@@ -190,7 +212,7 @@ export const CodeMirrorEditor = forwardRef<
     // Create editor view
     const view = new EditorView({
       state,
-      parent: containerRef.current,
+      parent: editorContainerRef.current,
     });
 
     viewRef.current = view;
@@ -228,6 +250,38 @@ export const CodeMirrorEditor = forwardRef<
     }
   }, [filePath, isReady]);
 
+  // Handle mode switching (WYSIWYG ↔ Source)
+  useEffect(() => {
+    if (!viewRef.current) return;
+
+    if (sourceMode && !wasInSourceMode.current) {
+      // Switching TO source mode: get current markdown
+      const markdown = viewRef.current.state.doc.toString();
+      setMarkdownSource(markdown);
+      wasInSourceMode.current = true;
+    } else if (!sourceMode && wasInSourceMode.current) {
+      // Switching FROM source mode: update the editor
+      viewRef.current.dispatch({
+        changes: {
+          from: 0,
+          to: viewRef.current.state.doc.length,
+          insert: markdownSource,
+        },
+      });
+      // Sync to store
+      setMarkdownToStore(markdownSource);
+      if (onUpdate) {
+        onUpdate(markdownToHtml(markdownSource));
+      }
+      wasInSourceMode.current = false;
+    }
+  }, [sourceMode, markdownSource, onUpdate]);
+
+  // Handle source editor changes
+  const handleSourceChange = useCallback((newMarkdown: string) => {
+    setMarkdownSource(newMarkdown);
+  }, []);
+
   // Set up internal link callbacks
   useEffect(() => {
     setInternalLinkCallbacks({
@@ -243,7 +297,7 @@ export const CodeMirrorEditor = forwardRef<
 
   // Handle link clicks
   useEffect(() => {
-    if (!containerRef.current || !viewRef.current) return;
+    if (!editorContainerRef.current || !viewRef.current) return;
 
     const handleClick = (event: MouseEvent) => {
       const view = viewRef.current;
@@ -265,7 +319,7 @@ export const CodeMirrorEditor = forwardRef<
       handleLinkClick(linkCtx, event);
     };
 
-    const container = containerRef.current;
+    const container = editorContainerRef.current;
     container.addEventListener("click", handleClick);
 
     return () => {
@@ -273,20 +327,37 @@ export const CodeMirrorEditor = forwardRef<
     };
   }, [isReady]);
 
-  // TODO: Add context menu handling for links
-
   return (
     <div
       ref={containerRef}
       className={cn(
-        "flex flex-col h-screen bg-[var(--color-paper)]",
+        "flex flex-col h-full bg-[var(--color-paper)]",
         focusMode && "focus-mode",
         sourceMode && "source-mode-active",
         `font-${fontFamily}`,
         "cm-editor-container"
       )}
       data-testid="codemirror-editor-container"
-    />
+    >
+      {/* Toolbar */}
+      <CodeMirrorToolbar view={viewRef.current} />
+
+      {/* Editor Content */}
+      {sourceMode ? (
+        <SourceEditor
+          value={markdownSource}
+          onChange={handleSourceChange}
+          placeholder={placeholder}
+          autofocus
+        />
+      ) : (
+        <div
+          ref={editorContainerRef}
+          className="flex-1 overflow-y-auto"
+          data-testid="codemirror-editor"
+        />
+      )}
+    </div>
   );
 });
 

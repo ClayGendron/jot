@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { cn } from "@/lib/utils";
-import { Editor, type EditorRef } from "@/components/editor/Editor";
+import { CodeMirrorEditor, type CodeMirrorEditorRef } from "@/components/editor/codemirror";
 import {
   FileTree,
   DocumentOutline,
   BacklinksPanel,
   SortDropdown,
 } from "@/components/sidebar";
-import { FindReplaceBar, GlobalSearchPanel } from "@/components/search";
+import { GlobalSearchPanel } from "@/components/search";
 import {
   SemanticSearchPanel,
   RelatedDocumentsPanel,
@@ -152,7 +152,7 @@ function App() {
   const [editorContent, setEditorContent] = useState("");
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("files");
   const mainContentRef = useRef<HTMLElement | null>(null);
-  const editorRef = useRef<EditorRef | null>(null);
+  const editorRef = useRef<CodeMirrorEditorRef | null>(null);
 
   // Search store - individual selectors for React 19 compatibility
   const documentSearchOpen = useSearchStore((s) => s.documentSearchOpen);
@@ -922,11 +922,12 @@ function App() {
         return;
       }
 
-      // Cmd/Ctrl + F: Find in document
+      // Cmd/Ctrl + F: Find in document (CodeMirror built-in search)
       if (isMod && e.key === "f" && !e.shiftKey) {
         e.preventDefault();
         if (filePath) {
           openDocumentSearch();
+          editorRef.current?.openSearch();
         }
       }
 
@@ -954,7 +955,7 @@ function App() {
         } else if (documentSearchOpen) {
           e.preventDefault();
           closeDocumentSearch();
-          editorRef.current?.editor?.commands.clearSearch();
+          editorRef.current?.closeSearch();
         } else if (globalSearchOpen) {
           e.preventDefault();
           closeGlobalSearch();
@@ -1561,17 +1562,8 @@ function App() {
             "editor-wrapper",
             zenMode && "flex-1 flex justify-center pt-8"
           )} ref={editorContentRef}>
-            {/* Find/Replace Bar */}
-            {documentSearchOpen && (
-              <FindReplaceBar
-                editor={editorRef.current?.editor ?? null}
-                onClose={() => {
-                  closeDocumentSearch();
-                  editorRef.current?.editor?.commands.clearSearch();
-                }}
-              />
-            )}
-            <Editor
+            {/* CodeMirror Editor - has built-in search panel (Cmd/Ctrl+F) */}
+            <CodeMirrorEditor
               ref={editorRef}
               initialContent={editorContent}
               onUpdate={handleEditorUpdate}

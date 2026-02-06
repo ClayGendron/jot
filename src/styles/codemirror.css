@@ -1,0 +1,336 @@
+/*
+ * Jot CodeMirror Editor Styles
+ *
+ * CSS styles for the CodeMirror-based WYSIWYG editor.
+ * These styles handle complex selectors that cannot be defined
+ * in the CodeMirror JS theme configuration.
+ */
+
+/* ==========================================
+   Font Family Classes
+   ========================================== */
+
+.cm-editor-container.font-serif .cm-editor,
+.cm-editor-container.font-serif .cm-editor .cm-content {
+  font-family: var(--font-serif);
+}
+
+.cm-editor-container.font-sans .cm-editor,
+.cm-editor-container.font-sans .cm-editor .cm-content {
+  font-family: var(--font-sans);
+}
+
+.cm-editor-container.font-mono .cm-editor,
+.cm-editor-container.font-mono .cm-editor .cm-content {
+  font-family: var(--font-mono);
+}
+
+/* ==========================================
+   Focus Mode - Editor-specific styles
+   Dim paragraphs, highlight current line
+   ========================================== */
+
+.focus-mode .cm-editor .cm-line {
+  opacity: 0.3;
+  transition: opacity var(--transition-smooth);
+}
+
+/* Lines with cursor get full opacity */
+.focus-mode .cm-editor .cm-line.cm-activeLine {
+  opacity: 1;
+}
+
+/* Also keep headings visible */
+.focus-mode .cm-editor .cm-line:has(.cm-h1),
+.focus-mode .cm-editor .cm-line:has(.cm-h2),
+.focus-mode .cm-editor .cm-line:has(.cm-h3),
+.focus-mode .cm-editor .cm-line:has(.cm-h4),
+.focus-mode .cm-editor .cm-line:has(.cm-h5),
+.focus-mode .cm-editor .cm-line:has(.cm-h6) {
+  opacity: 0.6;
+}
+
+/* Code blocks stay visible */
+.focus-mode .cm-editor .cm-line.cm-code-block-line {
+  opacity: 0.6;
+}
+
+/* ==========================================
+   Zen Mode - Centered, narrower content
+   ========================================== */
+
+.zen-mode .cm-editor .cm-content {
+  max-width: 720px;
+  width: 100%;
+  padding: 3rem var(--spacing-page);
+}
+
+/* ==========================================
+   Source Mode - Raw markdown editing
+   ========================================== */
+
+.source-mode-active .cm-editor .cm-content {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+/* ==========================================
+   Active Line Highlight
+   ========================================== */
+
+.cm-editor .cm-activeLine {
+  background-color: color-mix(in srgb, var(--color-paper-warm) 50%, transparent);
+}
+
+/* ==========================================
+   Gutter Styles
+   ========================================== */
+
+.cm-editor .cm-gutters {
+  background-color: var(--color-paper);
+  border-right: 1px solid var(--color-border);
+  color: var(--color-ink-muted);
+}
+
+.cm-editor .cm-lineNumbers .cm-gutterElement {
+  padding: 0 8px;
+  min-width: 32px;
+  text-align: right;
+}
+
+.cm-editor .cm-activeLineGutter {
+  background-color: var(--color-paper-warm);
+  color: var(--color-ink);
+}
+
+/* ==========================================
+   Table Cell Navigation
+   CM-native table rendering styles
+   ========================================== */
+
+/* Table row decorations */
+.cm-editor .cm-table-row {
+  display: block;
+}
+
+.cm-editor .cm-table-header-row {
+  font-weight: 600;
+  background-color: var(--color-paper-warm);
+}
+
+/* Table cell styling */
+.cm-editor .cm-table-cell {
+  display: inline;
+  padding: 0;
+}
+
+/* Pipe dividers rendered as table borders */
+.cm-table-pipe-divider {
+  display: inline-block;
+  width: 1px;
+  background-color: var(--color-border);
+  margin: 0 8px;
+  vertical-align: middle;
+  height: 1.2em;
+  opacity: 0.6;
+}
+
+/* ==========================================
+   Checkbox Styling
+   ========================================== */
+
+.cm-editor .cm-task-checkbox input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.1em;
+  height: 1.1em;
+  border: 2px solid var(--color-border-strong);
+  border-radius: 3px;
+  background-color: var(--color-paper);
+  cursor: pointer;
+  vertical-align: middle;
+  position: relative;
+  transition: all var(--transition-fast);
+}
+
+.cm-editor .cm-task-checkbox input[type="checkbox"]:hover {
+  border-color: var(--color-accent);
+}
+
+.cm-editor .cm-task-checkbox input[type="checkbox"]:checked {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.cm-editor .cm-task-checkbox input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0;
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+/* ==========================================
+   Link Context Menu
+   ========================================== */
+
+.cm-link-context-menu {
+  position: fixed;
+  background: var(--color-paper);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: var(--shadow-md);
+  padding: 4px 0;
+  z-index: 1000;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  min-width: 160px;
+}
+
+.cm-link-context-menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--color-ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color var(--transition-fast);
+}
+
+.cm-link-context-menu-item:hover {
+  background-color: var(--color-paper-warm);
+}
+
+.cm-link-context-menu-item.destructive {
+  color: var(--destructive);
+}
+
+.cm-link-context-menu-divider {
+  height: 1px;
+  background-color: var(--color-border);
+  margin: 4px 0;
+}
+
+/* ==========================================
+   Tooltip Styles
+   ========================================== */
+
+.cm-tooltip {
+  background-color: var(--color-paper);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.cm-tooltip-autocomplete {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.cm-tooltip-autocomplete > ul {
+  list-style: none;
+  margin: 0;
+  padding: 4px;
+}
+
+.cm-tooltip-autocomplete > ul > li {
+  padding: 6px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background-color: var(--color-accent-soft);
+  color: var(--color-ink);
+}
+
+/* ==========================================
+   Print Styles
+   ========================================== */
+
+@media print {
+  .cm-editor-container {
+    background: white !important;
+  }
+
+  .cm-editor .cm-content {
+    max-width: 100%;
+    padding: 0;
+  }
+
+  .cm-editor .cm-gutters {
+    display: none;
+  }
+
+  .cm-editor .cm-cursor {
+    display: none;
+  }
+
+  .focus-mode .cm-editor .cm-line {
+    opacity: 1;
+  }
+}
+
+/* ==========================================
+   Animations
+   ========================================== */
+
+@keyframes cm-cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cm-editor .cm-cursor {
+  animation: cm-cursor-blink 1.2s ease-in-out infinite;
+}
+
+/* ==========================================
+   Internal Link Suggestions Popup
+   ========================================== */
+
+.cm-internal-link-suggestions {
+  position: fixed;
+  background: var(--color-paper);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+  z-index: 1000;
+  max-height: 240px;
+  overflow-y: auto;
+  min-width: 200px;
+  max-width: 400px;
+}
+
+.cm-internal-link-suggestion {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background-color var(--transition-fast);
+}
+
+.cm-internal-link-suggestion:hover,
+.cm-internal-link-suggestion.selected {
+  background-color: var(--color-paper-warm);
+}
+
+.cm-internal-link-suggestion-name {
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.cm-internal-link-suggestion-path {
+  font-size: 0.85em;
+  color: var(--color-ink-muted);
+}
