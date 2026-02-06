@@ -11,6 +11,7 @@
 
 import type { EditorView } from "@codemirror/view";
 import type { EditorState } from "@codemirror/state";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   findLinkByRegex,
   isInternalLink,
@@ -18,6 +19,21 @@ import {
   type LinkContext,
   type InternalLinkTarget,
 } from "../utils/sharedHelpers";
+
+/**
+ * Safely open a URL in the system default browser.
+ * Only allows http/https schemes to prevent abuse via file:// or javascript: URLs.
+ */
+function safeOpenUrl(url: string): void {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      openUrl(url);
+    }
+  } catch {
+    // Invalid URL — silently ignore
+  }
+}
 
 // ===========================================
 // LINK CONTEXT DETECTION
@@ -292,7 +308,7 @@ export function handleContextMenuOpenLink() {
   if (!view || !linkContext) return;
 
   if (linkContext.url) {
-    window.open(linkContext.url, "_blank", "noopener,noreferrer");
+    safeOpenUrl(linkContext.url);
   }
 
   closeLinkContextMenu();
@@ -403,10 +419,10 @@ export function handleLinkClick(
     return true;
   }
 
-  // External link: open in new tab
+  // External link: open in default browser
   if (url) {
     event.preventDefault();
-    window.open(url, "_blank", "noopener,noreferrer");
+    safeOpenUrl(url);
     return true;
   }
 
@@ -442,7 +458,7 @@ export function handleContextMenuOpenInternalLink() {
     }
   } else if (url) {
     // External link
-    window.open(url, "_blank", "noopener,noreferrer");
+    safeOpenUrl(url);
   }
 
   closeLinkContextMenu();

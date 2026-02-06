@@ -211,7 +211,7 @@ async function collectMarkdownFiles(folderPath: string): Promise<string[]> {
   // In a full implementation, we'd add a dedicated Tauri command
 
   try {
-    const entries = await readDirectory(folderPath);
+    const entries = await readDirectory(folderPath, folderPath);
 
     const collectFromEntries = (entries: FileEntry[]) => {
       for (const entry of entries) {

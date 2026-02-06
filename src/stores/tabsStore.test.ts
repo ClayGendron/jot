@@ -4,9 +4,12 @@ import {
   selectActiveTab,
   selectHasUnsavedChanges,
 } from "./tabsStore";
+import { useEditorStore } from "./editorStore";
 
 describe("tabsStore", () => {
   beforeEach(() => {
+    // Reset editor store case sensitivity to default (case-insensitive)
+    useEditorStore.setState({ isCaseSensitiveFs: false });
     // Reset store to initial state before each test
     useTabsStore.setState({
       tabs: [],
@@ -462,6 +465,53 @@ describe("tabsStore", () => {
 
       // clearAllTabs removes everything
       expect(useTabsStore.getState().tabs).toHaveLength(0);
+    });
+  });
+
+  describe("Case-insensitive path matching", () => {
+    it("openTab deduplicates case-insensitively when isCaseSensitiveFs is false", () => {
+      useEditorStore.setState({ isCaseSensitiveFs: false });
+      const { openTab } = useTabsStore.getState();
+
+      const id1 = openTab("/Users/foo/Notes.md", "content");
+      const id2 = openTab("/Users/foo/notes.md", "same file");
+
+      expect(id2).toBe(id1);
+      expect(useTabsStore.getState().tabs).toHaveLength(1);
+    });
+
+    it("openTab allows different-case paths when isCaseSensitiveFs is true", () => {
+      useEditorStore.setState({ isCaseSensitiveFs: true });
+      const { openTab } = useTabsStore.getState();
+
+      openTab("/Users/foo/Notes.md", "content1");
+      openTab("/Users/foo/notes.md", "content2");
+
+      expect(useTabsStore.getState().tabs).toHaveLength(2);
+    });
+
+    it("findTabByPath matches case-insensitively when isCaseSensitiveFs is false", () => {
+      useEditorStore.setState({ isCaseSensitiveFs: false });
+      const { openTab, findTabByPath } = useTabsStore.getState();
+
+      const tabId = openTab("/Users/foo/MyDoc.md", "content");
+      const found = findTabByPath("/Users/foo/mydoc.md");
+
+      expect(found).toBeDefined();
+      expect(found?.id).toBe(tabId);
+    });
+
+    it("renameTab matches case-insensitively when isCaseSensitiveFs is false", () => {
+      useEditorStore.setState({ isCaseSensitiveFs: false });
+      const { openTab, renameTab } = useTabsStore.getState();
+
+      openTab("/Users/foo/OldName.md", "content");
+
+      renameTab("/Users/foo/oldname.md", "/Users/foo/NewName.md");
+
+      const state = useTabsStore.getState();
+      expect(state.tabs[0].filePath).toBe("/Users/foo/NewName.md");
+      expect(state.tabs[0].displayName).toBe("NewName");
     });
   });
 

@@ -14,18 +14,18 @@ export interface FileEntry {
 }
 
 /**
- * Read directory contents (markdown files and folders only)
+ * Read directory contents (markdown files and folders only) with workspace validation
  */
-export async function readDirectory(path: string): Promise<FileEntry[]> {
-  return invoke<FileEntry[]>("jot_read_directory", { path });
+export async function readDirectory(path: string, workspacePath: string): Promise<FileEntry[]> {
+  return invoke<FileEntry[]>("jot_read_directory", { path, workspacePath });
 }
 
 /**
- * Read a single folder's children (one level, no recursion)
+ * Read a single folder's children (one level, no recursion) with workspace validation
  * Used for lazy loading folders beyond initial depth limit
  */
-export async function readFolderChildren(path: string): Promise<FileEntry[]> {
-  return invoke<FileEntry[]>("jot_read_folder_children", { path });
+export async function readFolderChildren(path: string, workspacePath: string): Promise<FileEntry[]> {
+  return invoke<FileEntry[]>("jot_read_folder_children", { path, workspacePath });
 }
 
 /**
@@ -84,17 +84,17 @@ export async function deletePath(path: string, workspacePath: string): Promise<D
 }
 
 /**
- * Get file info
+ * Get file info with workspace validation
  */
-export async function getFileInfo(path: string): Promise<FileEntry> {
-  return invoke<FileEntry>("jot_get_file_info", { path });
+export async function getFileInfo(path: string, workspacePath: string): Promise<FileEntry> {
+  return invoke<FileEntry>("jot_get_file_info", { path, workspacePath });
 }
 
 /**
- * Check if path exists
+ * Check if path exists with workspace validation
  */
-export async function pathExists(path: string): Promise<boolean> {
-  return invoke<boolean>("jot_path_exists", { path });
+export async function pathExists(path: string, workspacePath: string): Promise<boolean> {
+  return invoke<boolean>("jot_path_exists", { path, workspacePath });
 }
 
 /**

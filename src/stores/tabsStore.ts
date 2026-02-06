@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { storeCrashRecoveryForFile } from "@/lib/crashRecovery";
+import { normalizeForComparison } from "@/lib/path/pathUtils";
+import { useEditorStore } from "@/stores/editorStore";
 
 /**
  * Tab state management using Zustand
@@ -73,6 +75,11 @@ export interface TabsActions {
   renameTab: (oldPath: string, newPath: string) => void;
 }
 
+function pathsMatch(a: string, b: string): boolean {
+  const caseSensitive = useEditorStore.getState().isCaseSensitiveFs;
+  return normalizeForComparison(a, caseSensitive) === normalizeForComparison(b, caseSensitive);
+}
+
 function generateId(): string {
   return crypto.randomUUID();
 }
@@ -106,8 +113,8 @@ export const useTabsStore = create<TabsState & TabsActions>((set, get) => ({
   openTab: (filePath, content) => {
     const state = get();
 
-    // Check if tab already exists for this file
-    const existingTab = state.tabs.find((t) => t.filePath === filePath);
+    // Check if tab already exists for this file (case-insensitive on macOS/Windows)
+    const existingTab = state.tabs.find((t) => pathsMatch(t.filePath, filePath));
     if (existingTab) {
       set({ activeTabId: existingTab.id });
       return existingTab.id;
@@ -269,7 +276,7 @@ export const useTabsStore = create<TabsState & TabsActions>((set, get) => ({
   },
 
   findTabByPath: (filePath) => {
-    return get().tabs.find((t) => t.filePath === filePath);
+    return get().tabs.find((t) => pathsMatch(t.filePath, filePath));
   },
 
   getActiveTab: () => {
@@ -284,7 +291,7 @@ export const useTabsStore = create<TabsState & TabsActions>((set, get) => ({
   renameTab: (oldPath, newPath) => {
     set((state) => ({
       tabs: state.tabs.map((t) =>
-        t.filePath === oldPath
+        pathsMatch(t.filePath, oldPath)
           ? { ...t, filePath: newPath, displayName: getDisplayName(newPath) }
           : t
       ),

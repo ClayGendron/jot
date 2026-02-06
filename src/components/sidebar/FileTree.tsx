@@ -266,10 +266,10 @@ export function FileTree({
         entry.children.length === 0 &&
         !loadingPaths.has(path);
 
-      if (needsLoad) {
+      if (needsLoad && workspacePath) {
         setPathLoading(path, true);
         try {
-          const children = await readFolderChildren(path);
+          const children = await readFolderChildren(path, workspacePath);
           loadFolderChildren(path, children);
         } catch (error) {
           console.error("Failed to load folder children:", error);
@@ -279,7 +279,7 @@ export function FileTree({
 
       toggleExpanded(path);
     },
-    [expandedPaths, loadingPaths, toggleExpanded, loadFolderChildren, setPathLoading]
+    [expandedPaths, loadingPaths, toggleExpanded, loadFolderChildren, setPathLoading, workspacePath]
   );
 
   const handleContextMenu = useCallback(

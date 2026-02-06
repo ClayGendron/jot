@@ -482,7 +482,7 @@ function App() {
       setError(null);
 
       try {
-        const entries = await readDirectory(path);
+        const entries = await readDirectory(path, path);
         storeLoadWorkspace(path, entries);
 
         // Add to recent workspaces

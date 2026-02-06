@@ -169,25 +169,39 @@ pub struct FileEntry {
 /// Read directory contents recursively, filtering for markdown files and folders
 /// Uses spawn_blocking to avoid blocking the main thread during IO
 #[tauri::command]
-async fn jot_read_directory(path: String) -> Result<Vec<FileEntry>, String> {
+async fn jot_read_directory(path: String, workspace_path: String) -> Result<Vec<FileEntry>, String> {
+    let ws = workspace_path.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let root = Path::new(&path);
+        validate_in_workspace(&path, &ws, true)?;
 
-        if !root.exists() {
-            return Err(format!("Directory does not exist: {}", path));
-        }
+        let root = Path::new(&path);
 
         if !root.is_dir() {
             return Err(format!("Path is not a directory: {}", path));
         }
 
-        read_dir_recursive(root, 0, 3) // Max depth of 3 for initial load
+        let mut visited = std::collections::HashSet::new();
+        read_dir_recursive(root, 0, 3, &mut visited) // Max depth of 3 for initial load
     })
     .await
     .map_err(|e| format!("Task join failed: {}", e))?
 }
 
-fn read_dir_recursive(dir: &Path, depth: usize, max_depth: usize) -> Result<Vec<FileEntry>, String> {
+fn read_dir_recursive(
+    dir: &Path,
+    depth: usize,
+    max_depth: usize,
+    visited: &mut std::collections::HashSet<PathBuf>,
+) -> Result<Vec<FileEntry>, String> {
+    // Resolve symlinks and detect cycles
+    let canonical = match dir.canonicalize() {
+        Ok(c) => c,
+        Err(_) => return Ok(Vec::new()), // Skip unreadable directories
+    };
+    if !visited.insert(canonical) {
+        return Ok(Vec::new()); // Already visited — cycle detected
+    }
+
     let mut entries: Vec<FileEntry> = Vec::new();
 
     let read_dir = fs::read_dir(dir).map_err(|e| e.to_string())?;
@@ -218,7 +232,7 @@ fn read_dir_recursive(dir: &Path, depth: usize, max_depth: usize) -> Result<Vec<
             .map(|d| d.as_secs() as i64);
 
         let children = if is_dir && depth < max_depth {
-            Some(read_dir_recursive(&path, depth + 1, max_depth).unwrap_or_default())
+            Some(read_dir_recursive(&path, depth + 1, max_depth, visited).unwrap_or_default())
         } else if is_dir {
             Some(Vec::new()) // Placeholder for lazy loading
         } else {
@@ -251,8 +265,10 @@ fn read_dir_recursive(dir: &Path, depth: usize, max_depth: usize) -> Result<Vec<
 /// Used for lazy loading folders beyond initial depth limit
 /// Uses spawn_blocking to avoid blocking the main thread during IO
 #[tauri::command]
-async fn jot_read_folder_children(path: String) -> Result<Vec<FileEntry>, String> {
+async fn jot_read_folder_children(path: String, workspace_path: String) -> Result<Vec<FileEntry>, String> {
+    let ws = workspace_path.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        validate_in_workspace(&path, &ws, true)?;
         read_folder_children_sync(&path)
     })
     .await
@@ -414,9 +430,10 @@ fn jot_delete_path(path: &str, workspace_path: &str) -> Result<DeleteResult, Str
     }
 }
 
-/// Get file metadata
+/// Get file metadata with workspace validation
 #[tauri::command]
-fn jot_get_file_info(path: &str) -> Result<FileEntry, String> {
+fn jot_get_file_info(path: &str, workspace_path: &str) -> Result<FileEntry, String> {
+    validate_in_workspace(path, workspace_path, true)?;
     let path_buf = PathBuf::from(path);
     let metadata = fs::metadata(&path_buf).map_err(|e| e.to_string())?;
 
@@ -444,10 +461,11 @@ fn jot_get_file_info(path: &str) -> Result<FileEntry, String> {
     })
 }
 
-/// Check if a path exists
+/// Check if a path exists with workspace validation
 #[tauri::command]
-fn jot_path_exists(path: &str) -> bool {
-    Path::new(path).exists()
+fn jot_path_exists(path: &str, workspace_path: &str) -> Result<bool, String> {
+    validate_in_workspace(path, workspace_path, false)?;
+    Ok(Path::new(path).exists())
 }
 
 /// Normalize a path and resolve .. and . components
@@ -1664,5 +1682,69 @@ mod tests {
 
         let read_back = fs::read_to_string(&nonexistent_parent).unwrap();
         assert_eq!(read_back, "content");
+    }
+
+    #[test]
+    fn read_dir_recursive_returns_entries() {
+        let workspace = TempDir::new().unwrap();
+        let sub = workspace.path().join("sub");
+        fs::create_dir(&sub).unwrap();
+        fs::write(sub.join("note.md"), "# Test").unwrap();
+
+        let mut visited = std::collections::HashSet::new();
+        let result = read_dir_recursive(workspace.path(), 0, 3, &mut visited);
+        assert!(result.is_ok());
+
+        let entries = result.unwrap();
+        assert_eq!(entries.len(), 1); // "sub" folder
+        assert!(entries[0].is_dir);
+        assert!(entries[0].children.is_some());
+
+        let children = entries[0].children.as_ref().unwrap();
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0].name, "note.md");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn read_dir_recursive_handles_symlink_cycle() {
+        use std::os::unix::fs::symlink;
+
+        let workspace = TempDir::new().unwrap();
+        let sub = workspace.path().join("sub");
+        fs::create_dir(&sub).unwrap();
+        fs::write(sub.join("note.md"), "content").unwrap();
+
+        // Create symlink cycle: sub/loop -> workspace root
+        symlink(workspace.path(), sub.join("loop")).unwrap();
+
+        let mut visited = std::collections::HashSet::new();
+        let result = read_dir_recursive(workspace.path(), 0, 10, &mut visited);
+        assert!(result.is_ok(), "Should handle symlink cycle without infinite recursion");
+
+        // Should still find the note.md file
+        let entries = result.unwrap();
+        assert!(!entries.is_empty());
+    }
+
+    #[test]
+    fn read_dir_recursive_respects_max_depth() {
+        let workspace = TempDir::new().unwrap();
+        let deep = workspace.path().join("a").join("b").join("c");
+        fs::create_dir_all(&deep).unwrap();
+        fs::write(deep.join("deep.md"), "deep").unwrap();
+
+        let mut visited = std::collections::HashSet::new();
+        let result = read_dir_recursive(workspace.path(), 0, 1, &mut visited);
+        assert!(result.is_ok());
+
+        // At depth 0, we see "a" folder; at depth 1, we see "b" folder with empty placeholder
+        let entries = result.unwrap();
+        assert_eq!(entries.len(), 1);
+        let a_children = entries[0].children.as_ref().unwrap();
+        assert_eq!(a_children.len(), 1);
+        // At depth 1 (max_depth), "b" should have empty children placeholder (not recursed into)
+        let b_children = a_children[0].children.as_ref().unwrap();
+        assert!(b_children.is_empty(), "Should not recurse beyond max_depth");
     }
 }
