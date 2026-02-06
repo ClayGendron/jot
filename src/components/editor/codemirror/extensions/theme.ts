@@ -17,6 +17,10 @@ export const theme = EditorView.theme({
     fontFamily: "var(--font-serif)",
     color: "var(--color-ink)",
     backgroundColor: "var(--color-paper)",
+    height: "100%",
+  },
+  ".cm-scroller": {
+    overflow: "auto",
   },
   ".cm-content": {
     maxWidth: "var(--editor-max-width, 72ch)",
@@ -24,13 +28,13 @@ export const theme = EditorView.theme({
     padding: "var(--spacing-page)",
     lineHeight: "var(--editor-line-height, 1.8)",
     minHeight: "100vh",
-    caretColor: "var(--color-accent)",
+    caretColor: "var(--color-ink)",
   },
   ".cm-focused": {
     outline: "none",
   },
   ".cm-cursor": {
-    borderLeftColor: "var(--color-accent)",
+    borderLeftColor: "var(--color-ink)",
     borderLeftWidth: "2px",
   },
   ".cm-strong": {
@@ -89,30 +93,22 @@ export const theme = EditorView.theme({
     fontWeight: "700",
     lineHeight: "1.3",
     letterSpacing: "-0.02em",
-    marginTop: "0",
-    marginBottom: "0.5em",
   },
   ".cm-h2": {
     fontSize: "1.875rem",
     fontWeight: "600",
     lineHeight: "1.3",
     letterSpacing: "-0.01em",
-    marginTop: "2em",
-    marginBottom: "0.5em",
   },
   ".cm-h3": {
     fontSize: "1.5rem",
     fontWeight: "600",
     lineHeight: "1.3",
-    marginTop: "2em",
-    marginBottom: "0.5em",
   },
   ".cm-h4": {
     fontSize: "1.25rem",
     fontWeight: "600",
     lineHeight: "1.5",
-    marginTop: "2em",
-    marginBottom: "0.5em",
   },
   ".cm-h5, .cm-h6": {
     fontSize: "1rem",
@@ -120,8 +116,6 @@ export const theme = EditorView.theme({
     lineHeight: "1.5",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
-    marginTop: "2em",
-    marginBottom: "0.5em",
   },
   ".cm-h6": {
     color: "var(--color-ink-muted)",
@@ -133,7 +127,7 @@ export const theme = EditorView.theme({
   // Widget styles for list bullets and numbers
   ".cm-list-bullet, .cm-list-number": {
     userSelect: "none",
-    fontFamily: "var(--font-sans)",
+    fontFamily: "inherit",
   },
   // Widget styles for task checkboxes
   ".cm-task-checkbox": {
@@ -235,6 +229,7 @@ export const theme = EditorView.theme({
   },
   ".cm-line": {
     padding: "0 4px",
+    lineHeight: "var(--editor-line-height, 1.8)",
   },
   // Selection styling
   "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
@@ -245,7 +240,9 @@ export const theme = EditorView.theme({
   },
   // HTML table widget styles
   ".cm-table-block": {
-    margin: "1.5em 0",
+    margin: "0",
+    paddingTop: "1.5em",
+    paddingBottom: "1.5em",
     overflowX: "auto",
     display: "block",
     width: "100%",
@@ -327,7 +324,7 @@ export const theme = EditorView.theme({
   ".cm-table-toolbar": {
     display: "flex",
     gap: "12px",
-    marginBottom: "8px",
+    paddingBottom: "8px",
     opacity: "0",
     transition: "opacity var(--transition-fast)",
   },

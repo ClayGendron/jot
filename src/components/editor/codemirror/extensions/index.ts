@@ -11,7 +11,7 @@ import { Prec } from "@codemirror/state";
 import { history } from "@codemirror/commands";
 import { syntaxHighlighting } from "@codemirror/language";
 import { search, searchKeymap, highlightSelectionMatches } from "@codemirror/search";
-import { keymap, EditorView, rectangularSelection } from "@codemirror/view";
+import { keymap, EditorView, rectangularSelection, drawSelection } from "@codemirror/view";
 
 // Extension modules
 export { hiddenRangesField, getHiddenRanges, type HiddenRange, type HiddenRangeKind } from "./hiddenRanges";
@@ -124,6 +124,8 @@ export function createWysiwygExtensions() {
     Prec.highest(formattingEscapeKeymap),
     // Default keymap with history
     defaultKeymapWithHistory,
+    // Custom cursor rendering (consistent height across wrapped lines)
+    drawSelection({ cursorBlinkRate: 1000 }),
     // Editor theme
     theme,
     // Line wrapping

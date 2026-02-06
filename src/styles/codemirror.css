@@ -280,16 +280,20 @@
 }
 
 /* ==========================================
-   Animations
+   Cursor Blink
    ========================================== */
 
-@keyframes cm-cursor-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+/* Cursor blink: use CodeMirror's built-in cursorLayer animation (set to 1s via drawSelection config).
+   We only override the timing function for a smooth fade rather than the default hard step toggle. */
+.cm-editor.cm-focused > .cm-scroller > .cm-cursorLayer {
+  animation-timing-function: ease-in-out !important;
 }
 
-.cm-editor .cm-cursor {
-  animation: cm-cursor-blink 1.2s ease-in-out infinite;
+/* Accessibility: disable blinking for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .cm-editor.cm-focused > .cm-scroller > .cm-cursorLayer {
+    animation: none !important;
+  }
 }
 
 /* ==========================================
