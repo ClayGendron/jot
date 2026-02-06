@@ -204,35 +204,3 @@ export const useEditorStore = create<EditorState>((set) => ({
   setIsCaseSensitiveFs: (isCaseSensitiveFs) => set({ isCaseSensitiveFs }),
 }));
 
-/**
- * Selector functions for optimized re-renders
- */
-export const selectDocument = (state: EditorState): DocumentState => ({
-  filePath: state.filePath,
-  content: state.content,
-  isDirty: state.isDirty,
-  lastSaved: state.lastSaved,
-  saveStatus: state.saveStatus,
-  saveError: state.saveError,
-});
-
-export const selectUIState = (state: EditorState): EditorUIState => ({
-  sidebarOpen: state.sidebarOpen,
-  focusMode: state.focusMode,
-  theme: state.theme,
-  themeName: state.themeName,
-  accentColorId: state.accentColorId,
-  fontFamily: state.fontFamily,
-  fontSize: state.fontSize,
-  lineHeight: state.lineHeight,
-  maxLineWidth: state.maxLineWidth,
-  typewriterMode: state.typewriterMode,
-  sourceMode: state.sourceMode,
-  showLineNumbers: state.showLineNumbers,
-  isCaseSensitiveFs: state.isCaseSensitiveFs,
-});
-
-export const selectLayoutState = (state: EditorState): LayoutState => ({
-  sidebarWidth: state.sidebarWidth,
-  zenMode: state.zenMode,
-});

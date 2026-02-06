@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { FileEntry } from "@/lib/tauri/files";
 import { sortFileEntries } from "@/lib/files/sortFiles";
-import { getRelativePath } from "@/lib/path/pathUtils";
+
 
 /**
  * Workspace state management
@@ -276,64 +276,3 @@ export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>(
   })
 );
 
-/**
- * Selector for getting a flat list of all file paths
- */
-export function selectAllFilePaths(state: WorkspaceState): string[] {
-  const paths: string[] = [];
-
-  const collectPaths = (entries: FileEntry[]) => {
-    for (const entry of entries) {
-      if (entry.is_markdown) {
-        paths.push(entry.path);
-      }
-      if (entry.children) {
-        collectPaths(entry.children);
-      }
-    }
-  };
-
-  collectPaths(state.fileTree);
-  return paths;
-}
-
-/**
- * File info for internal link suggestions
- */
-export interface SuggestionFile {
-  name: string;
-  path: string;
-  displayPath: string; // Relative path from workspace for display
-}
-
-/**
- * Selector for getting all markdown files as suggestion items
- */
-export function selectAllFilesForSuggestion(state: WorkspaceState): SuggestionFile[] {
-  const files: SuggestionFile[] = [];
-  const workspacePath = state.workspacePath;
-
-  const collectFiles = (entries: FileEntry[]) => {
-    for (const entry of entries) {
-      if (entry.is_markdown) {
-        // Get relative path from workspace root
-        // Uses getRelativePath for cross-platform consistency (Windows backslashes → forward slashes)
-        const displayPath = workspacePath
-          ? getRelativePath(workspacePath, entry.path) || entry.name
-          : entry.name;
-
-        files.push({
-          name: entry.name,
-          path: entry.path,
-          displayPath,
-        });
-      }
-      if (entry.children) {
-        collectFiles(entry.children);
-      }
-    }
-  };
-
-  collectFiles(state.fileTree);
-  return files;
-}
