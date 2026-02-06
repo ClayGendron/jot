@@ -6,11 +6,18 @@
  * - Link context detection
  * - Link editor state management
  * - Context menu actions
+ * - Internal link navigation
  */
 
 import type { EditorView } from "@codemirror/view";
 import type { EditorState } from "@codemirror/state";
-import { findLinkByRegex, type LinkContext } from "../utils/sharedHelpers";
+import {
+  findLinkByRegex,
+  isInternalLink,
+  parseInternalLinkTarget,
+  type LinkContext,
+  type InternalLinkTarget,
+} from "../utils/sharedHelpers";
 
 // ===========================================
 // LINK CONTEXT DETECTION
@@ -327,3 +334,122 @@ export function handleLinkCommand(view: EditorView): boolean {
   });
   return true;
 }
+
+// ===========================================
+// INTERNAL LINK NAVIGATION
+// ===========================================
+
+/**
+ * Callbacks for internal link navigation
+ */
+export interface InternalLinkCallbacks {
+  /** Called when an internal link to another file is clicked */
+  onInternalLinkClick?: (path: string, heading?: string) => void;
+  /** Called when a same-file heading link is clicked */
+  onScrollToHeading?: (heading: string) => void;
+  /** Called when a broken internal link is clicked */
+  onBrokenLinkClick?: (path: string) => void;
+}
+
+let internalLinkCallbacks: InternalLinkCallbacks = {};
+
+/**
+ * Set internal link navigation callbacks
+ */
+export function setInternalLinkCallbacks(callbacks: InternalLinkCallbacks) {
+  internalLinkCallbacks = callbacks;
+}
+
+/**
+ * Get current internal link callbacks
+ */
+export function getInternalLinkCallbacks(): InternalLinkCallbacks {
+  return internalLinkCallbacks;
+}
+
+/**
+ * Handle click on a link
+ *
+ * Behavior:
+ * - External links: open in new tab (regardless of modifier keys)
+ * - Internal links: navigate using callbacks
+ * - Same-file heading links: scroll to heading
+ *
+ * @returns true if the click was handled, false otherwise
+ */
+export function handleLinkClick(
+  ctx: LinkContext,
+  event: MouseEvent
+): boolean {
+  const { url } = ctx;
+
+  if (isInternalLink(url)) {
+    const target = parseInternalLinkTarget(url);
+    if (!target) return false;
+
+    event.preventDefault();
+
+    if (target.isSameFile) {
+      // Same-file heading link
+      if (target.heading && internalLinkCallbacks.onScrollToHeading) {
+        internalLinkCallbacks.onScrollToHeading(target.heading);
+      }
+    } else {
+      // Cross-file internal link
+      if (internalLinkCallbacks.onInternalLinkClick) {
+        internalLinkCallbacks.onInternalLinkClick(target.path, target.heading);
+      }
+    }
+    return true;
+  }
+
+  // External link: open in new tab
+  if (url) {
+    event.preventDefault();
+    window.open(url, "_blank", "noopener,noreferrer");
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Handle internal link navigation from context menu
+ * Called when "Open Link" is selected for an internal link
+ */
+export function handleContextMenuOpenInternalLink() {
+  const { view, linkContext } = linkContextMenuState;
+  if (!view || !linkContext) return;
+
+  const { url } = linkContext;
+
+  if (isInternalLink(url)) {
+    const target = parseInternalLinkTarget(url);
+    if (!target) {
+      closeLinkContextMenu();
+      view.focus();
+      return;
+    }
+
+    if (target.isSameFile) {
+      if (target.heading && internalLinkCallbacks.onScrollToHeading) {
+        internalLinkCallbacks.onScrollToHeading(target.heading);
+      }
+    } else {
+      if (internalLinkCallbacks.onInternalLinkClick) {
+        internalLinkCallbacks.onInternalLinkClick(target.path, target.heading);
+      }
+    }
+  } else if (url) {
+    // External link
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  closeLinkContextMenu();
+  view.focus();
+}
+
+/**
+ * Check if a URL is an internal link
+ */
+export { isInternalLink, parseInternalLinkTarget, type InternalLinkTarget };

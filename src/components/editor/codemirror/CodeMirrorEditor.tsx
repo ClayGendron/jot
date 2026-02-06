@@ -35,7 +35,12 @@ import {
   setHeading3,
 } from "./handlers/headingHandlers";
 import { insertTable } from "./handlers/tableHandlers";
-import { handleLinkCommand } from "./handlers/linkHandlers";
+import {
+  handleLinkCommand,
+  setInternalLinkCallbacks,
+  getLinkContextAtPos,
+  handleLinkClick,
+} from "./handlers/linkHandlers";
 
 export interface CodeMirrorEditorProps {
   /** Initial content as HTML (converted to MD internally) */
@@ -89,8 +94,8 @@ export const CodeMirrorEditor = forwardRef<
     onUpdate,
     placeholder = "Start writing...",
     autofocus = true,
-    onInternalLinkClick: _onInternalLinkClick,
-    onScrollToHeading: _onScrollToHeading,
+    onInternalLinkClick,
+    onScrollToHeading,
     onBrokenLinkClick: _onBrokenLinkClick,
   },
   ref
@@ -223,8 +228,52 @@ export const CodeMirrorEditor = forwardRef<
     }
   }, [filePath, isReady]);
 
+  // Set up internal link callbacks
+  useEffect(() => {
+    setInternalLinkCallbacks({
+      onInternalLinkClick,
+      onScrollToHeading,
+    });
+
+    // Clear callbacks on unmount
+    return () => {
+      setInternalLinkCallbacks({});
+    };
+  }, [onInternalLinkClick, onScrollToHeading]);
+
+  // Handle link clicks
+  useEffect(() => {
+    if (!containerRef.current || !viewRef.current) return;
+
+    const handleClick = (event: MouseEvent) => {
+      const view = viewRef.current;
+      if (!view) return;
+
+      // Check if click is on a link element (cm-link class)
+      const target = event.target as HTMLElement;
+      if (!target.classList.contains("cm-link")) return;
+
+      // Get the document position from the click coordinates
+      const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
+      if (pos === null) return;
+
+      // Find link context at this position
+      const linkCtx = getLinkContextAtPos(view.state, pos);
+      if (!linkCtx) return;
+
+      // Handle the link click
+      handleLinkClick(linkCtx, event);
+    };
+
+    const container = containerRef.current;
+    container.addEventListener("click", handleClick);
+
+    return () => {
+      container.removeEventListener("click", handleClick);
+    };
+  }, [isReady]);
+
   // TODO: Add context menu handling for links
-  // TODO: Add internal link navigation handling
 
   return (
     <div

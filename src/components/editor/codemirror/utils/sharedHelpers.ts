@@ -511,3 +511,79 @@ export function collectTableExtents(state: EditorState): Array<{ from: number; t
 export function isInTable(pos: number, extents: Array<{ from: number; to: number }>): boolean {
   return extents.some((r) => pos >= r.from && pos < r.to);
 }
+
+// ===========================================
+// INTERNAL LINK HELPERS
+// ===========================================
+
+/**
+ * Parsed internal link target information
+ */
+export interface InternalLinkTarget {
+  /** Full path or relative path to the file */
+  path: string;
+  /** Heading anchor (without #), if any */
+  heading?: string;
+  /** Whether this is a same-file heading link (starts with #) */
+  isSameFile: boolean;
+}
+
+/**
+ * Check if a URL is an internal link (points to a .md file or heading anchor)
+ *
+ * Internal links are:
+ * - Relative paths ending in .md (e.g., "notes/todo.md")
+ * - Relative paths with heading anchors (e.g., "notes/todo.md#section")
+ * - Same-file heading links (e.g., "#my-heading")
+ * - Paths without protocol that end in .md
+ *
+ * External links are:
+ * - URLs with protocols (http://, https://, mailto:, etc.)
+ * - Paths that don't end in .md
+ */
+export function isInternalLink(url: string): boolean {
+  // Empty URL is not a link
+  if (!url || url.trim() === "") return false;
+
+  // Same-file heading link
+  if (url.startsWith("#")) return true;
+
+  // Has protocol = external link
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return false;
+
+  // Check for .md extension (with or without heading anchor)
+  const pathWithoutAnchor = url.split("#")[0];
+  return pathWithoutAnchor.endsWith(".md");
+}
+
+/**
+ * Parse an internal link URL into path and heading components
+ */
+export function parseInternalLinkTarget(url: string): InternalLinkTarget | null {
+  if (!isInternalLink(url)) return null;
+
+  // Same-file heading link
+  if (url.startsWith("#")) {
+    return {
+      path: "",
+      heading: url.slice(1), // Remove #
+      isSameFile: true,
+    };
+  }
+
+  // Split on # to get path and heading
+  const hashIndex = url.indexOf("#");
+  if (hashIndex === -1) {
+    return {
+      path: url,
+      heading: undefined,
+      isSameFile: false,
+    };
+  }
+
+  return {
+    path: url.slice(0, hashIndex),
+    heading: url.slice(hashIndex + 1),
+    isSameFile: false,
+  };
+}
