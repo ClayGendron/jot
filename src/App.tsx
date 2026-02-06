@@ -56,6 +56,7 @@ import { getEffectiveAccent, resolveSystemTheme } from "@/lib/settings/themes";
 import type { ThemeName } from "@/lib/settings/themes";
 import { getRelativePath, joinFsPaths, getParentPath } from "@/lib/path/pathUtils";
 import { saveDocumentPipeline, saveAllDirtyTabs } from "@/services/saveService";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { indexFolder } from "@/services/semanticIndexingService";
 import {
   PanelLeft,
@@ -414,6 +415,42 @@ function App() {
       }
     }
   }, [checkCrashRecovery, recoverFromCrash, setFilePath]);
+
+  // Save all dirty tabs on window close (Tauri)
+  const isClosingRef = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    let unlistenFn: (() => void) | null = null;
+
+    getCurrentWindow().onCloseRequested(async (event) => {
+      if (isClosingRef.current) return;
+      const dirtyTabs = useTabsStore.getState().tabs.filter(t => t.isDirty);
+      if (dirtyTabs.length > 0) {
+        event.preventDefault();
+        isClosingRef.current = true;
+        const currentActiveTabId = useTabsStore.getState().activeTabId;
+        const failed = await saveAllDirtyTabs(currentActiveTabId);
+        if (failed.length > 0) {
+          const proceed = window.confirm(
+            `Failed to save ${failed.length} file(s). Close anyway?`
+          );
+          if (!proceed) {
+            isClosingRef.current = false;
+            return;
+          }
+        }
+        getCurrentWindow().close();
+      }
+    }).then(fn => {
+      if (cancelled) fn();
+      else unlistenFn = fn;
+    });
+
+    return () => {
+      cancelled = true;
+      unlistenFn?.();
+    };
+  }, []);
 
   // Load workspace directory
   const loadWorkspace = useCallback(

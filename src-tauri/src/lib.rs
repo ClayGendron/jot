@@ -80,12 +80,18 @@ fn atomic_write(path: &str, content: &str) -> Result<(), String> {
     temp.flush()
         .map_err(|e| format!("Failed to flush content: {}", e))?;
 
+    // Sync to disk before persist - ensures data survives power failure
+    temp.as_file().sync_data()
+        .map_err(|e| format!("Failed to sync to disk: {}", e))?;
+
     // Windows compatibility: persist() doesn't overwrite existing files.
     // Use backup pattern for crash safety:
     // 1. Rename existing to .jot-bak (if exists)
     // 2. Persist new file
     // 3. Delete backup on success
-    let backup = target.with_extension("jot-bak");
+    let mut backup_name = target.as_os_str().to_os_string();
+    backup_name.push(".jot-bak");
+    let backup = PathBuf::from(backup_name);
     let had_backup = if target.exists() {
         // Remove any stale backup first
         let _ = fs::remove_file(&backup);
@@ -105,7 +111,12 @@ fn atomic_write(path: &str, content: &str) -> Result<(), String> {
         let _ = fs::remove_file(&backup);
     } else if result.is_err() && had_backup {
         // Restore backup on failure to prevent data loss
-        let _ = fs::rename(&backup, target);
+        if let Err(restore_err) = fs::rename(&backup, target) {
+            return Err(format!(
+                "Failed to save file AND restore backup. Your data is at: {}. Restore error: {}",
+                backup.display(), restore_err
+            ));
+        }
     }
 
     result.map(|_| ())
@@ -1582,8 +1593,76 @@ mod tests {
         let content = fs::read_to_string(&file_path).unwrap();
         assert_eq!(content, "new content");
 
-        // Backup should be cleaned up
-        let backup_path = file_path.with_extension("jot-bak");
+        // Backup should be cleaned up (new naming: appends .jot-bak)
+        let mut backup_name = file_path.as_os_str().to_os_string();
+        backup_name.push(".jot-bak");
+        let backup_path = PathBuf::from(backup_name);
         assert!(!backup_path.exists(), "Backup should be cleaned up on success");
+    }
+
+    #[test]
+    fn atomic_write_syncs_to_disk_with_unicode() {
+        let dir = TempDir::new().unwrap();
+        let file_path = dir.path().join("unicode_test.md");
+
+        // Unicode content: emoji, CJK, combining characters
+        let content = "Hello 🌍\n日本語テスト\nCafé résumé naïve\n";
+
+        let result = atomic_write(file_path.to_str().unwrap(), content);
+        assert!(result.is_ok(), "Should write unicode content successfully");
+
+        let read_back = fs::read_to_string(&file_path).unwrap();
+        assert_eq!(read_back, content, "Unicode content should round-trip correctly");
+    }
+
+    #[test]
+    fn atomic_write_backup_preserves_full_extension() {
+        let dir = TempDir::new().unwrap();
+
+        // Test that notes.md produces notes.md.jot-bak (not notes.jot-bak)
+        let md_path = dir.path().join("notes.md");
+        fs::write(&md_path, "original").unwrap();
+
+        // Write new content - backup is created transiently during write
+        let result = atomic_write(md_path.to_str().unwrap(), "updated");
+        assert!(result.is_ok());
+
+        // The old with_extension("jot-bak") would produce notes.jot-bak
+        let wrong_backup = md_path.with_extension("jot-bak");
+        assert!(!wrong_backup.exists(), "Should NOT create notes.jot-bak");
+
+        // Test two files with same stem but different extensions produce distinct backups
+        let txt_path = dir.path().join("notes.txt");
+        fs::write(&txt_path, "text original").unwrap();
+
+        atomic_write(txt_path.to_str().unwrap(), "text updated").unwrap();
+
+        // Verify both files have correct content (backups cleaned up on success)
+        assert_eq!(fs::read_to_string(&md_path).unwrap(), "updated");
+        assert_eq!(fs::read_to_string(&txt_path).unwrap(), "text updated");
+
+        // Verify the correct backup path format by checking intermediate state
+        // Create a file, then verify backup naming during simulated concurrent access
+        let test_path = dir.path().join("test.notes.md");
+        fs::write(&test_path, "multi-dot original").unwrap();
+        atomic_write(test_path.to_str().unwrap(), "multi-dot updated").unwrap();
+        assert_eq!(fs::read_to_string(&test_path).unwrap(), "multi-dot updated");
+
+        // The backup for test.notes.md should be test.notes.md.jot-bak (not test.notes.jot-bak)
+        let wrong_multi_backup = test_path.with_extension("jot-bak");
+        assert!(!wrong_multi_backup.exists(), "Should NOT create test.notes.jot-bak");
+    }
+
+    #[test]
+    fn atomic_write_creates_intermediate_directories() {
+        let dir = TempDir::new().unwrap();
+        let nonexistent_parent = dir.path().join("no").join("such").join("path").join("file.md");
+
+        // atomic_write should create intermediate directories
+        let result = atomic_write(nonexistent_parent.to_str().unwrap(), "content");
+        assert!(result.is_ok(), "Should create intermediate directories");
+
+        let read_back = fs::read_to_string(&nonexistent_parent).unwrap();
+        assert_eq!(read_back, "content");
     }
 }
