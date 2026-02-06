@@ -275,8 +275,7 @@ class TableBlockWidget extends WidgetType {
     if (headerCells.length !== colCount) return false;
     if (bodyRows.length !== tableInfo.bodyRows.length) return false;
 
-    // 3. Update table cells (skip active cell in raw mode)
-    // Compute current focus cell for raw mode check
+    // 3. Update table cells (skip focused cell to avoid interrupting WYSIWYG editing)
     const savedFocusRow = focusState.focusPath?.match(/data-row="(\d+)"/)?.[1] ?? null;
     const savedFocusCol = focusState.focusPath?.match(/data-col="(\d+)"/)?.[1] ?? null;
 
@@ -284,8 +283,8 @@ class TableBlockWidget extends WidgetType {
       const cell = headerCells[col] as HTMLElement;
       const raw = tableInfo.headerCells[col]?.content ?? "";
       const isFocused = cell.dataset.row === savedFocusRow && cell.dataset.col === savedFocusCol;
-      if (isFocused && cell.dataset.mode === "raw") {
-        // Don't overwrite - just update dataset
+      if (isFocused) {
+        // Don't overwrite focused cell - user is editing (just update dataset)
         cell.dataset.raw = raw;
       } else {
         this.renderCell(cell, raw);
@@ -300,7 +299,8 @@ class TableBlockWidget extends WidgetType {
         const cell = rowCells[col] as HTMLElement;
         const raw = row[col]?.content ?? "";
         const isFocused = cell.dataset.row === String(rowIdx + 1) && cell.dataset.col === String(col);
-        if (isFocused && cell.dataset.mode === "raw") {
+        if (isFocused) {
+          // Don't overwrite focused cell - user is editing (just update dataset)
           cell.dataset.raw = raw;
         } else {
           this.renderCell(cell, raw);
@@ -477,7 +477,9 @@ class TableBlockWidget extends WidgetType {
         const col = parseInt(cell.dataset.col ?? "", 10);
         if (Number.isNaN(row) || Number.isNaN(col)) return;
 
-        const newContent = cell.dataset.raw ?? cell.textContent ?? "";
+        // Convert HTML back to markdown (WYSIWYG: cells always show rendered HTML)
+        const newContent = htmlToMarkdown(cell.innerHTML);
+        cell.dataset.raw = newContent;
 
         // Read tableFrom from DOM - this stays current even when widget instance is stale
         const wrapper = cell.closest(".cm-table-block") as HTMLElement;
@@ -507,14 +509,15 @@ class TableBlockWidget extends WidgetType {
       });
     };
 
+    // Input handler: sync HTML content to markdown (cells stay in rendered mode)
     cell.addEventListener("input", () => {
-      cell.dataset.raw = cell.textContent ?? "";
-      cell.dataset.mode = "raw";
       syncToMarkdown();
     });
-    cell.addEventListener("focus", () => {
-      this.setCellRaw(cell);
-    });
+
+    // Focus handler: no longer switches to raw mode - cells always show rendered HTML
+    // (removed setCellRaw call for WYSIWYG editing)
+
+    // Blur handler: sync and re-render to normalize HTML
     cell.addEventListener("blur", () => {
       syncToMarkdown();
       // Delay render to allow focus to move
@@ -646,6 +649,136 @@ class TableBlockWidget extends WidgetType {
           });
         }
       }
+
+      // ========================================
+      // Formatting keyboard shortcuts (WYSIWYG)
+      // ========================================
+
+      // Helper to apply formatting using execCommand
+      const applyFormatting = (command: string) => {
+        e.preventDefault();
+        document.execCommand(command);
+        syncToMarkdown();
+      };
+
+      // Cmd/Ctrl+B: Toggle bold
+      if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+        applyFormatting("bold");
+      }
+      // Cmd/Ctrl+I: Toggle italic
+      else if ((e.metaKey || e.ctrlKey) && e.key === "i") {
+        applyFormatting("italic");
+      }
+      // Cmd/Ctrl+E: Toggle inline code (no native execCommand, use custom)
+      else if ((e.metaKey || e.ctrlKey) && e.key === "e") {
+        e.preventDefault();
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          const selectedText = range.toString();
+          if (selectedText) {
+            // Wrap in <code> tag
+            const code = document.createElement("code");
+            code.className = "cm-inline-code";
+            code.textContent = selectedText;
+            range.deleteContents();
+            range.insertNode(code);
+            // Move selection after the code element
+            selection.collapseToEnd();
+          }
+        }
+        syncToMarkdown();
+      }
+      // Cmd/Ctrl+K: Insert/edit link
+      else if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          const selectedText = range.toString();
+
+          // Check if we're inside a link
+          const anchorNode = selection.anchorNode;
+          const linkEl = anchorNode?.parentElement?.closest("a");
+          if (linkEl) {
+            // Editing existing link
+            const currentUrl = linkEl.getAttribute("href") || "";
+            const newUrl = prompt("Edit link URL:", currentUrl);
+            if (newUrl !== null) {
+              if (newUrl === "") {
+                // Remove link, keep text
+                const text = document.createTextNode(linkEl.textContent || "");
+                linkEl.replaceWith(text);
+              } else {
+                linkEl.setAttribute("href", newUrl);
+              }
+            }
+          } else if (selectedText) {
+            // Create new link with selected text
+            const url = prompt("Enter link URL:");
+            if (url) {
+              const link = document.createElement("a");
+              link.href = url;
+              link.className = "cm-link";
+              link.rel = "noopener noreferrer";
+              link.target = "_blank";
+              link.textContent = selectedText;
+              range.deleteContents();
+              range.insertNode(link);
+              selection.collapseToEnd();
+            }
+          } else {
+            // No selection - create empty link
+            const url = prompt("Enter link URL:");
+            if (url) {
+              const text = prompt("Enter link text:", url) || url;
+              const link = document.createElement("a");
+              link.href = url;
+              link.className = "cm-link";
+              link.rel = "noopener noreferrer";
+              link.target = "_blank";
+              link.textContent = text;
+              range.insertNode(link);
+              selection.collapseToEnd();
+            }
+          }
+        }
+        syncToMarkdown();
+      }
+      // Cmd/Ctrl+Shift+S: Toggle strikethrough
+      else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "s") {
+        e.preventDefault();
+        document.execCommand("strikeThrough");
+        syncToMarkdown();
+      }
+      // Cmd/Ctrl+Shift+H: Toggle highlight
+      else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "h") {
+        e.preventDefault();
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          const selectedText = range.toString();
+          if (selectedText) {
+            // Check if already highlighted
+            const anchorNode = selection.anchorNode;
+            const markEl = anchorNode?.parentElement?.closest("mark");
+            if (markEl) {
+              // Remove highlight, keep text
+              const text = document.createTextNode(markEl.textContent || "");
+              markEl.replaceWith(text);
+            } else {
+              // Add highlight
+              const mark = document.createElement("mark");
+              mark.className = "cm-highlight";
+              mark.textContent = selectedText;
+              range.deleteContents();
+              range.insertNode(mark);
+              selection.collapseToEnd();
+            }
+          }
+        }
+        syncToMarkdown();
+      }
     });
   }
 
@@ -687,28 +820,13 @@ class TableBlockWidget extends WidgetType {
     }
   }
 
-  private setCellRaw(cell: HTMLElement) {
-    const raw = cell.dataset.raw ?? cell.textContent ?? "";
-    cell.dataset.raw = raw;
-    cell.dataset.mode = "raw";
-    cell.textContent = raw;
-  }
-
+  /**
+   * Render a cell's content as HTML from its raw markdown.
+   * Cells are always in rendered mode for WYSIWYG editing.
+   */
   private renderCell(cell: HTMLElement, rawOverride?: string) {
-    const doc = cell.ownerDocument;
-
-    // Don't overwrite cell if it's currently focused and in raw mode
-    if (cell === doc.activeElement && cell.dataset.mode === "raw") {
-      // Just update the dataset, don't touch DOM content
-      if (rawOverride !== undefined) {
-        cell.dataset.raw = rawOverride;
-      }
-      return;
-    }
-
-    const raw = rawOverride ?? cell.dataset.raw ?? cell.textContent ?? "";
+    const raw = rawOverride ?? cell.dataset.raw ?? "";
     cell.dataset.raw = raw;
-    cell.dataset.mode = "rendered";
     cell.innerHTML = renderInlineMarkdown(raw);
   }
 }
@@ -750,6 +868,82 @@ function renderInlineMarkdown(text: string): string {
 
   html = html.replace(/\u0000CODE(\d+)\u0000/g, (_m, idx) => codePlaceholders[Number(idx)]);
   return html;
+}
+
+/**
+ * Convert HTML back to markdown (inverse of renderInlineMarkdown).
+ * Used for WYSIWYG table cell editing - users edit rendered HTML,
+ * and we convert back to markdown for storage.
+ */
+function htmlToMarkdown(html: string): string {
+  // Create a temporary element to parse the HTML
+  const div = document.createElement("div");
+  div.innerHTML = html;
+
+  // Recursive function to convert a node to markdown
+  function convertNode(node: Node): string {
+    // Text nodes: just return text content
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent || "";
+    }
+
+    // Element nodes: process based on tag
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      const tagName = el.tagName.toLowerCase();
+
+      // Get the converted content of child nodes
+      const childContent = Array.from(el.childNodes)
+        .map(convertNode)
+        .join("");
+
+      // Convert based on tag
+      switch (tagName) {
+        case "strong":
+        case "b":
+          return childContent ? `**${childContent}**` : "";
+        case "em":
+        case "i":
+          return childContent ? `*${childContent}*` : "";
+        case "code":
+          return childContent ? `\`${childContent}\`` : "";
+        case "s":
+        case "del":
+        case "strike":
+          return childContent ? `~~${childContent}~~` : "";
+        case "mark":
+          return childContent ? `==${childContent}==` : "";
+        case "a": {
+          const href = el.getAttribute("href") || "";
+          return childContent ? `[${childContent}](${href})` : "";
+        }
+        case "br":
+          return "";
+        default:
+          // For unknown tags, just return the content
+          return childContent;
+      }
+    }
+
+    return "";
+  }
+
+  // Convert all child nodes
+  const result = Array.from(div.childNodes)
+    .map(convertNode)
+    .join("");
+
+  // Decode HTML entities
+  // Note: DOM parser converts &nbsp; to U+00A0, so we replace the actual character
+  const decoded = result
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\u00A0/g, " ");
+
+  return decoded;
 }
 
 // ===========================================
@@ -7624,6 +7818,8 @@ export {
   handleArrowDownInTable,
   handleEscapeInTable,
   getAllTableCells,
+  renderInlineMarkdown,
+  htmlToMarkdown,
 
   // Table types
   type TableInfo,
