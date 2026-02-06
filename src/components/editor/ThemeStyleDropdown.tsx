@@ -35,7 +35,7 @@ const THEME_OPTIONS: ThemeOption[] = [
 ];
 
 const FONT_OPTIONS: FontOption[] = [
-  { value: "serif", label: "Serif", description: "Crimson Pro" },
+  { value: "serif", label: "Serif", description: "Newsreader" },
   { value: "sans", label: "Sans", description: "Open Sans" },
   { value: "mono", label: "Mono", description: "JetBrains Mono" },
 ];

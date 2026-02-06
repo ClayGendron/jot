@@ -239,7 +239,7 @@ describe("ThemeStyleDropdown", () => {
 
       // Get all menuitemradio elements and find the one with "Serif"
       const menuItems = screen.getAllByRole("menuitemradio");
-      const serifOption = menuItems.find(item => item.textContent?.includes("Serif") && item.textContent?.includes("Crimson"));
+      const serifOption = menuItems.find(item => item.textContent?.includes("Serif") && item.textContent?.includes("Newsreader"));
       expect(serifOption).toBeTruthy();
       await act(async () => {
         fireEvent.click(serifOption!);

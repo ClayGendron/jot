@@ -1,52 +1,52 @@
 /* Bundled fonts for offline use */
 
-/* Crimson Pro - Serif */
+/* Newsreader - Serif */
 @font-face {
-  font-family: 'Crimson Pro';
+  font-family: 'Newsreader';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url('./CrimsonPro-400.ttf') format('truetype');
+  src: url('./Newsreader-400.ttf') format('truetype');
 }
 
 @font-face {
-  font-family: 'Crimson Pro';
+  font-family: 'Newsreader';
   font-style: normal;
   font-weight: 500;
   font-display: swap;
-  src: url('./CrimsonPro-500.ttf') format('truetype');
+  src: url('./Newsreader-500.ttf') format('truetype');
 }
 
 @font-face {
-  font-family: 'Crimson Pro';
+  font-family: 'Newsreader';
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url('./CrimsonPro-600.ttf') format('truetype');
+  src: url('./Newsreader-600.ttf') format('truetype');
 }
 
 @font-face {
-  font-family: 'Crimson Pro';
+  font-family: 'Newsreader';
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url('./CrimsonPro-700.ttf') format('truetype');
+  src: url('./Newsreader-700.ttf') format('truetype');
 }
 
 @font-face {
-  font-family: 'Crimson Pro';
+  font-family: 'Newsreader';
   font-style: italic;
   font-weight: 400;
   font-display: swap;
-  src: url('./CrimsonPro-Italic-400.ttf') format('truetype');
+  src: url('./Newsreader-Italic-400.ttf') format('truetype');
 }
 
 @font-face {
-  font-family: 'Crimson Pro';
+  font-family: 'Newsreader';
   font-style: italic;
   font-weight: 500;
   font-display: swap;
-  src: url('./CrimsonPro-Italic-500.ttf') format('truetype');
+  src: url('./Newsreader-Italic-500.ttf') format('truetype');
 }
 
 /* Open Sans - Sans-serif */

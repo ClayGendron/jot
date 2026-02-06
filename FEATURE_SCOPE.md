@@ -802,7 +802,7 @@ workspace/
 
 -   E7.2.4: Maximum line width control ✅
 
--   E7.2.5: Bundled fonts (Crimson Pro, Inter, JetBrains Mono) ✅
+-   E7.2.5: Bundled fonts (Newsreader, Open Sans, JetBrains Mono) ✅
 
 -   E7.3.1: Focus mode toggle (dims non-active paragraphs) ✅
 
