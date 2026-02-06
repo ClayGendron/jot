@@ -17,6 +17,7 @@ import { Annotation, EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { openSearchPanel, closeSearchPanel } from "@codemirror/search";
 import { useEditorStore } from "@/stores/editorStore";
+import { useTabsStore, selectActiveFilePath, selectActiveContent } from "@/stores/tabsStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
 import { createWysiwygExtensions, historyCompartment, clearPendingEscape } from "./extensions";
@@ -138,7 +139,7 @@ export const CodeMirrorEditor = forwardRef<
   const focusMode = useEditorStore((state) => state.focusMode);
   const sourceMode = useEditorStore((state) => state.sourceMode);
   const fontFamily = useEditorStore((state) => state.fontFamily);
-  const filePath = useEditorStore((state) => state.filePath);
+  const filePath = useTabsStore(selectActiveFilePath);
 
   // Settings store for spellcheck
   const spellCheckEnabled = useSettingsStore(
@@ -216,8 +217,8 @@ export const CodeMirrorEditor = forwardRef<
   useEffect(() => {
     if (!editorContainerRef.current) return;
 
-    // Get initial markdown content directly from store
-    const initialMarkdown = useEditorStore.getState().content || "";
+    // Get initial markdown content directly from tabsStore
+    const initialMarkdown = selectActiveContent(useTabsStore.getState());
 
     // Create extensions
     const extensions = [
@@ -234,7 +235,6 @@ export const CodeMirrorEditor = forwardRef<
           if (isFileSwitch) return;
 
           const markdown = update.state.doc.toString();
-          useEditorStore.getState().setContent(markdown);
           // Use ref to always call the latest onUpdate (avoids stale closure)
           if (onUpdateRef.current) {
             onUpdateRef.current(markdown);
@@ -279,7 +279,7 @@ export const CodeMirrorEditor = forwardRef<
   useEffect(() => {
     if (!viewRef.current || !isReady) return;
 
-    const markdown = useEditorStore.getState().content;
+    const markdown = selectActiveContent(useTabsStore.getState());
     const currentContent = viewRef.current.state.doc.toString();
 
     // Only update if content is different
@@ -325,8 +325,7 @@ export const CodeMirrorEditor = forwardRef<
         },
         annotations: fileSwitchAnnotation.of(true),
       });
-      // Sync to store
-      useEditorStore.getState().setContent(markdownSource);
+      // Sync via onUpdate to tabsStore
       if (onUpdate) {
         onUpdate(markdownSource);
       }

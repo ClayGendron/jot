@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { useEditorStore } from "@/stores/editorStore";
-import { useTabsStore } from "@/stores/tabsStore";
+import { useTabsStore, selectActiveFilePath, selectActiveIsDirty } from "@/stores/tabsStore";
 import { saveDocumentPipeline } from "@/services/saveService";
 import {
   readCrashRecoveryData,
@@ -26,9 +25,9 @@ const SAVED_INDICATOR_DURATION_MS = 2000;
  * to prevent race condition where user switches tabs during save.
  */
 export function useAutosave(content: string) {
-  const filePath = useEditorStore((s) => s.filePath);
-  const isDirty = useEditorStore((s) => s.isDirty);
-  const setSaveStatus = useEditorStore((s) => s.setSaveStatus);
+  const filePath = useTabsStore(selectActiveFilePath);
+  const isDirty = useTabsStore(selectActiveIsDirty);
+  const setSaveStatus = useTabsStore((s) => s.setSaveStatus);
   const activeTabId = useTabsStore((state) => state.activeTabId);
 
   // Track if a save is currently in progress

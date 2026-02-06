@@ -7,7 +7,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import { computeSimpleHash, saveDocumentPipeline, saveAllDirtyTabs, _resetSaveQueue } from "./saveService";
 import { useTabsStore } from "@/stores/tabsStore";
-import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useLinksStore } from "@/stores/linksStore";
 
@@ -72,15 +71,6 @@ describe("saveDocumentPipeline", () => {
       saveError: null,
     });
 
-    useEditorStore.setState({
-      filePath: null,
-      content: "",
-      isDirty: false,
-      lastSaved: null,
-      saveStatus: "idle",
-      saveError: null,
-    });
-
     useWorkspaceStore.setState({
       workspacePath: "/workspace",
       fileTree: [],
@@ -124,6 +114,7 @@ describe("saveDocumentPipeline", () => {
           isDirty: false,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -147,6 +138,7 @@ describe("saveDocumentPipeline", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -171,6 +163,7 @@ describe("saveDocumentPipeline", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -193,6 +186,7 @@ describe("saveDocumentPipeline", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -215,6 +209,7 @@ describe("saveDocumentPipeline", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -223,13 +218,11 @@ describe("saveDocumentPipeline", () => {
     await saveDocumentPipeline("tab-1", true);
 
     // After successful save, status should be "saved"
-    const status = useEditorStore.getState().saveStatus;
+    const status = useTabsStore.getState().saveStatus;
     expect(status).toBe("saved");
   });
 
   it("does not update save status for non-active doc", async () => {
-    useEditorStore.setState({ saveStatus: "idle" });
-
     useTabsStore.setState({
       tabs: [
         {
@@ -240,15 +233,17 @@ describe("saveDocumentPipeline", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-2", // Different from the tab being saved
+      saveStatus: "idle",
     });
 
     await saveDocumentPipeline("tab-1", false);
 
     // Status should remain idle for background save
-    const status = useEditorStore.getState().saveStatus;
+    const status = useTabsStore.getState().saveStatus;
     expect(status).toBe("idle");
   });
 
@@ -263,6 +258,7 @@ describe("saveDocumentPipeline", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -290,6 +286,7 @@ describe("saveDocumentPipeline", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -320,6 +317,7 @@ describe("saveDocumentPipeline", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -343,6 +341,7 @@ describe("saveDocumentPipeline", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -362,6 +361,7 @@ describe("saveDocumentPipeline", () => {
             isDirty: true,
             isPinned: false,
             scrollTop: 0,
+            lastSaved: null,
           },
         ],
         activeTabId: "tab-1",
@@ -392,6 +392,7 @@ describe("saveDocumentPipeline", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -417,6 +418,7 @@ describe("saveDocumentPipeline", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -434,6 +436,7 @@ describe("saveDocumentPipeline", () => {
             isDirty: true,
             isPinned: false,
             scrollTop: 0,
+            lastSaved: null,
           },
         ],
         activeTabId: "tab-1",
@@ -443,7 +446,7 @@ describe("saveDocumentPipeline", () => {
     await saveDocumentPipeline("tab-1", true);
 
     // SaveIndicator should be idle, not "saved" (would be misleading)
-    const status = useEditorStore.getState().saveStatus;
+    const status = useTabsStore.getState().saveStatus;
     expect(status).toBe("idle");
   });
 });
@@ -455,15 +458,6 @@ describe("per-file save mutex", () => {
     useTabsStore.setState({
       tabs: [],
       activeTabId: null,
-      saveStatus: "idle",
-      saveError: null,
-    });
-
-    useEditorStore.setState({
-      filePath: null,
-      content: "",
-      isDirty: false,
-      lastSaved: null,
       saveStatus: "idle",
       saveError: null,
     });
@@ -510,6 +504,7 @@ describe("per-file save mutex", () => {
         isDirty: true,
         isPinned: false,
         scrollTop: 0,
+        lastSaved: null,
       }],
       activeTabId: "tab-1",
     });
@@ -527,6 +522,7 @@ describe("per-file save mutex", () => {
         isDirty: true,
         isPinned: false,
         scrollTop: 0,
+        lastSaved: null,
       }],
     });
 
@@ -556,6 +552,7 @@ describe("per-file save mutex", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
         {
           id: "tab-2",
@@ -565,6 +562,7 @@ describe("per-file save mutex", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -597,6 +595,7 @@ describe("per-file save mutex", () => {
         isDirty: true,
         isPinned: false,
         scrollTop: 0,
+        lastSaved: null,
       }],
       activeTabId: "tab-1",
     });
@@ -629,6 +628,7 @@ describe("per-file save mutex", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         }],
       });
     });
@@ -645,6 +645,7 @@ describe("per-file save mutex", () => {
         isDirty: true,
         isPinned: false,
         scrollTop: 0,
+        lastSaved: null,
       }],
       activeTabId: "tab-1",
     });
@@ -678,6 +679,7 @@ describe("per-file save mutex", () => {
         isDirty: true,
         isPinned: false,
         scrollTop: 0,
+        lastSaved: null,
       }],
       activeTabId: "tab-1",
     });
@@ -708,6 +710,7 @@ describe("per-file save mutex", () => {
         isDirty: true,
         isPinned: false,
         scrollTop: 0,
+        lastSaved: null,
       }],
       activeTabId: "tab-1",
     });
@@ -725,6 +728,7 @@ describe("per-file save mutex", () => {
         isDirty: true,
         isPinned: false,
         scrollTop: 0,
+        lastSaved: null,
       }],
     });
 
@@ -775,6 +779,7 @@ describe("saveAllDirtyTabs", () => {
           isDirty: false,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -796,6 +801,7 @@ describe("saveAllDirtyTabs", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
         {
           id: "tab-2",
@@ -805,6 +811,7 @@ describe("saveAllDirtyTabs", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
         {
           id: "tab-3",
@@ -814,6 +821,7 @@ describe("saveAllDirtyTabs", () => {
           isDirty: false,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",
@@ -843,6 +851,7 @@ describe("saveAllDirtyTabs", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
         {
           id: "tab-2",
@@ -852,6 +861,7 @@ describe("saveAllDirtyTabs", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         },
       ],
       activeTabId: "tab-1",

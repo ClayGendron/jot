@@ -10,12 +10,6 @@ describe("editorStore", () => {
   beforeEach(() => {
     // Reset store to initial state before each test
     useEditorStore.setState({
-      filePath: null,
-      content: "",
-      isDirty: false,
-      lastSaved: null,
-      saveStatus: "idle",
-      saveError: null,
       sidebarOpen: true,
       focusMode: false,
       theme: "system",
@@ -28,85 +22,6 @@ describe("editorStore", () => {
       showLineNumbers: false,
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
       zenMode: false,
-    });
-  });
-
-  describe("Document State", () => {
-    it("initializes with empty document state", () => {
-      const state = useEditorStore.getState();
-
-      expect(state.filePath).toBeNull();
-      expect(state.content).toBe("");
-      expect(state.isDirty).toBe(false);
-      expect(state.lastSaved).toBeNull();
-      expect(state.saveStatus).toBe("idle");
-      expect(state.saveError).toBeNull();
-    });
-
-    it("setContent updates content and marks dirty", () => {
-      const { setContent } = useEditorStore.getState();
-
-      setContent("Hello, world!");
-
-      const state = useEditorStore.getState();
-      expect(state.content).toBe("Hello, world!");
-      expect(state.isDirty).toBe(true);
-    });
-
-    it("setFilePath updates file path", () => {
-      const { setFilePath } = useEditorStore.getState();
-
-      setFilePath("/path/to/document.md");
-
-      const state = useEditorStore.getState();
-      expect(state.filePath).toBe("/path/to/document.md");
-    });
-
-    it("markSaved clears dirty flag and sets timestamp", () => {
-      const { setContent, markSaved } = useEditorStore.getState();
-
-      setContent("Some content");
-      expect(useEditorStore.getState().isDirty).toBe(true);
-
-      markSaved();
-
-      const state = useEditorStore.getState();
-      expect(state.isDirty).toBe(false);
-      expect(state.lastSaved).toBeInstanceOf(Date);
-    });
-
-    it("resetDocument returns to initial state", () => {
-      const { setContent, setFilePath, resetDocument } =
-        useEditorStore.getState();
-
-      setContent("Some content");
-      setFilePath("/path/to/file.md");
-
-      resetDocument();
-
-      const state = useEditorStore.getState();
-      expect(state.content).toBe("");
-      expect(state.filePath).toBeNull();
-      expect(state.isDirty).toBe(false);
-      expect(state.saveStatus).toBe("idle");
-    });
-
-    it("setSaveStatus updates save status", () => {
-      const { setSaveStatus } = useEditorStore.getState();
-
-      setSaveStatus("saving");
-      expect(useEditorStore.getState().saveStatus).toBe("saving");
-      expect(useEditorStore.getState().saveError).toBeNull();
-
-      setSaveStatus("saved");
-      expect(useEditorStore.getState().saveStatus).toBe("saved");
-
-      setSaveStatus("error", "Failed to save");
-      expect(useEditorStore.getState().saveStatus).toBe("error");
-      expect(useEditorStore.getState().saveError).toBe("Failed to save");
-
-      setSaveStatus("idle");
-      expect(useEditorStore.getState().saveStatus).toBe("idle");
     });
   });
 

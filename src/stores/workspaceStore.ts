@@ -28,6 +28,8 @@ export interface WorkspaceState {
   sortDirection: "asc" | "desc";
   /** Paths of folders currently being lazy loaded */
   loadingPaths: Set<string>;
+  /** Whether filesystem is case-sensitive (Linux: true, Windows/macOS: false) */
+  isCaseSensitiveFs: boolean;
 }
 
 export interface WorkspaceActions {
@@ -62,6 +64,9 @@ export interface WorkspaceActions {
   loadFolderChildren: (folderPath: string, children: FileEntry[]) => void;
   setPathLoading: (path: string, loading: boolean) => void;
 
+  // Filesystem
+  setIsCaseSensitiveFs: (value: boolean) => void;
+
   // Reset
   reset: () => void;
 }
@@ -76,6 +81,7 @@ const initialState: WorkspaceState = {
   sortBy: "name",
   sortDirection: "asc",
   loadingPaths: new Set(),
+  isCaseSensitiveFs: false,
 };
 
 export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>(
@@ -271,6 +277,8 @@ export const useWorkspaceStore = create<WorkspaceState & WorkspaceActions>(
       }
       set({ loadingPaths: newLoadingPaths });
     },
+
+    setIsCaseSensitiveFs: (isCaseSensitiveFs) => set({ isCaseSensitiveFs }),
 
     reset: () => set(initialState),
   })

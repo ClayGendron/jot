@@ -3,13 +3,17 @@ import {
   useTabsStore,
   selectActiveTab,
   selectHasUnsavedChanges,
+  selectActiveFilePath,
+  selectActiveContent,
+  selectActiveIsDirty,
+  selectActiveLastSaved,
 } from "./tabsStore";
-import { useEditorStore } from "./editorStore";
+import { useWorkspaceStore } from "./workspaceStore";
 
 describe("tabsStore", () => {
   beforeEach(() => {
-    // Reset editor store case sensitivity to default (case-insensitive)
-    useEditorStore.setState({ isCaseSensitiveFs: false });
+    // Reset workspace store case sensitivity to default (case-insensitive)
+    useWorkspaceStore.setState({ isCaseSensitiveFs: false });
     // Reset store to initial state before each test
     useTabsStore.setState({
       tabs: [],
@@ -470,7 +474,7 @@ describe("tabsStore", () => {
 
   describe("Case-insensitive path matching", () => {
     it("openTab deduplicates case-insensitively when isCaseSensitiveFs is false", () => {
-      useEditorStore.setState({ isCaseSensitiveFs: false });
+      useWorkspaceStore.setState({ isCaseSensitiveFs: false });
       const { openTab } = useTabsStore.getState();
 
       const id1 = openTab("/Users/foo/Notes.md", "content");
@@ -481,7 +485,7 @@ describe("tabsStore", () => {
     });
 
     it("openTab allows different-case paths when isCaseSensitiveFs is true", () => {
-      useEditorStore.setState({ isCaseSensitiveFs: true });
+      useWorkspaceStore.setState({ isCaseSensitiveFs: true });
       const { openTab } = useTabsStore.getState();
 
       openTab("/Users/foo/Notes.md", "content1");
@@ -491,7 +495,7 @@ describe("tabsStore", () => {
     });
 
     it("findTabByPath matches case-insensitively when isCaseSensitiveFs is false", () => {
-      useEditorStore.setState({ isCaseSensitiveFs: false });
+      useWorkspaceStore.setState({ isCaseSensitiveFs: false });
       const { openTab, findTabByPath } = useTabsStore.getState();
 
       const tabId = openTab("/Users/foo/MyDoc.md", "content");
@@ -502,7 +506,7 @@ describe("tabsStore", () => {
     });
 
     it("renameTab matches case-insensitively when isCaseSensitiveFs is false", () => {
-      useEditorStore.setState({ isCaseSensitiveFs: false });
+      useWorkspaceStore.setState({ isCaseSensitiveFs: false });
       const { openTab, renameTab } = useTabsStore.getState();
 
       openTab("/Users/foo/OldName.md", "content");
@@ -536,6 +540,94 @@ describe("tabsStore", () => {
 
       markTabDirty(tab1Id);
       expect(selectHasUnsavedChanges(useTabsStore.getState())).toBe(true);
+    });
+
+    it("selectActiveFilePath returns active tab's file path", () => {
+      const { openTab } = useTabsStore.getState();
+
+      expect(selectActiveFilePath(useTabsStore.getState())).toBeNull();
+
+      openTab("/path/to/doc1.md", "content1");
+      openTab("/path/to/doc2.md", "content2");
+
+      expect(selectActiveFilePath(useTabsStore.getState())).toBe("/path/to/doc2.md");
+    });
+
+    it("selectActiveContent returns active tab's content", () => {
+      const { openTab } = useTabsStore.getState();
+
+      expect(selectActiveContent(useTabsStore.getState())).toBe("");
+
+      openTab("/path/to/doc.md", "Hello world");
+
+      expect(selectActiveContent(useTabsStore.getState())).toBe("Hello world");
+    });
+
+    it("selectActiveIsDirty returns active tab's dirty state", () => {
+      const { openTab, markTabDirty } = useTabsStore.getState();
+
+      expect(selectActiveIsDirty(useTabsStore.getState())).toBe(false);
+
+      const tabId = openTab("/path/to/doc.md", "content");
+      expect(selectActiveIsDirty(useTabsStore.getState())).toBe(false);
+
+      markTabDirty(tabId);
+      expect(selectActiveIsDirty(useTabsStore.getState())).toBe(true);
+    });
+
+    it("selectActiveLastSaved returns active tab's lastSaved timestamp", () => {
+      const { openTab, markTabSaved, markTabDirty } = useTabsStore.getState();
+
+      expect(selectActiveLastSaved(useTabsStore.getState())).toBeNull();
+
+      const tabId = openTab("/path/to/doc.md", "content");
+      expect(selectActiveLastSaved(useTabsStore.getState())).toBeNull();
+
+      markTabDirty(tabId);
+      markTabSaved(tabId);
+      const ts = selectActiveLastSaved(useTabsStore.getState());
+      expect(typeof ts).toBe("number");
+      expect(ts).toBeGreaterThan(0);
+    });
+  });
+
+  describe("lastSaved", () => {
+    it("initializes lastSaved as null on openTab", () => {
+      const { openTab } = useTabsStore.getState();
+
+      openTab("/path/to/doc.md", "content");
+
+      expect(useTabsStore.getState().tabs[0].lastSaved).toBeNull();
+    });
+
+    it("markTabSaved sets lastSaved to a Date", () => {
+      const { openTab, markTabDirty, markTabSaved } = useTabsStore.getState();
+
+      const tabId = openTab("/path/to/doc.md", "content");
+      markTabDirty(tabId);
+      markTabSaved(tabId);
+
+      const tab = useTabsStore.getState().tabs[0];
+      expect(tab.lastSaved).toBeInstanceOf(Date);
+      expect(tab.isDirty).toBe(false);
+    });
+
+    it("markTabSaved updates lastSaved timestamp on each save", () => {
+      const { openTab, markTabDirty, markTabSaved } = useTabsStore.getState();
+
+      const tabId = openTab("/path/to/doc.md", "content");
+
+      markTabDirty(tabId);
+      markTabSaved(tabId);
+      const firstSave = useTabsStore.getState().tabs[0].lastSaved;
+
+      markTabDirty(tabId);
+      markTabSaved(tabId);
+      const secondSave = useTabsStore.getState().tabs[0].lastSaved;
+
+      expect(firstSave).toBeInstanceOf(Date);
+      expect(secondSave).toBeInstanceOf(Date);
+      expect(secondSave!.getTime()).toBeGreaterThanOrEqual(firstSave!.getTime());
     });
   });
 });

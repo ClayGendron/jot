@@ -30,7 +30,7 @@ import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useLinksStore } from "@/stores/linksStore";
 import { useSearchStore } from "@/stores/searchStore";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { useTabsStore } from "@/stores/tabsStore";
+import { useTabsStore, selectActiveFilePath, selectActiveContent, selectActiveIsDirty } from "@/stores/tabsStore";
 import { useSemanticSearchStore } from "@/stores/semanticSearchStore";
 import { getBacklinksForFile } from "@/lib/links/backlinks";
 import { useAutosave } from "@/hooks/useAutosave";
@@ -86,11 +86,8 @@ function App() {
   const setSidebarWidth = useEditorStore((state) => state.setSidebarWidth);
   const zenMode = useEditorStore((state) => state.zenMode);
   const toggleZenMode = useEditorStore((state) => state.toggleZenMode);
-  const isDirty = useEditorStore((state) => state.isDirty);
-  const filePath = useEditorStore((state) => state.filePath);
-  const setFilePath = useEditorStore((state) => state.setFilePath);
-  const setContent = useEditorStore((state) => state.setContent);
-  const markSaved = useEditorStore((state) => state.markSaved);
+  const filePath = useTabsStore(selectActiveFilePath);
+  const isDirty = useTabsStore(selectActiveIsDirty);
   const theme = useEditorStore((state) => state.theme);
   const setTheme = useEditorStore((state) => state.setTheme);
   const themeName = useEditorStore((state) => state.themeName);
@@ -106,8 +103,8 @@ function App() {
   const setMaxLineWidth = useEditorStore((state) => state.setMaxLineWidth);
   const typewriterMode = useEditorStore((state) => state.typewriterMode);
   const setTypewriterMode = useEditorStore((state) => state.toggleTypewriterMode);
-  const caseSensitiveFs = useEditorStore((state) => state.isCaseSensitiveFs);
-  const setIsCaseSensitiveFs = useEditorStore((state) => state.setIsCaseSensitiveFs);
+  const caseSensitiveFs = useWorkspaceStore((state) => state.isCaseSensitiveFs);
+  const setIsCaseSensitiveFs = useWorkspaceStore((state) => state.setIsCaseSensitiveFs);
 
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const storeLoadWorkspace = useWorkspaceStore((state) => state.loadWorkspace);
@@ -150,7 +147,7 @@ function App() {
     [backlinksIndex, filePath, caseSensitiveFs]
   );
 
-  const [editorContent, setEditorContent] = useState("");
+  const activeContent = useTabsStore(selectActiveContent);
   const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTab>("files");
   const mainContentRef = useRef<HTMLElement | null>(null);
   const editorRef = useRef<CodeMirrorEditorRef | null>(null);
@@ -197,7 +194,7 @@ function App() {
   const closeOtherTabs = useTabsStore((s) => s.closeOtherTabs);
   const closeAllTabs = useTabsStore((s) => s.closeAllTabs);
   const clearAllTabs = useTabsStore((s) => s.clearAllTabs);
-  const setSaveStatus = useEditorStore((s) => s.setSaveStatus);
+  const setSaveStatus = useTabsStore((s) => s.setSaveStatus);
 
   // Tab context menu state
   const [tabContextMenu, setTabContextMenu] = useState<{
@@ -222,14 +219,14 @@ function App() {
 
   // Document outline hook
   const { headings, activeHeadingId, scrollToHeading } = useDocumentOutline({
-    content: editorContent,
+    content: activeContent,
     contentFormat: "markdown",
     scrollContainerRef: mainContentRef,
   });
 
   // Autosave hook
   const { saveNow, checkCrashRecovery, recoverFromCrash } =
-    useAutosave(editorContent);
+    useAutosave(activeContent);
 
   // Load settings on mount
   useEffect(() => {
@@ -343,15 +340,11 @@ function App() {
         }
       }
 
-      // Set active tab
+      // Set active tab — selectors react automatically
       if (openTabsFromSettings.activeTabPath) {
         const activeTab = findTabByPath(openTabsFromSettings.activeTabPath);
         if (activeTab) {
           setActiveTab(activeTab.id);
-          setEditorContent(activeTab.content);
-          setFilePath(activeTab.filePath);
-          setContent(activeTab.content);
-          markSaved();
         }
       }
     };
@@ -365,9 +358,6 @@ function App() {
     togglePinTab,
     findTabByPath,
     setActiveTab,
-    setFilePath,
-    setContent,
-    markSaved,
   ]);
 
   // Save tabs to settings when they change (debounced)
@@ -425,19 +415,11 @@ function App() {
         const tabId = openTab(recoveredPath, content);
         updateTabContent(tabId, content);
       }
-      // Set the first recovered file as active
-      const [firstPath, firstEntry] = entries[0];
-      let firstContent = firstEntry.content;
-      if (firstContent.startsWith("<")) {
-        firstContent = htmlToMarkdown(firstContent);
-      }
-      setEditorContent(firstContent);
-      setFilePath(firstPath);
-      setContent(firstContent);
+      // First recovered file is active via openTab — selectors react automatically
     }
     // Clear all crash recovery data (whether user accepted or declined)
     recoverFromCrash(recoveryMap);
-  }, [checkCrashRecovery, recoverFromCrash, setFilePath, openTab, updateTabContent, setContent]);
+  }, [checkCrashRecovery, recoverFromCrash, openTab, updateTabContent]);
 
   // Save all dirty tabs on window close (Tauri)
   const isClosingRef = useRef(false);
@@ -510,12 +492,6 @@ function App() {
     // Clear ALL tabs including pinned (workspace switch)
     clearAllTabs();
 
-    // Clear editor state
-    setEditorContent("");
-    setFilePath(null);
-    setContent("");
-    markSaved();
-
     // Clear backlinks index
     clearIndex();
 
@@ -524,7 +500,7 @@ function App() {
 
     // Reset tab restoration flag for new workspace
     tabsRestoredRef.current = false;
-  }, [clearAllTabs, setFilePath, setContent, markSaved, clearIndex, setSaveStatus]);
+  }, [clearAllTabs, clearIndex, setSaveStatus]);
 
   // Handle dirty tabs before workspace switch
   // Returns true if we should proceed, false if cancelled
@@ -636,24 +612,15 @@ function App() {
       // Check if file is already open in a tab
       const existingTab = findTabByPath(path);
       if (existingTab) {
-        // Switch to the existing tab
         setActiveTab(existingTab.id);
-        setEditorContent(existingTab.content);
-        setFilePath(path);
-        setContent(existingTab.content);
-        // Only mark as saved if the tab doesn't have pending changes
-        if (!existingTab.isDirty) {
-          markSaved();
-        }
         return;
       }
 
       // Save current file if it has unsaved changes
-      if (isDirty && filePath && activeTabId) {
+      if (isDirty && activeTabId) {
         try {
           const result = await saveDocumentPipeline(activeTabId, true);
           if (!result.saved) {
-            // Save failed - ask user whether to proceed
             const proceed = window.confirm(
               "Failed to save current file. Switch anyway and lose changes?"
             );
@@ -669,26 +636,18 @@ function App() {
       }
 
       try {
-        // Read file content (Markdown on disk) - requires workspace path for validation
         if (!workspacePath) {
           console.error("Cannot open file: no workspace is open");
           return;
         }
         const markdownContent = await readFile(path, workspacePath);
-
-        // Open in a new tab
         openTab(path, markdownContent);
-
-        // Sync with editor state
-        setEditorContent(markdownContent);
-        setFilePath(path);
-        setContent(markdownContent);
-        markSaved();
+        // No sync needed — tabsStore is source of truth, selectors update reactively
       } catch (err) {
         console.error("Failed to open file:", err);
       }
     },
-    [isDirty, filePath, activeTabId, workspacePath, setFilePath, setContent, markSaved, findTabByPath, setActiveTab, openTab]
+    [isDirty, activeTabId, workspacePath, findTabByPath, setActiveTab, openTab]
   );
 
   // Save file (immediate save via Cmd+S)
@@ -697,25 +656,21 @@ function App() {
     saveNow();
   }, [filePath, saveNow]);
 
-  // Handle content changes - syncs both local and store state, marks dirty for autosave
+  // Handle content changes — only update tabsStore (single source of truth)
   const handleEditorUpdate = useCallback(
     (content: string) => {
-      setEditorContent(content);
-      setContent(content); // Sync to store and mark dirty
-
-      // Also update the active tab's content
       if (activeTabId) {
         updateTabContent(activeTabId, content);
       }
     },
-    [setContent, activeTabId, updateTabContent]
+    [activeTabId, updateTabContent]
   );
 
   // Handle tab selection
   const handleTabSelect = useCallback(
     async (tabId: string) => {
       // Save current file if dirty before switching
-      if (isDirty && filePath && activeTabId && tabId !== activeTabId) {
+      if (isDirty && activeTabId && tabId !== activeTabId) {
         try {
           const result = await saveDocumentPipeline(activeTabId, true);
           if (!result.saved) {
@@ -733,20 +688,10 @@ function App() {
         }
       }
 
-      const tab = tabs.find((t) => t.id === tabId);
-      if (!tab) return;
-
       setActiveTab(tabId);
-      setEditorContent(tab.content);
-      setFilePath(tab.filePath);
-      setContent(tab.content);
-
-      // Only mark as saved if the tab doesn't have pending changes
-      if (!tab.isDirty) {
-        markSaved();
-      }
+      // No sync needed — reactive selectors
     },
-    [tabs, isDirty, filePath, activeTabId, setActiveTab, setFilePath, setContent, markSaved]
+    [isDirty, activeTabId, setActiveTab]
   );
 
   // Handle tab close
@@ -761,44 +706,21 @@ function App() {
           `"${tab.displayName}" has unsaved changes. Save before closing?\n\nClick OK to save, or Cancel to keep the tab open.`
         );
         if (shouldSave) {
-          // Use unified save pipeline - works for any tab, not just active
           try {
             await saveDocumentPipeline(tabId, tabId === activeTabId);
           } catch (error) {
             console.error("Failed to save tab before closing:", error);
-            // Don't close if save failed
             return;
           }
         } else {
-          // User clicked Cancel - abort the close operation
           return;
         }
       }
 
-      const nextTabId = closeTab(tabId);
-
-      // If we closed the active tab, switch to the next one
-      if (tabId === activeTabId) {
-        if (nextTabId) {
-          const nextTab = tabs.find((t) => t.id === nextTabId);
-          if (nextTab) {
-            setEditorContent(nextTab.content);
-            setFilePath(nextTab.filePath);
-            setContent(nextTab.content);
-            if (!nextTab.isDirty) {
-              markSaved();
-            }
-          }
-        } else {
-          // No more tabs
-          setEditorContent("");
-          setFilePath(null);
-          setContent("");
-          markSaved();
-        }
-      }
+      closeTab(tabId);
+      // No sync needed — tabsStore.closeTab sets new activeTabId, selectors react
     },
-    [tabs, activeTabId, closeTab, setFilePath, setContent, markSaved]
+    [tabs, activeTabId, closeTab]
   );
 
   // Handle tab reorder
@@ -835,7 +757,6 @@ function App() {
     const dirtyTabs = tabsToClose.filter((t) => t.isDirty);
 
     if (dirtyTabs.length > 0) {
-      // Batch prompt: Save All or Cancel (no Discard All in Phase 1)
       const message = `${dirtyTabs.length} file(s) have unsaved changes.\n\n` +
         `Click "OK" to save all and close\n` +
         `Click "Cancel" to abort`;
@@ -843,7 +764,6 @@ function App() {
       const shouldSave = window.confirm(message);
 
       if (shouldSave) {
-        // Try to save all dirty tabs
         const failedSaves: string[] = [];
         for (const tab of dirtyTabs) {
           try {
@@ -853,84 +773,44 @@ function App() {
           }
         }
 
-        // If any saves failed, abort and keep context menu open
         if (failedSaves.length > 0) {
           window.alert(
             `Failed to save: ${failedSaves.join(", ")}\n\nOperation aborted. No tabs were closed.`
           );
-          return;  // Keep context menu open so user can retry or investigate
+          return;
         }
       } else {
-        // User chose Cancel - abort entirely
         setTabContextMenu(null);
         return;
       }
     }
 
     closeOtherTabs(tabContextMenu.tabId);
-
-    // Read fresh state after mutation
-    const freshTabs = useTabsStore.getState().tabs;
-    const freshActiveTabId = useTabsStore.getState().activeTabId;
-
-    // Update editor state if needed
-    const remainingTab = freshTabs.find(
-      (t) => t.id === tabContextMenu.tabId || t.isPinned
-    );
-    if (remainingTab && remainingTab.id !== freshActiveTabId) {
-      setEditorContent(remainingTab.content);
-      setFilePath(remainingTab.filePath);
-      setContent(remainingTab.content);
-      if (!remainingTab.isDirty) {
-        markSaved();
-      }
-    }
-
-    setTabContextMenu(null);  // Dismiss on success
-  }, [tabContextMenu, tabs, activeTabId, closeOtherTabs, setFilePath, setContent, markSaved]);
+    setTabContextMenu(null);
+    // No sync needed — selectors react to new active tab
+  }, [tabContextMenu, tabs, activeTabId, closeOtherTabs]);
 
   // Handle close all from context menu
   const handleCloseAllTabs = useCallback(async () => {
-    // Check for dirty tabs (excluding pinned, which won't be closed)
     const dirtyTabs = tabs.filter((t) => t.isDirty && !t.isPinned);
     if (dirtyTabs.length > 0) {
       const shouldSave = window.confirm(
         `You have ${dirtyTabs.length} unsaved file(s). Save all before closing?\n\nClick OK to save all, or Cancel to abort.`
       );
       if (shouldSave) {
-        // Save all dirty tabs using unified pipeline
         const failedTabs = await saveAllDirtyTabs(activeTabId);
         if (failedTabs.length > 0) {
           console.error(`Failed to save ${failedTabs.length} tabs`);
-          // Don't proceed if some saves failed
           return;
         }
       } else {
-        // User clicked Cancel - abort the operation
         return;
       }
     }
 
     closeAllTabs();
-
-    // Read fresh state after mutation
-    const freshTabs = useTabsStore.getState().tabs;
-
-    // Check if any pinned tabs remain (freshTabs now reflects post-closeAllTabs state)
-    if (freshTabs.length > 0) {
-      setEditorContent(freshTabs[0].content);
-      setFilePath(freshTabs[0].filePath);
-      setContent(freshTabs[0].content);
-      if (!freshTabs[0].isDirty) {
-        markSaved();
-      }
-    } else {
-      setEditorContent("");
-      setFilePath(null);
-      setContent("");
-      markSaved();
-    }
-  }, [tabs, activeTabId, closeAllTabs, setFilePath, setContent, markSaved]);
+    // No sync needed — selectors react to new state
+  }, [tabs, activeTabId, closeAllTabs]);
 
   // Dismiss tab context menu
   const handleDismissTabContextMenu = useCallback(() => {
@@ -1161,18 +1041,14 @@ function App() {
         if (workspacePath) {
           await loadWorkspace(workspacePath);
         }
-        // Update editor if this was the open file
-        if (filePath === path) {
-          setFilePath(newPath);
-        }
-        // Update tab if this file is open in a tab
+        // Update tab if this file is open in a tab — selectors react automatically
         renameTab(path, newPath);
       } catch (err) {
         console.error("Failed to rename:", err);
         alert(err instanceof Error ? err.message : "Failed to rename");
       }
     },
-    [workspacePath, loadWorkspace, filePath, setFilePath, renameTab]
+    [workspacePath, loadWorkspace, renameTab, caseSensitiveFs]
   );
 
   // Delete file/folder
@@ -1196,18 +1072,17 @@ function App() {
         }
 
         await loadWorkspace(workspacePath);
-        // Clear editor if this was the open file
-        if (filePath === path) {
-          setFilePath(null);
-          setEditorContent("");
-          setContent("");
+        // Close the tab if this file was open
+        const deletedTab = findTabByPath(path);
+        if (deletedTab) {
+          closeTab(deletedTab.id);
         }
       } catch (err) {
         console.error("Failed to delete:", err);
         alert(err instanceof Error ? err.message : "Failed to delete");
       }
     },
-    [workspacePath, loadWorkspace, filePath, setFilePath, setContent]
+    [workspacePath, loadWorkspace, findTabByPath, closeTab]
   );
 
   // Move file/folder with automatic link updates
@@ -1240,16 +1115,14 @@ function App() {
         // Reload workspace to reflect changes
         await loadWorkspace(workspacePath);
 
-        // Update editor if this was the open file
-        if (filePath === sourcePath) {
-          setFilePath(newPath);
-        }
+        // Update tab if this file is open — selectors react automatically
+        renameTab(sourcePath, newPath);
       } catch (err) {
         console.error("Failed to move:", err);
         alert(err instanceof Error ? err.message : `Failed to move "${fileName}"`);
       }
     },
-    [workspacePath, loadWorkspace, filePath, setFilePath, caseSensitiveFs]
+    [workspacePath, loadWorkspace, renameTab, caseSensitiveFs]
   );
 
   // Handle internal link click - navigate to file and optionally scroll to heading
@@ -1289,12 +1162,13 @@ function App() {
   // Handle version restore
   const handleVersionRestore = useCallback(
     (content: string) => {
-      // Content from version history is already markdown
-      setEditorContent(content);
-      setContent(content);
+      // Content from version history is already markdown — update via tabsStore
+      if (activeTabId) {
+        updateTabContent(activeTabId, content);
+      }
       setShowHistory(false);
     },
-    [setContent]
+    [activeTabId, updateTabContent]
   );
 
   // Handle compare versions
@@ -1620,7 +1494,7 @@ function App() {
             {/* CodeMirror Editor - has built-in search panel (Cmd/Ctrl+F) */}
             <CodeMirrorEditor
               ref={editorRef}
-              initialContent={editorContent}
+              initialContent={activeContent}
               onUpdate={handleEditorUpdate}
               placeholder="Start writing..."
               onInternalLinkClick={handleInternalLinkClick}

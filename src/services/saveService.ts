@@ -20,7 +20,6 @@
 import { writeFile } from "@/lib/tauri/files";
 import { saveVersion } from "@/lib/tauri/versionHistory";
 import { useTabsStore } from "@/stores/tabsStore";
-import { useEditorStore } from "@/stores/editorStore";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
 import { useLinksStore } from "@/stores/linksStore";
 import { clearCrashRecoveryForFile } from "@/lib/crashRecovery";
@@ -144,7 +143,7 @@ async function executeSave(
 
   // 1. Update SaveIndicator for active doc only
   if (isActiveDoc) {
-    useEditorStore.getState().setSaveStatus("saving");
+    useTabsStore.getState().setSaveStatus("saving");
   }
 
   try {
@@ -183,19 +182,18 @@ async function executeSave(
       useTabsStore.getState().markTabSaved(tabId);
       clearCrashRecoveryForFile(tab.filePath);
       if (isActiveDoc) {
-        useEditorStore.getState().markSaved();
-        useEditorStore.getState().setSaveStatus("saved");
+        useTabsStore.getState().setSaveStatus("saved");
       }
     } else if (isActiveDoc) {
       // Content changed during save - show "saved" briefly but document is still dirty
       // Reset to idle immediately since we didn't actually finish saving everything
-      useEditorStore.getState().setSaveStatus("idle");
+      useTabsStore.getState().setSaveStatus("idle");
     }
     // If content changed during save, leave isDirty=true (next autosave will handle it)
 
     // 9. Update backlinks index for this file
     if (workspacePath) {
-      const caseSensitiveFs = useEditorStore.getState().isCaseSensitiveFs;
+      const caseSensitiveFs = useWorkspaceStore.getState().isCaseSensitiveFs;
       useLinksStore.getState().updateFileInIndex(
         tab.filePath,
         normalizedMarkdown,
@@ -213,7 +211,7 @@ async function executeSave(
       error instanceof Error ? error.message : "Failed to save file";
 
     if (isActiveDoc) {
-      useEditorStore.getState().setSaveStatus("error", errorMessage);
+      useTabsStore.getState().setSaveStatus("error", errorMessage);
     }
 
     console.error(`saveDocumentPipeline failed for ${tab.filePath}:`, error);

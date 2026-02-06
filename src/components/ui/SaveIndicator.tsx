@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { useEditorStore } from "@/stores/editorStore";
+import { useTabsStore, selectActiveLastSaved } from "@/stores/tabsStore";
 
 /**
  * Save status indicator component
@@ -15,11 +15,11 @@ import { useEditorStore } from "@/stores/editorStore";
  */
 export function SaveIndicator() {
   // Use individual selectors to avoid React 19 + Zustand issues
-  const saveStatus = useEditorStore((state) => state.saveStatus);
-  const saveError = useEditorStore((state) => state.saveError);
-  const lastSaved = useEditorStore((state) => state.lastSaved);
+  const saveStatus = useTabsStore((state) => state.saveStatus);
+  const saveError = useTabsStore((state) => state.saveError);
+  const lastSavedTs = useTabsStore(selectActiveLastSaved);
 
-  if (saveStatus === "idle" && !lastSaved) {
+  if (saveStatus === "idle" && !lastSavedTs) {
     return null;
   }
 
@@ -54,10 +54,10 @@ export function SaveIndicator() {
           </span>
         </span>
       )}
-      {saveStatus === "idle" && lastSaved && (
+      {saveStatus === "idle" && lastSavedTs && (
         <span className="inline-flex items-center gap-1.5 opacity-50 hover:opacity-80 transition-opacity">
           <span className="not-italic tabular-nums">
-            {formatLastSaved(lastSaved)}
+            {formatLastSaved(new Date(lastSavedTs))}
           </span>
         </span>
       )}

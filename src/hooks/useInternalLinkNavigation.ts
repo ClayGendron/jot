@@ -6,7 +6,6 @@
 
 import { useCallback, useEffect, useMemo } from "react";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { useEditorStore } from "@/stores/editorStore";
 import { resolveInternalLink, isInternalLink, isSameFileHeadingLink } from "@/lib/links/resolver";
 import { isWithinWorkspace, shouldScrollOnly } from "@/lib/links/linkService";
 import { joinFsPaths } from "@/lib/path/pathUtils";
@@ -46,7 +45,7 @@ export function useInternalLinkNavigation({
   // Use individual selectors to avoid React 19 + Zustand snapshot caching issues
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const fileTree = useWorkspaceStore((state) => state.fileTree);
-  const isCaseSensitiveFs = useEditorStore((state) => state.isCaseSensitiveFs);
+  const isCaseSensitiveFs = useWorkspaceStore((state) => state.isCaseSensitiveFs);
 
   // Derive file list from fileTree using useMemo for stable references
   const fileInfos = useMemo(() => {

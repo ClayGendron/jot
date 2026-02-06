@@ -2,7 +2,6 @@ import { useCallback, useState, useRef, useEffect, useMemo } from "react";
 import { File } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspaceStore";
-import { useEditorStore } from "@/stores/editorStore";
 import { readFolderChildren, type FileEntry } from "@/lib/tauri/files";
 import { validateMove } from "@/lib/links/moveFile";
 import { sortFileEntries } from "@/lib/files/sortFiles";
@@ -204,7 +203,7 @@ export function FileTree({
   const workspacePath = useWorkspaceStore((state) => state.workspacePath);
   const sortBy = useWorkspaceStore((state) => state.sortBy);
   const sortDirection = useWorkspaceStore((state) => state.sortDirection);
-  const caseSensitiveFs = useEditorStore((state) => state.isCaseSensitiveFs);
+  const caseSensitiveFs = useWorkspaceStore((state) => state.isCaseSensitiveFs);
 
   // Compute sorted file tree (memoized to avoid unnecessary re-sorts)
   const sortedFileTree = useMemo(

@@ -2,28 +2,10 @@ import { create } from "zustand";
 import type { ThemeName } from "@/lib/settings/themes";
 
 /**
- * Editor state management using Zustand
+ * Editor UI/preferences state management using Zustand
  *
- * Design: Separates document state from UI state for testability.
- * Pure state updates, side effects handled in components/hooks.
+ * Pure UI state — no document state. Document state lives in tabsStore.
  */
-
-export type SaveStatus = "idle" | "saving" | "saved" | "error";
-
-export interface DocumentState {
-  /** Current file path (null if untitled) */
-  filePath: string | null;
-  /** Document content as Markdown */
-  content: string;
-  /** Whether document has unsaved changes */
-  isDirty: boolean;
-  /** Last saved timestamp */
-  lastSaved: Date | null;
-  /** Current save operation status */
-  saveStatus: SaveStatus;
-  /** Error message if save failed */
-  saveError: string | null;
-}
 
 /** Layout state for panels and zen mode */
 export interface LayoutState {
@@ -60,19 +42,9 @@ export interface EditorUIState {
   sourceMode: boolean;
   /** Show line numbers in code blocks */
   showLineNumbers: boolean;
-  /** Whether filesystem is case-sensitive (Linux: true, Windows/macOS: false) */
-  isCaseSensitiveFs: boolean;
 }
 
-export interface EditorState extends DocumentState, EditorUIState, LayoutState {
-  // Document actions
-  setContent: (content: string) => void;
-  setFilePath: (path: string | null) => void;
-  markSaved: () => void;
-  markDirty: () => void;
-  resetDocument: () => void;
-  setSaveStatus: (status: SaveStatus, error?: string | null) => void;
-
+export interface EditorState extends EditorUIState, LayoutState {
   // UI actions
   toggleSidebar: () => void;
   toggleFocusMode: () => void;
@@ -89,17 +61,7 @@ export interface EditorState extends DocumentState, EditorUIState, LayoutState {
   setSidebarWidth: (width: number) => void;
   toggleZenMode: () => void;
   setLayoutState: (layout: Partial<LayoutState>) => void;
-  setIsCaseSensitiveFs: (value: boolean) => void;
 }
-
-const initialDocumentState: DocumentState = {
-  filePath: null,
-  content: "",
-  isDirty: false,
-  lastSaved: null,
-  saveStatus: "idle",
-  saveError: null,
-};
 
 /** Default sidebar width in pixels */
 export const DEFAULT_SIDEBAR_WIDTH = 260;
@@ -123,7 +85,6 @@ const initialUIState: EditorUIState = {
   typewriterMode: false,
   sourceMode: false,
   showLineNumbers: false,
-  isCaseSensitiveFs: false, // Default to case-insensitive (Windows/macOS), updated at startup
 };
 
 const initialLayoutState: LayoutState = {
@@ -133,34 +94,8 @@ const initialLayoutState: LayoutState = {
 
 export const useEditorStore = create<EditorState>((set) => ({
   // Initial state
-  ...initialDocumentState,
   ...initialUIState,
   ...initialLayoutState,
-
-  // Document actions
-  setContent: (content) =>
-    set((state) => ({
-      content,
-      isDirty: content !== state.content || state.isDirty,
-    })),
-
-  setFilePath: (filePath) => set({ filePath }),
-
-  markSaved: () =>
-    set({
-      isDirty: false,
-      lastSaved: new Date(),
-    }),
-
-  markDirty: () => set({ isDirty: true }),
-
-  resetDocument: () => set(initialDocumentState),
-
-  setSaveStatus: (status, error = null) =>
-    set({
-      saveStatus: status,
-      saveError: error,
-    }),
 
   // UI actions
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
@@ -200,7 +135,4 @@ export const useEditorStore = create<EditorState>((set) => ({
   toggleZenMode: () => set((state) => ({ zenMode: !state.zenMode })),
 
   setLayoutState: (layout) => set(layout),
-
-  setIsCaseSensitiveFs: (isCaseSensitiveFs) => set({ isCaseSensitiveFs }),
 }));
-

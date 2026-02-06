@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { storeCrashRecoveryForFile } from "@/lib/crashRecovery";
 import { normalizeForComparison } from "@/lib/path/pathUtils";
-import { useEditorStore } from "@/stores/editorStore";
+import { useWorkspaceStore } from "@/stores/workspaceStore";
 
 /**
  * Tab state management using Zustand
@@ -25,6 +25,8 @@ export interface Tab {
   isPinned: boolean;
   /** Scroll position to restore when switching back */
   scrollTop: number;
+  /** Last saved timestamp */
+  lastSaved: Date | null;
 }
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -76,7 +78,7 @@ export interface TabsActions {
 }
 
 function pathsMatch(a: string, b: string): boolean {
-  const caseSensitive = useEditorStore.getState().isCaseSensitiveFs;
+  const caseSensitive = useWorkspaceStore.getState().isCaseSensitiveFs;
   return normalizeForComparison(a, caseSensitive) === normalizeForComparison(b, caseSensitive);
 }
 
@@ -129,6 +131,7 @@ export const useTabsStore = create<TabsState & TabsActions>((set, get) => ({
       isDirty: false,
       isPinned: false,
       scrollTop: 0,
+      lastSaved: null,
     };
 
     set((state) => ({
@@ -231,7 +234,7 @@ export const useTabsStore = create<TabsState & TabsActions>((set, get) => ({
   markTabSaved: (tabId) => {
     set((state) => ({
       tabs: state.tabs.map((t) =>
-        t.id === tabId ? { ...t, isDirty: false } : t
+        t.id === tabId ? { ...t, isDirty: false, lastSaved: new Date() } : t
       ),
     }));
   },
@@ -311,4 +314,28 @@ export const selectActiveTab = (state: TabsState & TabsActions): Tab | undefined
  */
 export const selectHasUnsavedChanges = (state: TabsState & TabsActions): boolean => {
   return state.tabs.some((t) => t.isDirty);
+};
+
+/** Select active tab's filePath (primitive — React 19 safe) */
+export const selectActiveFilePath = (state: TabsState): string | null => {
+  const tab = state.tabs.find((t) => t.id === state.activeTabId);
+  return tab?.filePath ?? null;
+};
+
+/** Select active tab's content */
+export const selectActiveContent = (state: TabsState): string => {
+  const tab = state.tabs.find((t) => t.id === state.activeTabId);
+  return tab?.content ?? "";
+};
+
+/** Select active tab's isDirty */
+export const selectActiveIsDirty = (state: TabsState): boolean => {
+  const tab = state.tabs.find((t) => t.id === state.activeTabId);
+  return tab?.isDirty ?? false;
+};
+
+/** Select active tab's lastSaved timestamp (primitive — React 19 safe) */
+export const selectActiveLastSaved = (state: TabsState): number | null => {
+  const tab = state.tabs.find((t) => t.id === state.activeTabId);
+  return tab?.lastSaved?.getTime() ?? null;
 };

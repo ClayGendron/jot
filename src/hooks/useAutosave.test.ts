@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useAutosave } from "./useAutosave";
-import { useEditorStore } from "@/stores/editorStore";
 import { useTabsStore } from "@/stores/tabsStore";
 import { storeCrashRecoveryForFile } from "@/lib/crashRecovery";
 
@@ -23,19 +22,6 @@ const mockSaveDocumentPipeline = saveDocumentPipeline as Mock;
 
 describe("useAutosave", () => {
   beforeEach(() => {
-    // Reset the editor store
-    useEditorStore.setState({
-      filePath: null,
-      content: "",
-      isDirty: false,
-      lastSaved: null,
-      saveStatus: "idle",
-      saveError: null,
-      sidebarOpen: true,
-      focusMode: false,
-      theme: "system",
-      sourceMode: false,
-    });
     // Reset tabs store
     useTabsStore.setState({
       tabs: [],
@@ -156,6 +142,7 @@ describe("useAutosave", () => {
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
+          lastSaved: null,
         }],
         activeTabId: "tab-1",
       });
@@ -181,12 +168,8 @@ describe("useAutosave", () => {
     });
 
     it("does not call writeFile when no file path is set", async () => {
+      // No tabs open = no file path
       const { result } = renderHook(() => useAutosave("test content"));
-
-      // No file path set
-      act(() => {
-        useEditorStore.setState({ isDirty: true, filePath: null });
-      });
 
       await act(async () => {
         result.current.saveNow();
@@ -196,15 +179,24 @@ describe("useAutosave", () => {
     });
 
     it("does not call writeFile when not dirty", async () => {
-      const { result } = renderHook(() => useAutosave("test content"));
-
-      // File path set but not dirty
+      // Tab open but not dirty
       act(() => {
-        useEditorStore.setState({
-          isDirty: false,
-          filePath: "/test/file.md",
+        useTabsStore.setState({
+          tabs: [{
+            id: "tab-1",
+            filePath: "/test/file.md",
+            displayName: "file",
+            content: "test content",
+            isDirty: false,
+            isPinned: false,
+            scrollTop: 0,
+            lastSaved: null,
+          }],
+          activeTabId: "tab-1",
         });
       });
+
+      const { result } = renderHook(() => useAutosave("test content"));
 
       await act(async () => {
         result.current.saveNow();
@@ -216,11 +208,8 @@ describe("useAutosave", () => {
 
   describe("autosave conditions", () => {
     it("does not trigger save when there is no file path", () => {
+      // No tabs open = no file path
       renderHook(() => useAutosave("test content"));
-
-      act(() => {
-        useEditorStore.setState({ isDirty: true, filePath: null });
-      });
 
       // No crash recovery stored without a file path (no updateTabContent call)
       const data = localStorage.getItem("jot_crash_recovery_v2");
@@ -228,14 +217,23 @@ describe("useAutosave", () => {
     });
 
     it("does not trigger save when content is not dirty", () => {
-      renderHook(() => useAutosave("test content"));
-
       act(() => {
-        useEditorStore.setState({
-          filePath: "/test/file.md",
-          isDirty: false,
+        useTabsStore.setState({
+          tabs: [{
+            id: "tab-1",
+            filePath: "/test/file.md",
+            displayName: "file",
+            content: "test content",
+            isDirty: false,
+            isPinned: false,
+            scrollTop: 0,
+            lastSaved: null,
+          }],
+          activeTabId: "tab-1",
         });
       });
+
+      renderHook(() => useAutosave("test content"));
 
       // No crash recovery stored when not dirty
       const data = localStorage.getItem("jot_crash_recovery_v2");
