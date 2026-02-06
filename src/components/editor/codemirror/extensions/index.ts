@@ -7,7 +7,7 @@
 import { markdown } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { GFM } from "@lezer/markdown";
-import { Prec } from "@codemirror/state";
+import { Prec, Compartment } from "@codemirror/state";
 import { history } from "@codemirror/commands";
 import { syntaxHighlighting } from "@codemirror/language";
 import { search, searchKeymap, highlightSelectionMatches } from "@codemirror/search";
@@ -18,9 +18,12 @@ export { hiddenRangesField, getHiddenRanges, type HiddenRange, type HiddenRangeK
 export { hiddenSyntaxField, buildDecorationsFromRanges } from "./hiddenSyntax";
 export { selectionSnapper } from "./selectionSnapper";
 export { styleField, codeHighlightStyle } from "./styleDecorations";
-export { formattingInputHandler } from "./inputHandler";
+export { formattingInputHandler, clearPendingEscape } from "./inputHandler";
 export { formattingEscapeKeymap, defaultKeymapWithHistory } from "./keymap";
 export { theme } from "./theme";
+
+// History compartment (allows resetting undo history on file switch)
+export const historyCompartment = new Compartment();
 
 // Lezer extensions
 import { HighlightExtension } from "./lezerExtensions";
@@ -92,8 +95,8 @@ export function createWysiwygExtensions() {
       extensions: [GFM, HighlightExtension],
       codeLanguages: languages,
     }),
-    // History (undo/redo)
-    history(),
+    // History (undo/redo) — wrapped in compartment for reset on file switch
+    historyCompartment.of(history()),
     // Search and replace (Cmd/Ctrl+F, Cmd/Ctrl+H)
     search({
       top: true, // Panel at top of editor

@@ -34,7 +34,7 @@ interface PendingEscape {
 
 let pendingEscape: PendingEscape | null = null;
 
-function clearPendingEscape() {
+export function clearPendingEscape() {
   if (pendingEscape) {
     clearTimeout(pendingEscape.timeoutId);
     pendingEscape = null;

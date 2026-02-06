@@ -11,9 +11,11 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { EditorState, StateField, RangeSetBuilder, EditorSelection, Prec } from "@codemirror/state";
+import { EditorState, StateField, RangeSetBuilder, EditorSelection, Prec, Compartment } from "@codemirror/state";
 import { EditorView, Decoration, keymap, WidgetType, rectangularSelection } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+
+export const historyCompartment = new Compartment();
 import { markdown } from "@codemirror/lang-markdown";
 import { syntaxTree, syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { languages } from "@codemirror/language-data";
@@ -7054,7 +7056,7 @@ function Editor({ initialContent, hidesSyntax, onChange }: EditorProps) {
       codeBlockRectangularSelection,
       markdown({ extensions: [GFM, HighlightExtension], codeLanguages: languages }),
       syntaxHighlighting(codeHighlightStyle),
-      history(),
+      historyCompartment.of(history()),
       // Formatting escape keymap with HIGHEST priority to override markdown extension's list handling
       Prec.highest(formattingEscapeKeymap),
       keymap.of([...defaultKeymap, ...historyKeymap]),

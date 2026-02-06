@@ -9,7 +9,7 @@ export { CodeMirrorEditor, type CodeMirrorEditorProps, type CodeMirrorEditorRef 
 export { CodeMirrorToolbar } from "./CodeMirrorToolbar";
 
 // Extensions
-export { createWysiwygExtensions } from "./extensions";
+export { createWysiwygExtensions, historyCompartment } from "./extensions";
 export {
   hiddenRangesField,
   getHiddenRanges,
@@ -19,7 +19,7 @@ export {
 export { hiddenSyntaxField } from "./extensions/hiddenSyntax";
 export { selectionSnapper } from "./extensions/selectionSnapper";
 export { styleField, codeHighlightStyle } from "./extensions/styleDecorations";
-export { formattingInputHandler } from "./extensions/inputHandler";
+export { formattingInputHandler, clearPendingEscape } from "./extensions/inputHandler";
 export { formattingEscapeKeymap, defaultKeymapWithHistory } from "./extensions/keymap";
 export { theme } from "./extensions/theme";
 export { HighlightExtension } from "./extensions/lezerExtensions";

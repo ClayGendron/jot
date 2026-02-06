@@ -19,7 +19,8 @@ import { openSearchPanel, closeSearchPanel } from "@codemirror/search";
 import { useEditorStore } from "@/stores/editorStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
-import { createWysiwygExtensions } from "./extensions";
+import { createWysiwygExtensions, historyCompartment, clearPendingEscape } from "./extensions";
+import { history } from "@codemirror/commands";
 import {
   createSpellcheckExtension,
   setSpellcheckEnabledCmd,
@@ -51,6 +52,8 @@ import {
   setInternalLinkCallbacks,
   getLinkContextAtPos,
   handleLinkClick,
+  closeLinkEditor,
+  closeLinkContextMenu,
 } from "./handlers/linkHandlers";
 
 /**
@@ -290,6 +293,17 @@ export const CodeMirrorEditor = forwardRef<
         annotations: fileSwitchAnnotation.of(true),
       });
     }
+
+    // Clear stale module-level state from previous file
+    closeLinkEditor();
+    closeLinkContextMenu();
+    closeSpellcheckContextMenu();
+    clearPendingEscape();
+
+    // Reset undo history so previous file's edits don't bleed through
+    viewRef.current.dispatch({
+      effects: historyCompartment.reconfigure(history()),
+    });
   }, [filePath, isReady]);
 
   // Handle mode switching (WYSIWYG ↔ Source)
