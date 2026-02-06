@@ -15,7 +15,7 @@ export type ContentFormat = "html" | "markdown";
 interface UseDocumentOutlineOptions {
   /** Content from the editor (HTML or Markdown) */
   content: string;
-  /** Content format: 'html' for TipTap, 'markdown' for CodeMirror */
+  /** Content format: 'markdown' for CodeMirror, 'html' for legacy */
   contentFormat?: ContentFormat;
   /** Ref to the scrollable container */
   scrollContainerRef?: React.RefObject<HTMLElement | null>;
@@ -36,11 +36,11 @@ interface UseDocumentOutlineResult {
  * Hook for document outline functionality
  *
  * Extracts headings from content and tracks the active heading
- * based on scroll position. Supports both HTML (TipTap) and Markdown (CodeMirror) formats.
+ * based on scroll position.
  */
 export function useDocumentOutline({
   content,
-  contentFormat = "html",
+  contentFormat = "markdown",
   scrollContainerRef,
   scrollDebounce = 100,
 }: UseDocumentOutlineOptions): UseDocumentOutlineResult {
@@ -64,27 +64,14 @@ export function useDocumentOutline({
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
     const updateActiveHeading = () => {
-      // Find the editor element (TipTap or CodeMirror)
-      const editorElement =
-        container.querySelector(".cm-editor") ||
-        container.querySelector(".tiptap-editor");
+      // Find the CodeMirror editor element
+      const editorElement = container.querySelector(".cm-editor");
       if (!editorElement) return;
 
-      // Find heading elements based on editor type
-      const isCodeMirror = editorElement.classList.contains("cm-editor");
-      let headingElements: NodeListOf<Element>;
-
-      if (isCodeMirror) {
-        // CodeMirror: headings are styled spans with .cm-h1, .cm-h2, etc.
-        headingElements = editorElement.querySelectorAll(
-          ".cm-h1, .cm-h2, .cm-h3, .cm-h4, .cm-h5, .cm-h6"
-        );
-      } else {
-        // TipTap: headings are actual h1-h6 elements
-        headingElements = editorElement.querySelectorAll(
-          "h1, h2, h3, h4, h5, h6"
-        );
-      }
+      // CodeMirror: headings are styled spans with .cm-h1, .cm-h2, etc.
+      const headingElements = editorElement.querySelectorAll(
+        ".cm-h1, .cm-h2, .cm-h3, .cm-h4, .cm-h5, .cm-h6"
+      );
 
       if (headingElements.length === 0) return;
 
@@ -143,27 +130,14 @@ export function useDocumentOutline({
         scrollContainerRef?.current || document.querySelector(".main-content");
       if (!container) return;
 
-      // Find the editor element (TipTap or CodeMirror)
-      const editorElement =
-        container.querySelector(".cm-editor") ||
-        container.querySelector(".tiptap-editor");
+      // Find the CodeMirror editor element
+      const editorElement = container.querySelector(".cm-editor");
       if (!editorElement) return;
 
-      // Find heading elements based on editor type
-      const isCodeMirror = editorElement.classList.contains("cm-editor");
-      let headingElements: NodeListOf<Element>;
-
-      if (isCodeMirror) {
-        // CodeMirror: headings are styled spans with .cm-h1, .cm-h2, etc.
-        headingElements = editorElement.querySelectorAll(
-          ".cm-h1, .cm-h2, .cm-h3, .cm-h4, .cm-h5, .cm-h6"
-        );
-      } else {
-        // TipTap: headings are actual h1-h6 elements
-        headingElements = editorElement.querySelectorAll(
-          "h1, h2, h3, h4, h5, h6"
-        );
-      }
+      // CodeMirror: headings are styled spans with .cm-h1, .cm-h2, etc.
+      const headingElements = editorElement.querySelectorAll(
+        ".cm-h1, .cm-h2, .cm-h3, .cm-h4, .cm-h5, .cm-h6"
+      );
 
       for (const element of headingElements) {
         const text = element.textContent?.trim() || "";

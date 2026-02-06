@@ -1,7 +1,7 @@
 /**
  * Word/DOCX Export Functionality
  *
- * Exports TipTap editor content to Word format using the docx library.
+ * Exports editor content to Word format using the docx library.
  * Preserves formatting, headings, lists, tables, and images.
  */
 

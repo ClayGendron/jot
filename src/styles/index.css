@@ -10,7 +10,7 @@
 /* Theme variables and presets */
 @import "./theme.css";
 
-/* TipTap/ProseMirror editor styles */
+/* Global editor base styles */
 @import "./editor.css";
 
 /* CodeMirror WYSIWYG editor styles */

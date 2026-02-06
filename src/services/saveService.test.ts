@@ -20,13 +20,6 @@ vi.mock("@/lib/tauri/versionHistory", () => ({
   saveVersion: vi.fn().mockResolvedValue(1),
 }));
 
-vi.mock("@/lib/markdown/htmlToMarkdown", () => ({
-  htmlToMarkdown: vi.fn((html: string) => {
-    // Simple mock: strip HTML tags
-    return html.replace(/<[^>]+>/g, "");
-  }),
-}));
-
 import { writeFile } from "@/lib/tauri/files";
 import { saveVersion } from "@/lib/tauri/versionHistory";
 
@@ -124,7 +117,7 @@ describe("saveDocumentPipeline", () => {
           id: "tab-1",
           filePath: "/workspace/test.md",
           displayName: "test",
-          content: "<p>content</p>",
+          content: "content",
           isDirty: false,
           isPinned: false,
           scrollTop: 0,
@@ -147,7 +140,7 @@ describe("saveDocumentPipeline", () => {
           id: "tab-1",
           filePath: "/workspace/test.md",
           displayName: "test",
-          content: "<p>Hello world</p>",
+          content: "Hello world",
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
@@ -171,7 +164,7 @@ describe("saveDocumentPipeline", () => {
           id: "tab-1",
           filePath: "/workspace/test.md",
           displayName: "test",
-          content: "<p>content</p>",
+          content: "content",
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
@@ -193,7 +186,7 @@ describe("saveDocumentPipeline", () => {
           id: "tab-1",
           filePath: "/workspace/test.md",
           displayName: "test",
-          content: "<p>content</p>",
+          content: "content",
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
@@ -215,7 +208,7 @@ describe("saveDocumentPipeline", () => {
           id: "tab-1",
           filePath: "/workspace/test.md",
           displayName: "test",
-          content: "<p>content</p>",
+          content: "content",
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
@@ -240,7 +233,7 @@ describe("saveDocumentPipeline", () => {
           id: "tab-1",
           filePath: "/workspace/test.md",
           displayName: "test",
-          content: "<p>content</p>",
+          content: "content",
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
@@ -257,17 +250,13 @@ describe("saveDocumentPipeline", () => {
   });
 
   it("normalizes line endings", async () => {
-    // Mock htmlToMarkdown to return content with CRLF
-    const { htmlToMarkdown } = await import("@/lib/markdown/htmlToMarkdown");
-    (htmlToMarkdown as Mock).mockReturnValueOnce("Hello\r\nWorld");
-
     useTabsStore.setState({
       tabs: [
         {
           id: "tab-1",
           filePath: "/workspace/test.md",
           displayName: "test",
-          content: "<p>content</p>",
+          content: "Hello\r\nWorld",
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
@@ -294,7 +283,7 @@ describe("saveDocumentPipeline", () => {
           id: "tab-1",
           filePath: "/workspace/test.md",
           displayName: "test",
-          content: "<p>content</p>",
+          content: "content",
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
@@ -324,7 +313,7 @@ describe("saveDocumentPipeline", () => {
           id: "tab-1",
           filePath: "/workspace/test.md",
           displayName: "test",
-          content: "<p>content</p>",
+          content: "content",
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
@@ -339,7 +328,7 @@ describe("saveDocumentPipeline", () => {
   });
 
   it("keeps isDirty true and returns isClean:false if content changed during save", async () => {
-    const originalContent = "<p>original</p>";
+    const originalContent = "original";
 
     useTabsStore.setState({
       tabs: [
@@ -366,7 +355,7 @@ describe("saveDocumentPipeline", () => {
             id: "tab-1",
             filePath: "/workspace/test.md",
             displayName: "test",
-            content: "<p>edited during save</p>",  // Content changed!
+            content: "edited during save",  // Content changed!
             isDirty: true,
             isPinned: false,
             scrollTop: 0,
@@ -388,7 +377,7 @@ describe("saveDocumentPipeline", () => {
   });
 
   it("marks as saved only when HTML content is exactly the same", async () => {
-    const content = "<p>unchanged</p>";
+    const content = "unchanged";
 
     useTabsStore.setState({
       tabs: [
@@ -421,7 +410,7 @@ describe("saveDocumentPipeline", () => {
           id: "tab-1",
           filePath: "/workspace/test.md",
           displayName: "test",
-          content: "<p>original</p>",
+          content: "original",
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
@@ -438,7 +427,7 @@ describe("saveDocumentPipeline", () => {
             id: "tab-1",
             filePath: "/workspace/test.md",
             displayName: "test",
-            content: "<p>edited</p>",
+            content: "edited",
             isDirty: true,
             isPinned: false,
             scrollTop: 0,
@@ -492,7 +481,7 @@ describe("saveAllDirtyTabs", () => {
           id: "tab-1",
           filePath: "/workspace/test.md",
           displayName: "test",
-          content: "<p>content</p>",
+          content: "content",
           isDirty: false,
           isPinned: false,
           scrollTop: 0,
@@ -513,7 +502,7 @@ describe("saveAllDirtyTabs", () => {
           id: "tab-1",
           filePath: "/workspace/a.md",
           displayName: "a",
-          content: "<p>A</p>",
+          content: "A",
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
@@ -522,7 +511,7 @@ describe("saveAllDirtyTabs", () => {
           id: "tab-2",
           filePath: "/workspace/b.md",
           displayName: "b",
-          content: "<p>B</p>",
+          content: "B",
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
@@ -531,7 +520,7 @@ describe("saveAllDirtyTabs", () => {
           id: "tab-3",
           filePath: "/workspace/c.md",
           displayName: "c",
-          content: "<p>C</p>",
+          content: "C",
           isDirty: false,
           isPinned: false,
           scrollTop: 0,
@@ -560,7 +549,7 @@ describe("saveAllDirtyTabs", () => {
           id: "tab-1",
           filePath: "/workspace/a.md",
           displayName: "a",
-          content: "<p>A</p>",
+          content: "A",
           isDirty: true,
           isPinned: false,
           scrollTop: 0,
@@ -569,7 +558,7 @@ describe("saveAllDirtyTabs", () => {
           id: "tab-2",
           filePath: "/workspace/b.md",
           displayName: "b",
-          content: "<p>B</p>",
+          content: "B",
           isDirty: true,
           isPinned: false,
           scrollTop: 0,

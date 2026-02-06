@@ -10,16 +10,13 @@
  * Pipeline:
  * 1. Validate tab exists and is dirty
  * 2. Update SaveIndicator (active doc only)
- * 3. Convert HTML → Markdown
- * 4. Normalize line endings
- * 5. Write to disk
- * 6. Save version history
- * 7. Compute hash and update store
- * 8. Update backlinks index
- * 9. Mark tab as saved
+ * 3. Normalize line endings
+ * 4. Write to disk
+ * 5. Save version history
+ * 6. Compute hash and update store
+ * 7. Update backlinks index
+ * 8. Mark tab as saved
  */
-
-import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
 import { writeFile } from "@/lib/tauri/files";
 import { saveVersion } from "@/lib/tauri/versionHistory";
 import { useTabsStore } from "@/stores/tabsStore";
@@ -77,9 +74,9 @@ export async function saveDocumentPipeline(
     return { saved: false, isClean: true }; // Already clean, nothing to save
   }
 
-  // Capture HTML content snapshot at START of save
+  // Capture content snapshot at START of save
   // Used to detect if content changed during async save
-  const htmlAtSaveStart = tab.content;
+  const contentAtSaveStart = tab.content;
 
   const workspacePath = useWorkspaceStore.getState().workspacePath;
 
@@ -89,12 +86,8 @@ export async function saveDocumentPipeline(
   }
 
   try {
-    // 2. Convert HTML → Markdown using the SNAPSHOT (not current tab.content)
-    // This ensures we save exactly what we captured and will compare against
-    const markdown = htmlToMarkdown(htmlAtSaveStart);
-
-    // 3. Normalize line endings for consistent hashing
-    const normalizedMarkdown = markdown.replace(/\r\n/g, "\n");
+    // 2. Normalize line endings for consistent hashing
+    const normalizedMarkdown = contentAtSaveStart.replace(/\r\n/g, "\n");
 
     // 4. Write to disk (requires workspace path for security validation)
     if (!workspacePath) {
@@ -118,10 +111,10 @@ export async function saveDocumentPipeline(
     // 7. Update hash in links store
     useLinksStore.getState().setFileHash(tab.filePath, hash);
 
-    // 8. GUARD: Check if content changed during save using EXACT HTML comparison
+    // 7. GUARD: Check if content changed during save
     // If user edited while save was in progress, don't mark as saved
     const currentTab = useTabsStore.getState().tabs.find((t) => t.id === tabId);
-    const contentUnchanged = Boolean(currentTab && currentTab.content === htmlAtSaveStart);
+    const contentUnchanged = Boolean(currentTab && currentTab.content === contentAtSaveStart);
 
     if (contentUnchanged) {
       // Content unchanged during save - safe to mark as saved

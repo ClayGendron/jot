@@ -13,7 +13,7 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error";
 export interface DocumentState {
   /** Current file path (null if untitled) */
   filePath: string | null;
-  /** Document content as HTML (TipTap's internal format) */
+  /** Document content as Markdown */
   content: string;
   /** Whether document has unsaved changes */
   isDirty: boolean;

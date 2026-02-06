@@ -46,10 +46,10 @@ describe("editorStore", () => {
     it("setContent updates content and marks dirty", () => {
       const { setContent } = useEditorStore.getState();
 
-      setContent("<p>Hello, world!</p>");
+      setContent("Hello, world!");
 
       const state = useEditorStore.getState();
-      expect(state.content).toBe("<p>Hello, world!</p>");
+      expect(state.content).toBe("Hello, world!");
       expect(state.isDirty).toBe(true);
     });
 
@@ -65,7 +65,7 @@ describe("editorStore", () => {
     it("markSaved clears dirty flag and sets timestamp", () => {
       const { setContent, markSaved } = useEditorStore.getState();
 
-      setContent("<p>Some content</p>");
+      setContent("Some content");
       expect(useEditorStore.getState().isDirty).toBe(true);
 
       markSaved();
@@ -79,7 +79,7 @@ describe("editorStore", () => {
       const { setContent, setFilePath, resetDocument } =
         useEditorStore.getState();
 
-      setContent("<p>Some content</p>");
+      setContent("Some content");
       setFilePath("/path/to/file.md");
 
       resetDocument();

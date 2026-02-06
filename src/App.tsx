@@ -47,7 +47,6 @@ import {
   isCaseSensitiveFs,
   type FileEntry,
 } from "@/lib/tauri/files";
-import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { isWithinWorkspace } from "@/lib/links/linkService";
 import { createFileSafe } from "@/lib/tauri/links";
 import { renameFileWithLinkUpdates } from "@/lib/links/linkUpdater";
@@ -222,6 +221,7 @@ function App() {
   // Document outline hook
   const { headings, activeHeadingId, scrollToHeading } = useDocumentOutline({
     content: editorContent,
+    contentFormat: "markdown",
     scrollContainerRef: mainContentRef,
   });
 
@@ -330,8 +330,7 @@ function App() {
         try {
           // Check if file still exists by trying to read it
           const markdownContent = await readFile(persistedTab.filePath, workspacePath);
-          const htmlContent = markdownToHtml(markdownContent);
-          const tabId = openTab(persistedTab.filePath, htmlContent);
+          const tabId = openTab(persistedTab.filePath, markdownContent);
 
           // Restore pinned state
           if (persistedTab.isPinned) {
@@ -616,16 +615,14 @@ function App() {
           return;
         }
         const markdownContent = await readFile(path, workspacePath);
-        // Convert Markdown to HTML for TipTap editor
-        const htmlContent = markdownToHtml(markdownContent);
 
         // Open in a new tab
-        openTab(path, htmlContent);
+        openTab(path, markdownContent);
 
         // Sync with editor state
-        setEditorContent(htmlContent);
+        setEditorContent(markdownContent);
         setFilePath(path);
-        setContent(htmlContent);
+        setContent(markdownContent);
         markSaved();
       } catch (err) {
         console.error("Failed to open file:", err);
@@ -907,8 +904,8 @@ function App() {
       // Cmd/Ctrl + Shift + O: Open recent workspace (focus the dropdown)
       // Note: The dropdown handles its own state internally
 
-      // Cmd/Ctrl + B: Toggle sidebar
-      if (isMod && e.key === "b" && !e.shiftKey) {
+      // Cmd/Ctrl + \: Toggle sidebar
+      if (isMod && e.key === "\\" && !e.shiftKey) {
         e.preventDefault();
         handleToggleSidebar();
       }
@@ -1232,11 +1229,9 @@ function App() {
   // Handle version restore
   const handleVersionRestore = useCallback(
     (content: string) => {
-      // Content from version history is in markdown format
-      // Convert to HTML for the editor
-      const htmlContent = markdownToHtml(content);
-      setEditorContent(htmlContent);
-      setContent(htmlContent);
+      // Content from version history is already markdown
+      setEditorContent(content);
+      setContent(content);
       setShowHistory(false);
     },
     [setContent]
@@ -1483,8 +1478,8 @@ function App() {
 
       {/* Main Content */}
       <main className={cn(
-        "flex-1 overflow-y-auto min-w-0",
-        zenMode && "flex flex-col"
+        "flex-1 flex flex-col min-w-0 overflow-hidden",
+        zenMode && "zen-mode-main"
       )} ref={mainContentRef}>
         {/* Title bar */}
         <div className={cn(
@@ -1495,7 +1490,7 @@ function App() {
             <button
               className="flex items-center justify-center w-8 h-8 p-0 border-none rounded bg-transparent text-[var(--color-ink-muted)] cursor-pointer transition-all duration-150 hover:bg-[var(--color-paper-warm)] hover:text-[var(--color-ink)]"
               onClick={handleToggleSidebar}
-              title={sidebarOpen ? "Hide sidebar (⌘B)" : "Show sidebar (⌘B)"}
+              title={sidebarOpen ? "Hide sidebar (⌘\\)" : "Show sidebar (⌘\\)"}
             >
               <PanelLeft className="h-5 w-5" />
             </button>
@@ -1559,8 +1554,8 @@ function App() {
         {/* Editor */}
         {filePath ? (
           <div className={cn(
-            "editor-wrapper",
-            zenMode && "flex-1 flex justify-center pt-8"
+            "editor-wrapper flex-1 min-h-0",
+            zenMode && "flex justify-center pt-8"
           )} ref={editorContentRef}>
             {/* CodeMirror Editor - has built-in search panel (Cmd/Ctrl+F) */}
             <CodeMirrorEditor

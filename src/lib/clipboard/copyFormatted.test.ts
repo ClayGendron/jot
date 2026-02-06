@@ -18,19 +18,7 @@ const mockClipboard = {
   write: vi.fn(),
 };
 
-// Mock htmlToMarkdown
-vi.mock("../markdown/htmlToMarkdown", () => ({
-  htmlToMarkdown: vi.fn((html: string) => {
-    // Simple mock conversion
-    if (html === "<p>Hello <strong>world</strong></p>") {
-      return "Hello **world**";
-    }
-    if (html === "<h1>Title</h1><p>Content</p>") {
-      return "# Title\n\nContent";
-    }
-    return "mocked markdown";
-  }),
-}));
+// No htmlToMarkdown mock needed — copyAsMarkdown now accepts markdown directly
 
 describe("Copy Formatted", () => {
   beforeEach(() => {
@@ -86,23 +74,23 @@ describe("Copy Formatted", () => {
   });
 
   describe("copyAsMarkdown", () => {
-    it("converts HTML to markdown and copies to clipboard", async () => {
-      const html = "<p>Hello <strong>world</strong></p>";
+    it("copies markdown content to clipboard", async () => {
+      const markdown = "Hello **world**";
 
       mockClipboard.writeText.mockResolvedValueOnce(undefined);
 
-      const result = await copyAsMarkdown(html);
+      const result = await copyAsMarkdown(markdown);
 
       expect(result.success).toBe(true);
       expect(mockClipboard.writeText).toHaveBeenCalledWith("Hello **world**");
     });
 
-    it("handles complex content with headings", async () => {
-      const html = "<h1>Title</h1><p>Content</p>";
+    it("handles content with headings", async () => {
+      const markdown = "# Title\n\nContent";
 
       mockClipboard.writeText.mockResolvedValueOnce(undefined);
 
-      const result = await copyAsMarkdown(html);
+      const result = await copyAsMarkdown(markdown);
 
       expect(result.success).toBe(true);
       expect(mockClipboard.writeText).toHaveBeenCalledWith(
@@ -111,13 +99,13 @@ describe("Copy Formatted", () => {
     });
 
     it("returns error result when clipboard API fails", async () => {
-      const html = "<p>Test</p>";
+      const markdown = "Test";
 
       mockClipboard.writeText.mockRejectedValueOnce(
         new Error("Clipboard not available")
       );
 
-      const result = await copyAsMarkdown(html);
+      const result = await copyAsMarkdown(markdown);
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Clipboard not available");

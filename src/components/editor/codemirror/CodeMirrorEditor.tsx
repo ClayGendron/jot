@@ -19,7 +19,6 @@ import { openSearchPanel, closeSearchPanel } from "@codemirror/search";
 import { useEditorStore } from "@/stores/editorStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { cn } from "@/lib/utils";
-import { markdownToHtml } from "@/lib/markdown/markdownToHtml";
 import { createWysiwygExtensions } from "./extensions";
 import {
   createSpellcheckExtension,
@@ -30,7 +29,6 @@ import {
   handleAddToPersonalDictionary,
   handleIgnoreWord,
 } from "./extensions/spellcheck";
-import { getMarkdownFromStore, setMarkdownToStore } from "./storeAdapter";
 import { CodeMirrorToolbar } from "./CodeMirrorToolbar";
 import { SourceEditor } from "../SourceEditor";
 
@@ -56,9 +54,9 @@ import {
 } from "./handlers/linkHandlers";
 
 export interface CodeMirrorEditorProps {
-  /** Initial content as HTML (converted to MD internally) */
+  /** Initial content (unused — content comes from store) */
   initialContent?: string;
-  /** Callback when content changes (returns HTML for compatibility) */
+  /** Callback when content changes (returns markdown) */
   onUpdate?: (content: string) => void;
   /** Placeholder text */
   placeholder?: string;
@@ -121,6 +119,11 @@ export const CodeMirrorEditor = forwardRef<
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const [isReady, setIsReady] = useState(false);
+
+  // Keep a ref to the latest onUpdate so the mount-only effect always uses
+  // the current callback (avoids stale closure with wrong activeTabId)
+  const onUpdateRef = useRef(onUpdate);
+  useEffect(() => { onUpdateRef.current = onUpdate; }, [onUpdate]);
 
   // Store state
   const focusMode = useEditorStore((state) => state.focusMode);
@@ -204,8 +207,8 @@ export const CodeMirrorEditor = forwardRef<
   useEffect(() => {
     if (!editorContainerRef.current) return;
 
-    // Get initial markdown content
-    const initialMarkdown = getMarkdownFromStore() || "";
+    // Get initial markdown content directly from store
+    const initialMarkdown = useEditorStore.getState().content || "";
 
     // Create extensions
     const extensions = [
@@ -216,10 +219,10 @@ export const CodeMirrorEditor = forwardRef<
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           const markdown = update.state.doc.toString();
-          setMarkdownToStore(markdown);
-          // Also call onUpdate callback with HTML for compatibility
-          if (onUpdate) {
-            onUpdate(markdownToHtml(markdown));
+          useEditorStore.getState().setContent(markdown);
+          // Use ref to always call the latest onUpdate (avoids stale closure)
+          if (onUpdateRef.current) {
+            onUpdateRef.current(markdown);
           }
         }
       }),
@@ -261,7 +264,7 @@ export const CodeMirrorEditor = forwardRef<
   useEffect(() => {
     if (!viewRef.current || !isReady) return;
 
-    const markdown = getMarkdownFromStore();
+    const markdown = useEditorStore.getState().content;
     const currentContent = viewRef.current.state.doc.toString();
 
     // Only update if content is different
@@ -295,9 +298,9 @@ export const CodeMirrorEditor = forwardRef<
         },
       });
       // Sync to store
-      setMarkdownToStore(markdownSource);
+      useEditorStore.getState().setContent(markdownSource);
       if (onUpdate) {
-        onUpdate(markdownToHtml(markdownSource));
+        onUpdate(markdownSource);
       }
       wasInSourceMode.current = false;
     }
@@ -405,7 +408,7 @@ export const CodeMirrorEditor = forwardRef<
       ) : (
         <div
           ref={editorContainerRef}
-          className="flex-1 overflow-y-auto"
+          className="flex-1 min-h-0"
           data-testid="codemirror-editor"
         />
       )}

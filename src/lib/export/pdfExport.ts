@@ -1,7 +1,7 @@
 /**
  * PDF Export Functionality
  *
- * Exports TipTap editor content to PDF format using jsPDF.
+ * Exports editor content to PDF format using jsPDF.
  * Preserves formatting, images, and creates bookmarks from headings.
  */
 

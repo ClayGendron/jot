@@ -31,14 +31,14 @@ describe("tabsStore", () => {
     it("opens a new tab and sets it as active", () => {
       const { openTab } = useTabsStore.getState();
 
-      const tabId = openTab("/path/to/document.md", "<p>Content</p>");
+      const tabId = openTab("/path/to/document.md", "Content");
 
       const state = useTabsStore.getState();
       expect(state.tabs).toHaveLength(1);
       expect(state.tabs[0].id).toBe(tabId);
       expect(state.tabs[0].filePath).toBe("/path/to/document.md");
       expect(state.tabs[0].displayName).toBe("document");
-      expect(state.tabs[0].content).toBe("<p>Content</p>");
+      expect(state.tabs[0].content).toBe("Content");
       expect(state.tabs[0].isDirty).toBe(false);
       expect(state.tabs[0].isPinned).toBe(false);
       expect(state.activeTabId).toBe(tabId);
@@ -56,14 +56,14 @@ describe("tabsStore", () => {
     it("returns existing tab ID if file is already open", () => {
       const { openTab } = useTabsStore.getState();
 
-      const firstId = openTab("/path/to/doc.md", "<p>Original</p>");
-      const secondId = openTab("/path/to/doc.md", "<p>New content</p>");
+      const firstId = openTab("/path/to/doc.md", "Original");
+      const secondId = openTab("/path/to/doc.md", "New content");
 
       expect(secondId).toBe(firstId);
       const state = useTabsStore.getState();
       expect(state.tabs).toHaveLength(1);
       // Content should NOT be updated when switching to existing tab
-      expect(state.tabs[0].content).toBe("<p>Original</p>");
+      expect(state.tabs[0].content).toBe("Original");
     });
 
     it("opens multiple tabs", () => {
@@ -242,11 +242,11 @@ describe("tabsStore", () => {
     it("updates content and marks tab as dirty", () => {
       const { openTab, updateTabContent } = useTabsStore.getState();
 
-      const tabId = openTab("/path/to/doc.md", "<p>Original</p>");
-      updateTabContent(tabId, "<p>Updated</p>");
+      const tabId = openTab("/path/to/doc.md", "Original");
+      updateTabContent(tabId, "Updated");
 
       const state = useTabsStore.getState();
-      expect(state.tabs[0].content).toBe("<p>Updated</p>");
+      expect(state.tabs[0].content).toBe("Updated");
       expect(state.tabs[0].isDirty).toBe(true);
     });
   });

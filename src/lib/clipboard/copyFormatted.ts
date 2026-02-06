@@ -5,8 +5,6 @@
  * different formats: HTML (rich text) or Markdown.
  */
 
-import { htmlToMarkdown } from "../markdown/htmlToMarkdown";
-
 /**
  * Copy format options
  */
@@ -59,19 +57,13 @@ export async function copyAsFormatted(
 }
 
 /**
- * Copy HTML content as Markdown
+ * Copy markdown content to clipboard as plain text
  *
- * Converts the HTML to Markdown and copies as plain text.
- * This is useful for pasting into markdown-aware editors.
- *
- * @param html - The HTML content to convert and copy
+ * @param markdown - The markdown content to copy
  * @returns CopyResult indicating success or failure
  */
-export async function copyAsMarkdown(html: string): Promise<CopyResult> {
+export async function copyAsMarkdown(markdown: string): Promise<CopyResult> {
   try {
-    // Convert HTML to Markdown
-    const markdown = htmlToMarkdown(html);
-
     // Copy as plain text
     await navigator.clipboard.writeText(markdown);
 
@@ -87,18 +79,18 @@ export async function copyAsMarkdown(html: string): Promise<CopyResult> {
 /**
  * Copy content using the specified default format
  *
- * @param html - The HTML content
- * @param plainText - Plain text fallback
+ * @param html - The HTML content (for formatted copy)
+ * @param markdown - The markdown content (for markdown copy / plain text fallback)
  * @param format - The format to use
  * @returns CopyResult indicating success or failure
  */
 export async function copyWithDefaultFormat(
   html: string,
-  plainText: string,
+  markdown: string,
   format: CopyFormat
 ): Promise<CopyResult> {
   if (format === "markdown") {
-    return copyAsMarkdown(html);
+    return copyAsMarkdown(markdown);
   }
-  return copyAsFormatted(html, plainText);
+  return copyAsFormatted(html, markdown);
 }

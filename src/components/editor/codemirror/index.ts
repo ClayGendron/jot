@@ -8,9 +8,6 @@
 export { CodeMirrorEditor, type CodeMirrorEditorProps, type CodeMirrorEditorRef } from "./CodeMirrorEditor";
 export { CodeMirrorToolbar } from "./CodeMirrorToolbar";
 
-// Store adapter
-export { createStoreAdapter, useStoreAdapter, getMarkdownFromStore, setMarkdownToStore } from "./storeAdapter";
-
 // Extensions
 export { createWysiwygExtensions } from "./extensions";
 export {

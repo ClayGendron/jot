@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useEditorStore } from "@/stores/editorStore";
 import { useTabsStore } from "@/stores/tabsStore";
 import { saveDocumentPipeline } from "@/services/saveService";
+import { htmlToMarkdown } from "@/lib/markdown/htmlToMarkdown";
 
 const AUTOSAVE_DELAY_MS = 1000;
 const SAVED_INDICATOR_DURATION_MS = 2000;
@@ -82,7 +83,6 @@ export function useAutosave(content: string) {
 
       try {
         // Use unified save pipeline - it handles:
-        // - HTML to Markdown conversion
         // - Writing to disk
         // - Version history
         // - Hash computation
@@ -194,9 +194,14 @@ export function useAutosave(content: string) {
   }, [clearCrashRecovery]);
 
   // Recover from crash
+  // Migration guard: pre-refactor recovery data may contain HTML — convert to markdown
   const recoverFromCrash = useCallback(
     (recoveryData: CrashRecoveryData) => {
-      setContent(recoveryData.content);
+      let content = recoveryData.content;
+      if (content.startsWith("<")) {
+        content = htmlToMarkdown(content);
+      }
+      setContent(content);
       clearCrashRecovery();
     },
     [setContent, clearCrashRecovery]
